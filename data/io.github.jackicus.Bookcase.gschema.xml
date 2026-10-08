@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="bookcase">
+  <enum id="io.github.jackicus.Bookcase.ReaderTheme">
+    <value nick="auto" value="0"/>
+    <value nick="light" value="1"/>
+    <value nick="sepia" value="2"/>
+    <value nick="dark" value="3"/>
+    <value nick="black" value="4"/>
+  </enum>
+  <enum id="io.github.jackicus.Bookcase.ReaderFont">
+    <value nick="publisher" value="0"/>
+    <value nick="serif" value="1"/>
+    <value nick="sans" value="2"/>
+    <value nick="custom" value="3"/>
+  </enum>
+  <schema id="io.github.jackicus.Bookcase" path="/io/github/jackicus/Bookcase/">
+    <key name="window-width" type="i">
+      <default>1100</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>760</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Whether the window is maximized</summary>
+    </key>
+    <key name="last-page" type="s">
+      <default>'home'</default>
+      <summary>Last page shown</summary>
+      <description>The sidebar item selected when the window closed: "home", "all", "authors", "series", "tags", "status:reading", "shelf:ID"…</description>
+    </key>
+    <key name="library-folder" type="s">
+      <default>''</default>
+      <summary>Library folder</summary>
+      <description>The folder books added to Bookcase are copied into, as Author/Title files. Empty means ~/Books.</description>
+    </key>
+    <key name="view-mode" type="s">
+      <choices>
+        <choice value="grid"/>
+        <choice value="list"/>
+      </choices>
+      <default>'grid'</default>
+      <summary>Show books as covers or as a list</summary>
+    </key>
+    <key name="sort-order" type="s">
+      <choices>
+        <choice value="added"/>
+        <choice value="title"/>
+        <choice value="author"/>
+        <choice value="series"/>
+        <choice value="published"/>
+        <choice value="last-read"/>
+        <choice value="rating"/>
+      </choices>
+      <default>'added'</default>
+      <summary>How book lists are sorted</summary>
+    </key>
+    <key name="cover-size" type="i">
+      <range min="96" max="256"/>
+      <default>150</default>
+      <summary>Width of the covers in the grid, in pixels</summary>
+    </key>
+    <key name="reader-width" type="i">
+      <default>900</default>
+      <summary>Reader window width</summary>
+    </key>
+    <key name="reader-height" type="i">
+      <default>1000</default>
+      <summary>Reader window height</summary>
+    </key>
+    <key name="reader-theme" enum="io.github.jackicus.Bookcase.ReaderTheme">
+      <default>'auto'</default>
+      <summary>Colours of the page</summary>
+      <description>"auto" follows the system's light or dark style.</description>
+    </key>
+    <key name="reader-font" enum="io.github.jackicus.Bookcase.ReaderFont">
+      <default>'publisher'</default>
+      <summary>Typeface of the text</summary>
+    </key>
+    <key name="reader-custom-font" type="s">
+      <default>''</default>
+      <summary>The font family used when the typeface is "custom"</summary>
+    </key>
+    <key name="reader-font-size" type="i">
+      <range min="10" max="40"/>
+      <default>18</default>
+      <summary>Text size, in pixels</summary>
+    </key>
+    <key name="reader-line-height" type="d">
+      <range min="1.0" max="2.4"/>
+      <default>1.5</default>
+      <summary>Line spacing</summary>
+    </key>
+    <key name="reader-margin" type="i">
+      <range min="0" max="25"/>
+      <default>8</default>
+      <summary>Side margins, in percent of the page</summary>
+    </key>
+    <key name="reader-max-width" type="i">
+      <range min="400" max="2000"/>
+      <default>720</default>
+      <summary>Widest a column of text gets, in pixels</summary>
+    </key>
+    <key name="reader-justify" type="b">
+      <default>true</default>
+      <summary>Justify text</summary>
+    </key>
+    <key name="reader-hyphenate" type="b">
+      <default>true</default>
+      <summary>Hyphenate words</summary>
+    </key>
+    <key name="reader-publisher-styles" type="b">
+      <default>true</default>
+      <summary>Keep the book's own styles</summary>
+      <description>When off, Bookcase's typeface, size and spacing override the book's.</description>
+    </key>
+    <key name="reader-scrolled" type="b">
+      <default>false</default>
+      <summary>Scroll instead of turning pages</summary>
+    </key>
+    <key name="reader-two-pages" type="b">
+      <default>true</default>
+      <summary>Show two pages side by side when the window is wide</summary>
+    </key>
+    <key name="reader-animate" type="b">
+      <default>true</default>
+      <summary>Slide when turning pages</summary>
+    </key>
+    <key name="reader-progress-label" type="s">
+      <choices>
+        <choice value="percent"/>
+        <choice value="page"/>
+        <choice value="chapter-time"/>
+        <choice value="book-time"/>
+      </choices>
+      <default>'percent'</default>
+      <summary>What the reader's progress label shows</summary>
+    </key>
+    <key name="send-kepub" type="b">
+      <default>true</default>
+      <summary>Send EPUBs to a Kobo as Kobo EPUBs</summary>
+      <description>A Kobo shows reading statistics and page numbers only for its own variant of EPUB (.kepub.epub).</description>
+    </key>
+    <key name="google-books-key" type="s">
+      <default>''</default>
+      <summary>Google Books API key</summary>
+      <description>When set, Find Metadata also asks Google Books. Open Library needs no key.</description>
+    </key>
+  </schema>
+</schemalist>

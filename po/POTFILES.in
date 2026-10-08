@@ -1,0 +1,6 @@
+data/io.github.jackicus.Bookcase.desktop.in
+data/io.github.jackicus.Bookcase.metainfo.xml.in
+data/io.github.jackicus.Bookcase.gschema.xml
+src/shortcuts.py
+src/dialogs/about.py
+src/dialogs/shortcuts.py

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Bookcase@NAME_SUFFIX@
+Comment=Keep your e-books in order and read them
+Exec=bookcase %F
+Icon=@APP_ID@
+Terminal=false
+Type=Application
+Categories=Office;Viewer;Literature;GTK;GNOME;
+# Translators: Search terms to find this application. Do NOT translate or localize the semicolons.
+Keywords=ebook;e-book;epub;mobi;azw3;kindle;kobo;calibre;library;reader;books;comics;
+MimeType=application/epub+zip;application/x-mobipocket-ebook;application/vnd.amazon.mobi8-ebook;application/x-fictionbook+xml;application/x-zip-compressed-fb2;application/vnd.comicbook+zip;application/x-cbz;application/vnd.comicbook-rar;application/x-cbr;application/pdf;
+StartupNotify=true
+DBusActivatable=false
+X-Purism-FormFactor=Workstation;Mobile;
