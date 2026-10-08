@@ -115,6 +115,7 @@ def sections():
             (_('Start of the Book'), accelerator('start')),
             (_('End of the Book'), accelerator('end')),
             (_('Back to Where You Were'), accelerator('back')),
+            (_('Forward Again'), accelerator('forward')),
             (_('Contents'), accelerator('contents')),
             (_('Search the Book'), accelerator('search')),
             (_('Next Result'), accelerator('search-next')),
