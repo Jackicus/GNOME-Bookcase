@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!-- SPDX-FileCopyrightText: 2026 Jack Tully -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill="#222222" d="M 2 2 C 1.164 2 0.697 2.965 1.215 3.621 L 6 9.682 L 6 14 C 6 14.743 6.782 15.227 7.447 14.894 L 9.447 13.894 C 9.786 13.725 10 13.379 10 13 L 10 9.682 L 14.785 3.621 C 15.303 2.965 14.836 2 14 2 Z"/>
+</svg>

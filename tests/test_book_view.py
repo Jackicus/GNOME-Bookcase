@@ -273,6 +273,18 @@ class BookViewTest(unittest.TestCase):
         self.assertEqual(item['match'].lower(), 'harbour')
         self.opened.view.clear_search()
 
+    def test_05_finds_imported_highlights_by_text(self):
+        found = []
+        text = ('Nobody on the quay said   much; the gulls said enough for everyone.\n'
+                'A cart of crates rolled past the chandlery')
+        self.opened.view.find_texts([{'id': 7, 'text': text},
+                                     {'id': 8, 'text': 'Words never written in it'}],
+                                    found.append)
+        self.assertTrue(wait_for(lambda: found, WAIT))
+        self.assertEqual([item['id'] for item in found[0]], [7])
+        self.assertTrue(found[0][0]['cfi'].startswith('epubcfi('))
+        self.assertIn(',', found[0][0]['cfi'])  # a range, from the first words to the last
+
     def test_06_a_selection_is_reported(self):
         self.opened.view.evaluate(
             'const { doc } = globalThis.reader._contents();'

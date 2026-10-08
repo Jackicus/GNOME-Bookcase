@@ -8,14 +8,20 @@ without the library window, for checking the reader's look.
     meson compile -C build
     scripts/headless.sh scripts/reader_demo.py build/reader.png [--light] [--size WxH]
         [--theme auto|light|sepia|dark|black] [--one-page] [--scrolled] [--font serif|sans]
-        [--sidebar contents|annotations|search] [--search QUERY] [--select] [--popover]
-        [--fullscreen] [--hide-chrome] [--at FRACTION] [--missing] [--pdf]
+        [--sidebar contents|annotations|search] [--search QUERY] [--select] [--lookup]
+        [--read-aloud] [--popover] [--fullscreen] [--hide-chrome] [--at FRACTION] [--missing]
+        [--pdf] [--sync]
 
 It runs the source tree (src/ as the `bookcase` package, as the tests do) with the build's
 gresource, settings in memory and a library in a temporary directory: an EPUB of invented
 chapters (with a footnote and two highlights) written there. --select selects a sentence and
-shows the selection popover, --popover opens the Text and Layout popover, --missing shows the
-missing-file page, --pdf the page a PDF gets.
+shows the selection popover, --lookup selects a word and shows its (invented) definition,
+in the popover or the narrow window's sheet, --popover opens the Text and Layout popover,
+--read-aloud starts Read Aloud (with a silent stand-in engine), --missing shows the
+missing-file page, --pdf reads demo_library.py's PDF (Notes on Letterpress) in the PdfView
+instead, with a highlight (--at goes to a fraction of it).
+--sync signs in to a fake KOReader sync server (tests/fake_kosync.py, on 127.0.0.1)
+holding an invented Kobo's newer place: the Go There banner.
 """
 
 import argparse
@@ -24,6 +30,7 @@ import os
 import pathlib
 import sys
 import tempfile
+import time
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -41,11 +48,14 @@ parser.add_argument('--sidebar', choices=['contents', 'annotations', 'search'])
 parser.add_argument('--search', metavar='QUERY')
 parser.add_argument('--select', action='store_true')
 parser.add_argument('--popover', action='store_true')
+parser.add_argument('--lookup', action='store_true')
+parser.add_argument('--read-aloud', action='store_true')
 parser.add_argument('--fullscreen', action='store_true')
 parser.add_argument('--hide-chrome', action='store_true')
 parser.add_argument('--at', type=float, default=None)
 parser.add_argument('--missing', action='store_true')
 parser.add_argument('--pdf', action='store_true')
+parser.add_argument('--sync', action='store_true')
 args = parser.parse_args()
 faulthandler.dump_traceback_later(60, exit=True)  # a hang is reported, not waited out
 width, height = (int(n) for n in args.size.split('x'))
@@ -59,7 +69,7 @@ if reason:
 
 from gi.repository import Adw, Gio, GLib, Graphene, Gtk  # noqa: E402
 
-from bookcase import reader_window  # noqa: E402
+from bookcase import lookup, reader_window, speech  # noqa: E402
 from bookcase.formats import BookInfo  # noqa: E402
 from bookcase.library import Library  # noqa: E402
 
@@ -149,11 +159,15 @@ class DemoApp(Adw.Application):
 directory = pathlib.Path(tempfile.mkdtemp(prefix='bookcase-reader-demo-'))
 library = Library(directory / 'library.sqlite')
 book_path = make_book(directory / ('missing.epub' if args.missing else 'A Quiet Harbour.epub'))
+title, author = 'A Quiet Harbour', 'Ada Lark'
 if args.pdf:
-    book_path = directory / 'A Quiet Harbour.pdf'
-    book_path.write_bytes(b'%PDF-1.4\n%invented\n')
-info = BookInfo(title='A Quiet Harbour', authors=['Ada Lark'], format=book_path.suffix[1:],
-                language='en')
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    import demo_library  # noqa: E402
+
+    pdf_book = next(b for b in demo_library.BOOKS if b.get('format') == 'pdf')
+    book_path, _chapters = demo_library.write_book(pdf_book, directory)
+    title, author = pdf_book['title'], pdf_book['authors'][0]
+info = BookInfo(title=title, authors=[author], format=book_path.suffix[1:], language='en')
 book_id = library.add_book(info, str(book_path), hash='demo', size=book_path.stat().st_size)
 if args.missing:
     os.remove(book_path)
@@ -167,6 +181,22 @@ settings.set_string('reader-font', args.font)
 settings.set_boolean('reader-animate', False)
 settings.set_int('reader-width', width)
 settings.set_int('reader-height', height)
+if args.sync:
+    from tests.fake_kosync import FakeServer  # noqa: E402
+
+    from bookcase import importing, kosync  # noqa: E402
+
+    sync_server = FakeServer().start()
+    sync_key = kosync.key_for('invented')
+    sync_server.users['ada'] = sync_key
+    keyring = kosync.MemoryKeyring()
+    keyring.store(kosync.account_name(sync_server.url, 'ada'), 'demo', sync_key)
+    settings.set_string('sync-server', sync_server.url)
+    settings.set_string('sync-username', 'ada')
+    app.sync = kosync.Sync(settings, directory / 'sync.json', keyring=keyring, watch=False)
+    sync_server.store('ada', importing.partial_md5(str(book_path)), 0.62,
+                      '/body/DocFragment[5]/body/p[3]/text().0', 'Kobo Libra 2', 'KOBO-DEMO',
+                      time.time() + 60)
 failed = []
 
 
@@ -176,6 +206,8 @@ def shoot(window):
     paintable = Gtk.WidgetPaintable.new(target)
     snapshot = Gtk.Snapshot()
     paintable.snapshot(snapshot, target.get_width(), target.get_height())
+    if args.lookup:
+        draw_popovers(target, snapshot)
     node = snapshot.to_node()
     if node is None:
         failed.append('nothing drawn')
@@ -202,26 +234,123 @@ def activate(app):
 
 
 def start(app):
+    if args.read_aloud:
+        speech._engine[:] = [SilentEngine()]
     style = Adw.StyleManager.get_default()
     style.set_color_scheme(Adw.ColorScheme.FORCE_LIGHT if args.light
                            else Adw.ColorScheme.FORCE_DARK)
     Gtk.Settings.get_default().set_property('gtk-enable-animations', False)
     window = reader_window.open(app, book_id)
-    window.set_resizable(False)
+    # A dialog over a window that cannot be resized opens in a window of its own.
+    window.set_resizable(args.lookup)
     if args.fullscreen:
         window.fullscreen()
     GLib.idle_add(lambda: (steps(window), GLib.SOURCE_REMOVE)[1])
+
+
+# An invented dictionary answer for --lookup: the shot never depends on the network.
+LOOKUP_ARTICLE = lookup.Article('breakwater', 'wiktionary', (
+    lookup.Entry('Noun', 'English', (
+        lookup.Sense('A wall built out into the sea to shelter a harbour from the waves.',
+                     ('The bell buoy rang somewhere beyond the breakwater.',)),
+        lookup.Sense('Anything that breaks the force of something, as a wall does a wave.'),
+    )),
+), 'https://en.wiktionary.org/wiki/breakwater')
+LOOKUP_SUMMARY = lookup.Summary('Breakwater', 'Structure that protects a coast',
+                                'A breakwater is a wall built out into the sea to protect '
+                                'a harbour or a beach from the force of the waves.',
+                                'https://en.wikipedia.org/wiki/Breakwater_(structure)')
+
+
+class SilentEngine:
+    """A speech engine for --read-aloud that never finishes its sentence."""
+
+    def speak(self, text, done, rate=0, language=''):
+        pass
+
+    def stop(self):
+        pass
+
+
+def look_up(window):
+    """Select the word 'breakwater' as a double click would and show its definition: in the
+    selection popover, or (a narrow window) the Look Up sheet."""
+    service = lookup.service()
+    service.remember('define', 'breakwater', 'en', LOOKUP_ARTICLE)
+    service.remember('summarize', 'breakwater', 'en', LOOKUP_SUMMARY)
+    run_js(window, """
+        const { doc } = globalThis.reader._contents()
+        const p = [...doc.querySelectorAll('p')]
+            .find(p => p.firstChild.textContent.includes('breakwater'))
+        const text = p.firstChild
+        const start = text.textContent.indexOf('breakwater')
+        const range = doc.createRange()
+        range.setStart(text, start); range.setEnd(text, start + 10)
+        const selection = doc.getSelection()
+        selection.removeAllRanges(); selection.addRange(range)
+        doc.dispatchEvent(new PointerEvent('pointerup'))
+        return true""")
+    wait_for(lambda: window._selection is not None, 3)
+    if window._selection is not None and not window._lookup_panel.get_visible():
+        window._on_lookup()
+    wait_for(lambda: False, 0.8)
+
+
+def draw_popovers(window, snapshot):
+    """The open popovers, drawn where they are over the window."""
+    window_x, window_y = window.get_surface_transform()
+    for popover in (window._selection_popover, window.typography_popover):
+        if not popover.get_mapped():
+            continue
+        surface = popover.get_surface()
+        popover_x, popover_y = popover.get_surface_transform()
+        point = Graphene.Point()
+        point.x = surface.get_position_x() + popover_x - window_x
+        point.y = surface.get_position_y() + popover_y - window_y
+        snapshot.save()
+        snapshot.translate(point)
+        Gtk.WidgetPaintable.new(popover).snapshot(snapshot, popover.get_width(),
+                                                  popover.get_height())
+        snapshot.restore()
+
+
+def pdf_select(window, start, end, finish=False):
+    """Select from `start` to `end` (PDF points) on the page shown, as a drag would."""
+    from gi.repository import Poppler
+
+    view = window.view
+    view._select(view._current_page() - 1, start, end, Poppler.SelectionStyle.GLYPH)
+    if finish:
+        view._selection_done()
+
+
+def pdf_highlight(window):
+    """A highlight on the page shown, saved as the selection popover saves one."""
+    from bookcase import pdf_location
+
+    view = window.view
+    pdf_select(window, (52, 190), (360, 222))
+    selection = view._selection
+    if selection and selection['rects']:
+        page = selection['index'] + 1
+        library.add_annotation(book_id, 'highlight',
+                               pdf_location.location(page, rects=selection['rects']),
+                               text=selection['text'], color='yellow',
+                               position=view.fraction, note='The tide again.')
+    view.clear_selection()
 
 
 def steps(window):
     if window.content_stack.get_visible_child_name() == 'book':
         if not wait_for(lambda: window._place is not None, 15):
             failed.append('the book never showed')
+        if args.sync and not wait_for(lambda: window._sync.banner.get_revealed(), 5):
+            failed.append('no sync banner')
         # two highlights, saved as the selection popover saves them
         if args.at is not None:
-            window.book_view.go_to_fraction(args.at)
+            window.view.go_to_fraction(args.at)
             wait_for(lambda: False, 0.8)
-        cfis = run_js(window, """
+        cfis = [] if window.is_pdf else run_js(window, """
             const { doc, index } = globalThis.reader._contents()
             const ps = doc.querySelectorAll('p')
             const out = []
@@ -236,8 +365,11 @@ def steps(window):
             library.add_annotation(book_id, 'highlight', cfi, text=text, color=color,
                                    position=0.05, note='The tide again.' if color == 'blue'
                                    else '')
-        library.add_annotation(book_id, 'bookmark', 'epubcfi(/6/6!/4/2)', text=TITLES[1],
-                               position=0.2)
+        if window.is_pdf:
+            pdf_highlight(window)
+        else:
+            library.add_annotation(book_id, 'bookmark', 'epubcfi(/6/6!/4/2)', text=TITLES[1],
+                                   position=0.2)
         wait_for(lambda: False, 0.6)
         if args.hide_chrome:
             window._set_chrome(False)
@@ -252,7 +384,11 @@ def steps(window):
                      and 'so far' not in window.search_status.get_label(), 5)
             window._search_step(1)
             wait_for(lambda: False, 0.6)
-        if args.select:
+        if args.select and window.is_pdf:
+            pdf_select(window, (52, 330), (300, 360), finish=True)
+            wait_for(lambda: window._selection is not None, 3)
+            wait_for(lambda: False, 0.5)
+        elif args.select:
             run_js(window, """
                 const { doc } = globalThis.reader._contents()
                 const p = doc.querySelectorAll('p')[4]
@@ -264,6 +400,11 @@ def steps(window):
                 return true""")
             wait_for(lambda: window._selection is not None, 3)
             wait_for(lambda: False, 0.5)
+        if args.lookup:
+            look_up(window)
+        if args.read_aloud:
+            window._toggle_read_aloud()
+            wait_for(lambda: False, 1.0)
         if args.popover:
             window.typography_button.popup()
             wait_for(lambda: False, 0.5)

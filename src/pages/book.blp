@@ -27,6 +27,7 @@ template $BookcaseBookPage: Adw.NavigationPage {
         authors_label.justify: center;
         series_label.xalign: 0.5;
         series_label.justify: center;
+        series_nav.halign: center;
         rating_box.halign: center;
         status_label.xalign: 0.5;
         progress_bar.halign: center;
@@ -114,6 +115,59 @@ template $BookcaseBookPage: Adw.NavigationPage {
                   ]
                 }
 
+                // The books before and after this one in its series.
+                Box series_nav {
+                  spacing: 6;
+                  halign: start;
+                  visible: false;
+
+                  Button previous_button {
+                    visible: false;
+
+                    styles [
+                      "flat",
+                      "series-step",
+                    ]
+
+                    child: Box {
+                      spacing: 6;
+
+                      Image {
+                        icon-name: "go-previous-symbolic";
+                        accessible-role: presentation;
+                      }
+
+                      Label previous_label {
+                        ellipsize: end;
+                        max-width-chars: 18;
+                      }
+                    };
+                  }
+
+                  Button next_button {
+                    visible: false;
+
+                    styles [
+                      "flat",
+                      "series-step",
+                    ]
+
+                    child: Box {
+                      spacing: 6;
+
+                      Label next_label {
+                        ellipsize: end;
+                        max-width-chars: 18;
+                      }
+
+                      Image {
+                        icon-name: "go-next-symbolic";
+                        accessible-role: presentation;
+                      }
+                    };
+                  }
+                }
+
                 Box rating_box {
                   halign: start;
                   margin-top: 4;
@@ -198,6 +252,13 @@ template $BookcaseBookPage: Adw.NavigationPage {
               row-spacing: 6;
               max-children-per-line: 30;
               homogeneous: false;
+            }
+
+            // More in the series and more by the author: rows of covers (pages/book.py).
+            Box more_box {
+              orientation: vertical;
+              spacing: 24;
+              visible: false;
             }
 
             Adw.PreferencesGroup details_group {

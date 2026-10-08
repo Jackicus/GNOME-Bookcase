@@ -13,8 +13,8 @@ Developed on GTK 4.22, libadwaita 1.9, WebKitGTK 2.52 (API 6.0), Python 3.14 and
 3.56. The minimums are Python 3.12 (`pyproject.toml`) and, in `meson.build`, GTK 4.20, GLib
 2.84, libadwaita 1.9, PyGObject 3.50, Meson 1.2: use no newer API without raising them there
 and in README.md. lxml is a dependency (EPUB metadata); Poppler's GI typelib is optional
-(PDF covers and metadata). This file holds rules and pointers: a module's API is in its
-docstring, product decisions and their reasons in `docs/decisions.md`, the research behind
+(PDF covers and metadata, and the reader's PDF view). This file holds rules and pointers: a
+module's API is in its docstring, product decisions and their reasons in `docs/decisions.md`, the research behind
 them in `docs/research/` (calibre.md, competitors.md, tech.md: read the part you need).
 
 ## Architecture
@@ -28,17 +28,20 @@ Application (main.py)    app.library, app.covers, app.settings, app.devices; app
 │                        app.toast(), app.report(), app.undo(), app.open_book(id)
 ├─ Window (window.py)    AdwToastOverlay > AdwNavigationSplitView; sidebar.py fills the
 │  │                     AdwSidebar (Home, All Books, Authors, Series, Tags; the reading
-│  │                     states; the user's shelves; connected devices)
+│  │                     states, Statistics; the user's shelves; connected devices)
 │  ├─ content            AdwNavigationView: a sidebar item replaces the stack with its root
-│  │                     page (pages/: home, books, groups, device); a book's details
+│  │                     page (pages/: home, books, groups, device, stats); a book's details
 │  │                     (pages/book.py) and a filtered list are pushed
 │  └─ dialogs/           edit_metadata, fetch_metadata, add_books, shelf, send, preferences,
-│                        about, shortcuts
+│                        about, shortcuts, goals
 ├─ ReaderWindow (reader_window.py)  one Adw.ApplicationWindow per open book: the book view,
 │                        contents/annotations/search sidebar, typography popover, progress bar
 │   └─ BookView (widgets/book_view.py)  a WebKit.WebView on the bookcase:// scheme running
 │                        src/reader/reader.html: our bridge (reader.js) over the vendored
 │                        foliate-js (src/reader/foliate/, MIT, pinned in its README)
+│   └─ PdfView (widgets/pdf_view.py)  a PDF's pages drawn by Poppler, BookView's interface;
+│                        places are pdf_location.py's 'page:N' strings; TXT and CBR open as
+│                        converting.py's cached EPUB and CBZ copies
 ├─ Library (library.py)  the SQLite library (schema.py): books, files, authors, series, tags,
 │                        identifiers, shelves, annotations, reading sessions, folders; the
 │                        undo stack; the `changed` signal
@@ -49,13 +52,24 @@ Application (main.py)    app.library, app.covers, app.settings, app.devices; app
 ├─ importing.py          adding files (copied into the library folder), scanning watched
 │                        folders in place, content hashes, duplicates
 ├─ calibre.py            reading a Calibre library (metadata.db) to link its books in place
+├─ existing_books.py     the welcome's look for a user's Calibre libraries and book folders
 ├─ covers.py             the cover store and its thumbnail cache
 ├─ online.py             metadata and covers from Open Library (and Google Books with a key)
+├─ opds.py               online catalogues (OPDS 1.2 and 2.0): feeds, search, downloads into
+│                        the library (pages/discover.py, pages/catalog.py)
+├─ bulk_metadata.py      Find Metadata for many books: a rate-kept queue, the changes, one
+│                        undo step (dialogs/bulk_metadata.py)
+├─ lookup.py             Look Up: StarDict dictionaries, Wiktionary, Wikipedia summaries
+├─ speech.py             Read Aloud: the speech engine (speech-dispatcher) and the player
 ├─ devices.py, kepub.py  e-readers on USB (Kobo, Kindle, any reader with a books folder);
 │                        sending a book, as kepub for a Kobo
+├─ mail.py, passwords.py Send to Kindle by e-mail (SMTP); passwords in the keyring (libsecret)
+├─ kosync.py             reading sync over KOReader's protocol: app.sync (reader_sync.py,
+│                        dialogs/sync_prefs.py)
 ├─ exporting.py          copies of books with their metadata written in (export, devices)
 ├─ annotations.py        highlights and notes to Markdown; Kindle's My Clippings.txt in
-└─ stats.py              reading time and speed (time left), from reading sessions
+└─ stats.py              reading time, speed (time left), streaks, pages and goals, from
+                         reading sessions and books' finished dates
 ```
 
 Data lives in `$XDG_DATA_HOME/bookcase/` (`library.sqlite`, `covers/`, `thumbnails/`), the
@@ -73,9 +87,11 @@ read in place. GSettings: one schema for both builds.
   read, never written. Removing a book from the library leaves its file; Move to Trash is a
   separate, confirmed action that trashes it (Gio, recoverable).
 - **Model code has no GTK**: library.py, schema.py, search.py, formats/, importing.py,
-  calibre.py, covers.py, online.py, devices.py, kepub.py, exporting.py, annotations.py and
-  stats.py import Gio/GLib/GObject/GdkPixbuf/Poppler at most, and are tested without a
-  display. Pages and widgets call them; they never reach into widgets.
+  calibre.py, covers.py, online.py, opds.py, lookup.py, speech.py, devices.py, kepub.py, exporting.py,
+  annotations.py, stats.py, converting.py, pdf_location.py, mail.py, passwords.py,
+  kosync.py, bulk_metadata.py and existing_books.py import Gio/GLib/GObject/GdkPixbuf/Poppler (passwords.py: Secret) at most,
+  and are tested without a display. Pages and widgets call them; they never reach into
+  widgets.
 - **Everything undoable**: a change to the library goes through `Library.undoable(label)`, so
   `app.undo()` (Ctrl+Z) can put it back; a destructive action shows a toast with Undo, not a
   confirmation, except Move to Trash and removing a shelf with books (an `AdwAlertDialog`).

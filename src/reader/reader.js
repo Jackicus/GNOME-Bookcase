@@ -470,6 +470,71 @@ const whenOpen = f => async (...args) => {
     return f(...args)
 }
 
+// Reading aloud (widgets/read_aloud.py speaks, a sentence at a time): foliate-js's TTS
+// gives a block's SSML with a mark before each sentence; ttsNext() returns the next
+// sentence's text, highlighted and turned to, and goes on into the following sections. The
+// highlight's key starts with foliate-js's search prefix, so a click on it is no annotation's.
+const TTS_KEY = 'foliate-search:bookcase-tts'
+let ttsQueue = [] // [{ mark, text }]: the rest of the block being read
+
+const ssmlSentences = ssml => {
+    if (!ssml) return []
+    const doc = new DOMParser().parseFromString(ssml, 'application/xml')
+    const sentences = []
+    let current = { mark: null, text: '' }
+    const walk = node => {
+        for (const child of node.childNodes) {
+            if (child.nodeType === Node.ELEMENT_NODE && child.localName === 'mark') {
+                sentences.push(current)
+                current = { mark: child.getAttribute('name'), text: '' }
+            } else if (child.nodeType === Node.TEXT_NODE
+                || child.nodeType === Node.CDATA_SECTION_NODE) current.text += child.nodeValue
+            else if (child.nodeType === Node.ELEMENT_NODE) {
+                if (child.localName === 'break') current.text += ' '
+                walk(child)
+            }
+        }
+    }
+    walk(doc.documentElement)
+    sentences.push(current)
+    return sentences.map(({ mark, text }) => ({ mark, text: text.replace(/\s+/g, ' ').trim() }))
+        .filter(({ text }) => text)
+}
+
+const ttsClear = () => {
+    for (const { overlayer } of view?.renderer?.getContents?.() ?? []) overlayer?.remove(TTS_KEY)
+}
+
+const ttsHighlight = range => {
+    ttsClear()
+    const contents = view.renderer.getContents?.() ?? []
+    const { overlayer } = contents.find(c => c.doc === range.startContainer?.ownerDocument)
+        ?? contents[0] ?? {}
+    overlayer?.add(TTS_KEY, range, Overlayer.highlight, { color: style.theme.link })
+    view.renderer.scrollToAnchor?.(range)
+}
+
+// Reading from the page shown (its first sentence) in the section shown.
+const ttsInit = async fromPage => {
+    ttsQueue = []
+    await view.initTTS('sentence', ttsHighlight)
+    let ssml
+    try {
+        ssml = fromPage && lastDetail?.range ? view.tts.from(lastDetail.range) : view.tts.start()
+    } catch (e) {
+        console.error(e)
+        ssml = view.tts.start()
+    }
+    ttsQueue = ssmlSentences(ssml)
+}
+
+const nextLinearSection = index => {
+    const sections = view.book.sections ?? []
+    for (let i = index + 1; i < sections.length; i++)
+        if (sections[i].linear !== 'no') return i
+    return null
+}
+
 const reader = {
     open(args) {
         opening = reader._open(args)
@@ -651,8 +716,89 @@ const reader = {
         if (lastDetail) fillMarginals(lastDetail)
         return true
     },
+    // Reading aloud: ttsStart() from the page shown, then ttsNext() for each sentence (its
+    // text, or null at the end of the book), ttsStop() to clear the highlight.
+    async ttsStart() {
+        if (!view?.renderer?.getContents?.()?.[0]?.doc || view.isFixedLayout) return false
+        await ttsInit(true)
+        return true
+    },
+    async ttsNext() {
+        for (let guard = 0; guard < 10000; guard++) {
+            const contents = view.renderer.getContents()?.[0]
+            if (!contents?.doc) return null
+            // The reader went to another section: read from the page shown there.
+            if (!view.tts || view.tts.doc !== contents.doc) await ttsInit(true)
+            const sentence = ttsQueue.shift()
+            if (sentence) {
+                if (sentence.mark != null) view.tts.setMark(sentence.mark)
+                return sentence.text
+            }
+            const ssml = view.tts.next()
+            if (ssml) {
+                ttsQueue = ssmlSentences(ssml)
+                continue
+            }
+            const next = nextLinearSection(contents.index)
+            if (next == null) {
+                ttsClear()
+                return null
+            }
+            await view.renderer.goTo({ index: next })
+            await ttsInit(false)
+        }
+        return null
+    },
+    ttsStop() {
+        ttsQueue = []
+        ttsClear()
+        return true
+    },
     getTOC: () => toJSONTOC(view?.book?.toc),
     getSectionFractions: () => view?.getSectionFractions() ?? [],
+    // The places of highlights known only by their text (imported from a Kindle):
+    // [{id, text}] -> [{id, cfi, fraction}] for those found, each the first match in the
+    // book, from its first words to its last.
+    async findTexts({ items }) {
+        const sections = view?.book?.sections ?? []
+        const { searchMatcher } = await import('./foliate/search.js')
+        const { textWalker } = await import('./foliate/text-walker.js')
+        const matcher = searchMatcher(textWalker, { defaultLocale: view.language,
+            matchCase: false, matchDiacritics: true, matchWholeWords: false })
+        const words = text => text.split(/\s+/).filter(Boolean)
+        const left = new Map()
+        for (const { id, text } of items) {
+            const all = words(text ?? '')
+            if (!all.length) continue
+            const head = all.slice(0, 8).join(' ')
+            const tail = all.length > 12 ? all.slice(-8).join(' ') : null
+            left.set(id, { head, tail })
+        }
+        const fractions = view?.getSectionFractions() ?? []
+        const found = []
+        for (const [index, section] of sections.entries()) {
+            if (!left.size) break
+            if (!section.createDocument) continue
+            const doc = await section.createDocument()
+            for (const [id, { head, tail }] of left) {
+                const first = matcher(doc, head).next()
+                if (first.done) continue
+                let range = first.value.range
+                if (tail) for (const end of matcher(doc, tail)) {
+                    if (end.range.compareBoundaryPoints(Range.START_TO_START, range) < 0)
+                        continue
+                    const whole = doc.createRange()
+                    whole.setStart(range.startContainer, range.startOffset)
+                    whole.setEnd(end.range.endContainer, end.range.endOffset)
+                    range = whole
+                    break
+                }
+                found.push({ id, cfi: view.getCFI(index, range), fraction: fractions[index] ?? 0 })
+                left.delete(id)
+            }
+        }
+        return found
+    },
     // For scripts/reader_demo.py and the tests (through BookView.evaluate), not the window.
     _contents: () => view?.renderer?.getContents()?.[0] ?? {},
     _cfi: (index, range) => view.getCFI(index, range),

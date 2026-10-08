@@ -115,6 +115,37 @@ class ClippingsTest(unittest.TestCase):
             self.assertEqual(matches[3].position, 1180 / 1183)
             self.assertEqual(matches[1].position, 1.0)
 
+    def test_import_dedupes_and_undoes(self):
+        with temporary_library() as library:
+            harbour = add_book(library, 'The Quiet Harbour', ('Ada Lark',))
+            other = add_book(library, 'A Different Book', ('Cara Moss',))
+            library.add_annotation(harbour, 'highlight', 'epubcfi(/6/4!/4/2)',
+                                   text='Later   words.')
+            clippings = annotations.parse_kindle_clippings(CLIPPINGS)
+            groups = annotations.clipping_groups(
+                library, annotations.match_clippings(library, clippings))
+            # The bookmark (Fog Over Ashby) is left out.
+            self.assertEqual([group.title for group in groups],
+                             ['The Quiet Harbour', 'Notes (Unattached)', 'Unknown Book'])
+            self.assertEqual((groups[0].highlights, groups[0].notes), (2, 1))
+            self.assertEqual(groups[0].new(library), 1)  # 'Later words.' is there
+            self.assertIsNone(groups[1].book_id)
+            chosen = {groups[1].key: other}
+            plan = annotations.import_plan(library, groups, chosen)
+            self.assertEqual(sorted(plan), [harbour, other])
+            self.assertEqual(annotations.import_clippings(library, plan), 2)
+            added = library.annotations(harbour)
+            self.assertEqual(len(added), 2)
+            first = next(a for a in added if a.location == '')
+            self.assertEqual(first.note, 'Who lit them?')
+            self.assertGreater(first.created, 0)
+            self.assertEqual(library.annotations(other)[0].note, 'A note on its own.')
+            # Importing the same file again adds nothing.
+            self.assertEqual(annotations.import_plan(library, groups, chosen), {})
+            self.assertEqual(library.undo(), 'Import Highlights')
+            self.assertEqual(len(library.annotations(harbour)), 1)
+            self.assertEqual(library.annotations(other), [])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -185,5 +185,34 @@ class LibrarySearchTest(unittest.TestCase):
             self.assertEqual(library.count(query='lighthouse'), 0)
 
 
+class FilterQueryTest(unittest.TestCase):
+
+    def test_filter_query(self):
+        from bookcase.search import filter_query
+
+        self.assertEqual(filter_query(), '')
+        self.assertEqual(filter_query(format='epub', status='reading', rating=4,
+                                      language='en'),
+                         '(format:epub or format:kepub) status:reading rating:>=4 language:en')
+        self.assertEqual(filter_query(format='pdf', language='x y"'), 'format:pdf language:xy')
+        self.assertEqual(filter_query(format='nonsense', status='nonsense'), '')
+
+    def test_filters_and_missing_files(self):
+        with temporary_library() as library:
+            epub = add_book(library, 'A Quiet Harbour', language='en')
+            comic = add_book(library, 'Salt Roads', fmt='cbz', language='de')
+            library.update_book(comic, rating=8)
+            from bookcase.search import filter_query
+
+            self.assertEqual(library.book_ids(query=filter_query(format='comic')), [comic])
+            self.assertEqual(library.book_ids(query='harbour ' + filter_query(format='epub')),
+                             [epub])
+            self.assertEqual(library.book_ids(query=filter_query(rating=4)), [comic])
+            self.assertEqual(library.book_ids(query=filter_query(language='en')), [epub])
+            self.assertEqual(library.count(query='has:missing'), 0)
+            library.set_missing([library.files(epub)[0].id])
+            self.assertEqual(library.book_ids(query='has:missing'), [epub])
+
+
 if __name__ == '__main__':
     unittest.main()

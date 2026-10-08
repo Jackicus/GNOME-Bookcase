@@ -49,10 +49,21 @@ Books (a Book is a frozen dataclass; lists are tuples):
     library.find_file(path)                 # BookFile or None
     library.find_by_source_key(source, key) # book id or None ('calibre', '42')
     library.find_similar(title, authors)    # [book id]: same normalised title and an author
+    library.find_by_identifier(kind, value) # book id or None ('isbn', '…'; 'uuid' is the book's)
                                             # in common (or no authors on one side)
     library.update_book(book_id, **fields)  # undoable 'Edit Book'
     library.update_books(book_ids, **fields)  # bulk; also add_tags=, remove_tags=
     library.remove_books(book_ids)          # undoable; files stay where they are
+    library.duplicates()                    # [[book id]]: the same title, an author shared
+    library.richest(book_ids)               # the one of them to keep in a merge
+    library.merge_books(keep_id, other_ids) # undoable 'Merge Books': one book of them all
+
+Books opened from outside without adding them (source OPENED) have rows, so the reader
+keeps their place and highlights, but no list, count, search or group shows them:
+
+    library.add_opened(info, path, hash=…, size=…)   # its id; no undo step
+    library.opened_ids()                    # {book id}
+    library.keep_book(book_id, source='library', path=None)   # undoable 'Add to Library'
     library.authors() / series() / tags()   # [Group(id, name, sort, count)], books only
     library.publishers() / languages()      # [str]
 
@@ -79,6 +90,10 @@ Reading state (not undo steps; `changed('progress')`):
     library.set_status(book_ids, status)    # undoable: 'unread', 'reading', 'finished'
     library.log_session(book_id, started, seconds, start_fraction, end_fraction)
     library.sessions(book_id=None, since=None)          # [Session], oldest first
+    library.finished(since=None, until=None)            # [(book_id, when)] marked
+                                            # finished (when: kept while read again,
+                                            # cleared by 'unread'), oldest first
+    library.page_counts()                   # {book_id: pages} where books.pages is known
 
 Annotations ('highlight', 'bookmark'; a highlight may carry a note):
 
@@ -87,6 +102,8 @@ Annotations ('highlight', 'bookmark'; a highlight may carry a note):
                            position=0.0)    # undoable; returns its id
     library.update_annotation(annotation_id, note=None, color=None)   # undoable
     library.remove_annotation(annotation_id)  # undoable
+    library.set_annotation_location(annotation_id, location, position=None)   # a CFI for
+                                            # one imported without (not an undo step)
 
 Shelves (a manual shelf holds books; a smart shelf has a search query instead):
 
@@ -152,6 +169,10 @@ SORTS = ('added', 'title', 'author', 'series', 'published', 'last-read', 'rating
 DESCENDING = {'added': True, 'title': False, 'author': False, 'series': False,
               'published': True, 'last-read': True, 'rating': True}
 UNDO_LIMIT = 50
+# A book opened from outside without being added (main.py's open_path): it has a row, so
+# the reader keeps its place and highlights, but no list, count or group shows it.
+OPENED = 'opened'
+HIDDEN = f"b.source != '{OPENED}'"
 CHUNK = 500  # ids per IN (…) list
 
 # Which `changed` kind a write to each table is.
@@ -375,6 +396,12 @@ class Library(GObject.Object):
         """A Library on the same file, for another thread; see the module docstring."""
         return Library(self.path, worker=True)
 
+    @property
+    def closed(self):
+        """True once close() has run: a late signal handler (a widget outliving the app's
+        shutdown) checks it before asking anything."""
+        return self.db is None
+
     def close(self):
         if self.db is not None:
             self.db.close()
@@ -510,7 +537,7 @@ class Library(GObject.Object):
     # -- reading books --------------------------------------------------------------------
 
     def _where(self, query='', shelf=None, status=None, author=None, series=None, tag=None):
-        clauses, params = [], []
+        clauses, params = [HIDDEN], []
         if query:
             sql, more = search.to_sql(query)
             clauses.append(sql)
@@ -539,8 +566,6 @@ class Library(GObject.Object):
         if tag is not None:
             clauses.append('b.id IN (SELECT book_id FROM book_tags WHERE tag_id = ?)')
             params.append(_id(tag))
-        if not clauses:
-            return '1', []
         return ' AND '.join(f'({clause})' for clause in clauses), params
 
     def _sorted_rows(self, select, filters, sort, descending, limit, offset):
@@ -705,6 +730,18 @@ class Library(GObject.Object):
                               'LIMIT 1', (source, str(key))).fetchone()
         return row[0] if row else None
 
+    def find_by_identifier(self, kind, value):
+        if not value:
+            return None
+        if kind == 'uuid':
+            row = self.db.execute('SELECT id FROM books WHERE lower(uuid) = lower(?) LIMIT 1',
+                                  (value,)).fetchone()
+            if row:
+                return row[0]
+        row = self.db.execute('SELECT book_id FROM identifiers WHERE type = ? AND value = ? '
+                              'LIMIT 1', (kind, value)).fetchone()
+        return row[0] if row else None
+
     def find_similar(self, title, authors):
         key = titles.title_key(title)
         if not key:
@@ -713,7 +750,8 @@ class Library(GObject.Object):
         for name in authors or ():
             wanted |= titles.name_tokens(name)
         found = []
-        for (book_id,) in self.db.execute('SELECT id FROM books WHERE title_key = ?', (key,)):
+        for (book_id,) in self.db.execute(f'SELECT id FROM books b WHERE title_key = ? AND '
+                                          f'{HIDDEN}', (key,)):
             names = [row[0] for row in self.db.execute(
                 'SELECT a.name FROM book_authors ba JOIN authors a ON a.id = ba.author_id '
                 'WHERE ba.book_id = ?', (book_id,))]
@@ -730,24 +768,26 @@ class Library(GObject.Object):
 
     def authors(self):
         return self._groups('SELECT a.id, a.name, a.sort, COUNT(*) FROM authors a '
-                            'JOIN book_authors ba ON ba.author_id = a.id GROUP BY a.id')
+                            'JOIN book_authors ba ON ba.author_id = a.id '
+                            f'JOIN books b ON b.id = ba.book_id AND {HIDDEN} GROUP BY a.id')
 
     def series(self):
         return self._groups('SELECT s.id, s.name, s.sort, COUNT(*) FROM series s '
-                            'JOIN books b ON b.series_id = s.id GROUP BY s.id')
+                            f'JOIN books b ON b.series_id = s.id AND {HIDDEN} GROUP BY s.id')
 
     def tags(self):
         return self._groups('SELECT t.id, t.name, t.name, COUNT(*) FROM tags t '
-                            'JOIN book_tags bt ON bt.tag_id = t.id GROUP BY t.id')
+                            'JOIN book_tags bt ON bt.tag_id = t.id '
+                            f'JOIN books b ON b.id = bt.book_id AND {HIDDEN} GROUP BY t.id')
 
     def publishers(self):
         names = [row[0] for row in self.db.execute(
-            "SELECT DISTINCT publisher FROM books WHERE publisher != ''")]
+            f"SELECT DISTINCT publisher FROM books b WHERE publisher != '' AND {HIDDEN}")]
         return sorted(names, key=titles.sort_key)
 
     def languages(self):
         return sorted(row[0] for row in self.db.execute(
-            "SELECT DISTINCT language FROM books WHERE language != ''"))
+            f"SELECT DISTINCT language FROM books b WHERE language != '' AND {HIDDEN}"))
 
     # -- adding and editing books ---------------------------------------------------------
 
@@ -982,10 +1022,33 @@ class Library(GObject.Object):
         book_ids = list(dict.fromkeys(_id(book_id) for book_id in book_ids))
         label = {'unread': _('Mark as Unread'), 'reading': _('Mark as Reading'),
                  'finished': _('Mark as Finished')}[status]
+        now = time.time()
         with self.undoable(label):
             for chunk in _chunks(book_ids):
                 marks = ','.join('?' * len(chunk))
-                self._update('books', f'id IN ({marks})', chunk, {'status': status})
+                if status == 'finished':  # its date; a book already finished keeps its own
+                    self._update('books', f'id IN ({marks}) AND status != ?',
+                                 chunk + ['finished'], {'finished': now})
+                values = {'status': status, **({'finished': 0} if status == 'unread' else {})}
+                self._update('books', f'id IN ({marks})', chunk, values)
+
+    def finished(self, since=None, until=None):
+        """[(book_id, when)] of the books marked finished (in [since, until) when given),
+        oldest first: books.finished, kept while a finished book is read again."""
+        clauses, params = ['finished > 0'], []
+        if since is not None:
+            clauses.append('finished >= ?')
+            params.append(since)
+        if until is not None:
+            clauses.append('finished < ?')
+            params.append(until)
+        return [tuple(row) for row in self.db.execute(
+            f'SELECT id, finished FROM books WHERE {" AND ".join(clauses)} '
+            'ORDER BY finished, id', params)]
+
+    def page_counts(self):
+        """{book_id: pages} of the books whose page count is known (books.pages)."""
+        return dict(self.db.execute('SELECT id, pages FROM books WHERE pages > 0').fetchall())
 
     def log_session(self, book_id, started, seconds, start_fraction, end_fraction):
         """Record a stretch of reading; its id."""
@@ -1059,6 +1122,14 @@ class Library(GObject.Object):
         label = _('Remove Highlight') if row['kind'] == 'highlight' else _('Remove Bookmark')
         with self.undoable(label):
             self._delete('annotations', 'id = ?', [annotation_id])
+
+    def set_annotation_location(self, annotation_id, location, position=None):
+        """The place of an annotation imported without one (a Kindle highlight the reader
+        found in the book): not an undo step, as reading progress is not."""
+        values = {'location': location or ''}
+        if position is not None:
+            values['position'] = max(0.0, min(1.0, float(position)))
+        self._update('annotations', 'id = ?', [annotation_id], values, record=False)
 
     # -- shelves --------------------------------------------------------------------------
 
@@ -1199,3 +1270,162 @@ class Library(GObject.Object):
                                     {'missing': int(bool(missing))}, record=False)
         if changed:
             self._touch('books')
+
+    # -- books opened without adding ------------------------------------------------------
+
+    def add_opened(self, info, path, *, hash, size):
+        """A book file opened from outside, read where it is and kept out of the library's
+        lists (source OPENED): its id. No undo step: nothing the user sees changed."""
+        with self.undoable(None):
+            return self.add_book(info, path, hash=hash, size=size, source=OPENED)
+
+    def opened_ids(self):
+        """The ids of the books opened without adding."""
+        return {row[0] for row in self.db.execute('SELECT id FROM books WHERE source = ?',
+                                                  (OPENED,))}
+
+    def keep_book(self, book_id, source='library', path=None):
+        """Add a book opened without adding to the library (undoable 'Add to Library'): its
+        source becomes `source`, its 'added' now, and with `path` (a copy made in the
+        library folder) its file is that copy. False when it was not an opened book."""
+        row = self.db.execute('SELECT source FROM books WHERE id = ?', (book_id,)).fetchone()
+        if row is None or row['source'] != OPENED:
+            return False
+        with self.undoable(_('Add to Library')):
+            if path is not None:
+                path = str(path)
+                if self.db.execute('SELECT 1 FROM files WHERE path = ? AND book_id != ?',
+                                   (path, book_id)).fetchone():
+                    raise LibraryError(_('This file is already in the library'))
+                first = self.db.execute('SELECT id FROM files WHERE book_id = ? ORDER BY id '
+                                        'LIMIT 1', (book_id,)).fetchone()
+                if first is not None:
+                    self._update('files', 'id = ?', [first[0]], {
+                        'path': path, 'missing': 0, 'folder_id': self._folder_for(path)})
+            self._update('books', 'id = ?', [book_id], {'source': source, 'added': time.time()})
+            self._touch('books')
+        return True
+
+    # -- duplicates -----------------------------------------------------------------------
+
+    def duplicates(self):
+        """The books that look like the same book: [[book id]] groups of two or more with
+        the same normalised title (titles.title_key) and an author in common (or no author
+        on one side), each group oldest first, the groups by title."""
+        rows = self.db.execute(
+            f"SELECT b.title_key, b.id, b.sort_title FROM books b WHERE b.title_key != '' AND "
+            f"{HIDDEN} AND b.title_key IN (SELECT title_key FROM books b WHERE "
+            f"title_key != '' AND {HIDDEN} GROUP BY title_key HAVING COUNT(*) > 1) "
+            'ORDER BY b.title_key, b.id').fetchall()
+        if not rows:
+            return []
+        names = {}
+        for book_id, name in self._grouped(
+                'SELECT ba.book_id, a.name FROM book_authors ba JOIN authors a '
+                'ON a.id = ba.author_id {where}', [row[1] for row in rows], 'ba.book_id'):
+            names.setdefault(book_id, set()).update(titles.name_tokens(name))
+        groups, keys = [], {}
+        for key, book_id, sort_title in rows:
+            tokens = names.get(book_id, set())
+            clusters = keys.setdefault(key, [])
+            for cluster in clusters:
+                if not tokens or not cluster['tokens'] or tokens & cluster['tokens']:
+                    cluster['ids'].append(book_id)
+                    cluster['tokens'] |= tokens
+                    break
+            else:
+                cluster = {'ids': [book_id], 'tokens': set(tokens), 'sort': sort_title}
+                clusters.append(cluster)
+                groups.append(cluster)
+        groups = [group for group in groups if len(group['ids']) > 1]
+        groups.sort(key=lambda group: titles.sort_key(group['sort']))
+        return [group['ids'] for group in groups]
+
+    def richest(self, book_ids):
+        """Of books that are the same book, the one to keep when they are merged: the one
+        with the most to lose (a cover, a description, identifiers, highlights, progress)."""
+        def score(book):
+            annotations = self.db.execute('SELECT COUNT(*) FROM annotations WHERE book_id = ?',
+                                          (book.id,)).fetchone()[0]
+            return (3 * book.has_cover + 2 * bool(book.description) + len(book.identifiers)
+                    + len(book.tags) + bool(book.series) + bool(book.publisher)
+                    + bool(book.published) + bool(book.rating) + 2 * bool(annotations)
+                    + 2 * bool(book.progress or book.status != 'unread') + len(book.formats),
+                    -book.id)
+        books = [book for book in (self.book(book_id) for book_id in book_ids) if book]
+        return max(books, key=score).id if books else None
+
+    def merge_books(self, keep_id, other_ids):
+        """Merge books that are the same book into `keep_id` (undoable 'Merge Books'): the
+        others' files become its formats, their highlights, bookmarks, reading sessions and
+        shelves its own; what it lacks (description, publisher, published, language, series,
+        identifiers, tags) is taken from them, the best rating kept; the reading place is
+        the most recently read one's; it keeps the earliest date added. The others leave
+        the library (their files stay where they are, now the kept book's). Returns the
+        number of books merged into it."""
+        keep = self.book(keep_id)
+        others = [book for book in (self.book(book_id) for book_id in
+                                    dict.fromkeys(other_ids) if book_id != keep_id) if book]
+        if keep is None or not others:
+            return 0
+        everyone = [keep] + others
+        with self.undoable(_('Merge Books')):
+            values = {}
+            for name in ('description', 'publisher', 'published', 'language'):
+                if not getattr(keep, name):
+                    found = next((getattr(book, name) for book in others
+                                  if getattr(book, name)), '')
+                    if found:
+                        values[name] = found
+            if not keep.series:
+                donor = next((book for book in others if book.series), None)
+                if donor is not None:
+                    values['series_id'] = self._series_id(donor.series)
+                    values['series_index'] = donor.series_index
+            values['rating'] = max(book.rating for book in everyone)
+            read = max(everyone, key=lambda book: (book.last_read, book.progress))
+            if read.last_read:
+                values.update(status=read.status, progress=read.progress,
+                              location=read.location, last_read=read.last_read)
+            else:
+                rank = {'unread': 0, 'reading': 1, 'finished': 2}
+                values['status'] = max((book.status for book in everyone), key=rank.get)
+            ids = [book.id for book in everyone]
+            marks = ','.join('?' * len(ids))
+            values['finished'] = self.db.execute(
+                f'SELECT MAX(finished) FROM books WHERE id IN ({marks})', ids).fetchone()[0]
+            values['added'] = min(book.added for book in everyone)
+            values['modified'] = time.time()
+            if not keep.authors:
+                donor = next((book for book in others if book.authors), None)
+                if donor is not None:
+                    self._set_authors(keep_id, donor.authors)
+                    values['author_sort'] = titles.authors_sort(donor.authors)
+            self._add_tags(keep_id, [tag for book in others for tag in book.tags])
+            have = set(keep.identifiers)
+            for book in others:
+                for kind, value in book.identifiers.items():
+                    if kind not in have and kind != 'uuid':
+                        have.add(kind)
+                        self._insert('identifiers', {'book_id': keep_id, 'type': kind,
+                                                     'value': value})
+            shelves = {row[0] for row in self.db.execute(
+                'SELECT shelf_id FROM shelf_books WHERE book_id = ?', (keep_id,))}
+            other_marks = ','.join('?' * len(others))
+            other_ids = [book.id for book in others]
+            for shelf_id, added in self.db.execute(
+                    f'SELECT shelf_id, MIN(added) FROM shelf_books WHERE book_id IN '
+                    f'({other_marks}) GROUP BY shelf_id', other_ids).fetchall():
+                if shelf_id not in shelves:
+                    self._insert('shelf_books', {'shelf_id': shelf_id, 'book_id': keep_id,
+                                                 'added': added})
+            for table in ('files', 'annotations', 'sessions'):
+                self._update(table, f'book_id IN ({other_marks})', other_ids,
+                             {'book_id': keep_id})
+            for table in ('book_authors', 'book_tags', 'identifiers', 'shelf_books'):
+                self._delete(table, f'book_id IN ({other_marks})', other_ids)
+            self._delete('books', f'id IN ({other_marks})', other_ids)
+            self._update('books', 'id = ?', [keep_id], values)
+            self._refresh_derived([keep_id])
+            self._touch('books')
+        return len(others)

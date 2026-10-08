@@ -22,6 +22,7 @@
     device.send(library, covers, book_id, kepub=True, progress=None, cancellable=None)
                                         # the path written on the device (in a thread)
     device.remove(path)                 # deletes a book file from the device
+    device.clippings_path()             # a Kindle's My Clippings.txt, or None
     device.eject(callback, operation=None)  # callback(error or None), on the main thread
     monitor.devices_with_book(book_id)  # [Device] whose last match() found the book
 
@@ -35,7 +36,7 @@ renamed, so an unplugged reader never shows half a book):
 - 'kindle' (`documents/` and `system/` at the root): `<root>/documents/<Title> - <Author>.azw3`.
   A Kindle reads AZW3, MOBI, PDF and TXT over USB but not EPUB: an EPUB-only book is
   converted with Calibre's `ebook-convert` when it is installed, and otherwise cannot be
-  sent by cable (Amazon's Send to Kindle takes EPUB by e-mail; not done yet).
+  sent by cable (Amazon's Send to Kindle takes EPUB by e-mail: mail.py).
 - 'generic' (PocketBook, Tolino, Boox in USB mode…): a removable drive with a books folder
   at its root (`Books`, `books`, `eBooks`, `ebooks`, `Digital Editions`), which is where
   books go, as `<Title> - <Author>.<ext>`. A plain USB stick with such a folder counts too.
@@ -323,6 +324,13 @@ class Device:
             return _('A Kindle cannot open EPUB books sent by cable. Install Calibre to '
                      'convert them, or use Amazon’s Send to Kindle.')
         return _('No format this reader can open')
+
+    def clippings_path(self):
+        """A Kindle's documents/My Clippings.txt (its highlights), or None."""
+        if self.kind != 'kindle':
+            return None
+        path = os.path.join(self.root, 'documents', 'My Clippings.txt')
+        return path if os.path.isfile(path) else None
 
     # -- books on the device -----------------------------------------------------------------
 

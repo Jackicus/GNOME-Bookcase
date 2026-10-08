@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Jack Tully
+
+using Gtk 4.0;
+using Adw 1;
+
+// Find Duplicates: the books that look like the same book, a group each, with the one to
+// keep chosen and Merge (pages/duplicates.py fills the groups).
+template $BookcaseDuplicatesPage: Adw.NavigationPage {
+  title: _("Duplicates");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      title-widget: Adw.WindowTitle window_title {
+        title: _("Duplicates");
+      };
+
+      [end]
+      Button merge_all_button {
+        label: _("Merge _All");
+        use-underline: true;
+        tooltip-text: _("Merge Every Group Into the Book Chosen to Keep");
+      }
+    }
+
+    content: Stack stack {
+      transition-type: crossfade;
+
+      StackPage {
+        name: "groups";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 720;
+            tightening-threshold: 520;
+
+            child: Box groups_box {
+              orientation: vertical;
+              spacing: 24;
+              margin-top: 18;
+              margin-bottom: 24;
+              margin-start: 12;
+              margin-end: 12;
+
+              Label {
+                label: _("These books have the same title and an author in common. Merging keeps one book with every file, highlight, bookmark and shelf of the others, and the details it lacks. The files stay where they are, and Undo puts the books back.");
+                wrap: true;
+                xalign: 0;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+            };
+          };
+        };
+      }
+
+      StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage {
+          icon-name: "object-select-symbolic";
+          title: _("No Duplicates");
+          description: _("No two books in the library look like the same book");
+        };
+      }
+    };
+  };
+}

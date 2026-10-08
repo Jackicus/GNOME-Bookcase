@@ -5,20 +5,29 @@
     <file preprocess="xml-stripblanks">reader_window.ui</file>
     <file preprocess="xml-stripblanks">home.ui</file>
     <file preprocess="xml-stripblanks">books.ui</file>
+    <file preprocess="xml-stripblanks">duplicates.ui</file>
     <file preprocess="xml-stripblanks">groups.ui</file>
     <file preprocess="xml-stripblanks">book.ui</file>
     <file preprocess="xml-stripblanks">device.ui</file>
+    <file preprocess="xml-stripblanks">discover.ui</file>
+    <file preprocess="xml-stripblanks">catalog.ui</file>
+    <file preprocess="xml-stripblanks">stats.ui</file>
     <file preprocess="xml-stripblanks">edit_metadata.ui</file>
     <file preprocess="xml-stripblanks">fetch_metadata.ui</file>
     <file preprocess="xml-stripblanks">add_books.ui</file>
     <file preprocess="xml-stripblanks">shelf.ui</file>
     <file preprocess="xml-stripblanks">preferences.ui</file>
+    <file preprocess="xml-stripblanks">catalog_entry.ui</file>
+    <file preprocess="xml-stripblanks">add_catalog.ui</file>
     <file>style.css</file>
     <!-- The app's own symbolic icons (src/icons/), found by GTK under the resource base path. -->
     <file alias="icons/scalable/actions/tag-symbolic.svg" preprocess="xml-stripblanks">icons/tag-symbolic.svg</file>
     <file alias="icons/scalable/actions/library-symbolic.svg" preprocess="xml-stripblanks">icons/library-symbolic.svg</file>
     <file alias="icons/scalable/actions/book-open-symbolic.svg" preprocess="xml-stripblanks">icons/book-open-symbolic.svg</file>
     <file alias="icons/scalable/actions/book-closed-symbolic.svg" preprocess="xml-stripblanks">icons/book-closed-symbolic.svg</file>
+    <file alias="icons/scalable/actions/discover-symbolic.svg" preprocess="xml-stripblanks">icons/discover-symbolic.svg</file>
+    <file alias="icons/scalable/actions/funnel-symbolic.svg" preprocess="xml-stripblanks">icons/funnel-symbolic.svg</file>
+    <file alias="icons/scalable/actions/statistics-symbolic.svg" preprocess="xml-stripblanks">icons/statistics-symbolic.svg</file>
     <file preprocess="xml-stripblanks">metainfo.xml</file>
     <!-- The reader page (src/reader/) and the vendored foliate-js. -->
     <file>reader/reader.html</file>

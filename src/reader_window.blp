@@ -93,16 +93,32 @@ template $BookcaseReaderWindow: Adw.ApplicationWindow {
               Gtk.StackPage {
                 name: "list";
 
-                child: Gtk.ScrolledWindow {
-                  hscrollbar-policy: never;
+                child: Gtk.Box {
+                  orientation: vertical;
 
-                  child: Gtk.ListBox annotations_list {
-                    selection-mode: none;
+                  Gtk.ScrolledWindow {
+                    hscrollbar-policy: never;
+                    vexpand: true;
 
-                    styles [
-                      "navigation-sidebar",
-                    ]
-                  };
+                    child: Gtk.ListBox annotations_list {
+                      selection-mode: none;
+
+                      styles [
+                        "navigation-sidebar",
+                      ]
+                    };
+                  }
+
+                  // Export Highlights… and Copy as Markdown (dialogs/highlights.py).
+                  Gtk.ActionBar {
+                    [end]
+                    Gtk.MenuButton {
+                      label: _("E_xport");
+                      use-underline: true;
+                      menu-model: annotations_menu;
+                      direction: up;
+                    }
+                  }
                 };
               }
 
@@ -546,6 +562,11 @@ menu primary_menu {
       label: _("Book Details");
       action: "win.info";
     }
+
+    item {
+      label: _("Open With…");
+      action: "win.open-with";
+    }
   }
 
   section {
@@ -559,6 +580,20 @@ menu primary_menu {
     item {
       label: _("Close");
       action: "win.close";
+    }
+  }
+}
+
+menu annotations_menu {
+  section {
+    item {
+      label: _("_Export Highlights…");
+      action: "win.export-highlights";
+    }
+
+    item {
+      label: _("_Copy as Markdown");
+      action: "win.copy-highlights";
     }
   }
 }

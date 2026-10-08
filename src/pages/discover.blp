@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Jack Tully
+
+using Gtk 4.0;
+using Adw 1;
+
+// Discover: the online catalogues as cards (pages/discover.py fills them), each opening its
+// books (pages/catalog.py), and Add Catalog… for a server of one's own.
+template $BookcaseDiscoverPage: Adw.NavigationPage {
+  title: _("Discover");
+  tag: "discover";
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [end]
+      Button add_button {
+        icon-name: "list-add-symbolic";
+        tooltip-text: _("Add Catalog…");
+        action-name: "discover.add";
+      }
+    }
+
+    content: Stack stack {
+      StackPage {
+        name: "catalogs";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 860;
+            tightening-threshold: 600;
+
+            child: Box {
+              orientation: vertical;
+              spacing: 18;
+              margin-top: 18;
+              margin-bottom: 30;
+              margin-start: 12;
+              margin-end: 12;
+
+              Label intro_label {
+                label: _("Free books from online catalogues, and books from your own server: Calibre-Web, Kavita, Komga or Calibre’s content server.");
+                xalign: 0;
+                wrap: true;
+                margin-start: 6;
+                margin-end: 6;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              FlowBox flow_box {
+                selection-mode: none;
+                activate-on-single-click: true;
+                homogeneous: true;
+                min-children-per-line: 1;
+                max-children-per-line: 2;
+                column-spacing: 12;
+                row-spacing: 12;
+                valign: start;
+
+                styles [
+                  "catalog-cards",
+                ]
+              }
+
+              Button {
+                label: _("_Add Catalog…");
+                use-underline: true;
+                halign: center;
+                margin-top: 6;
+                action-name: "discover.add";
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          };
+        };
+      }
+
+      StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage {
+          icon-name: "discover-symbolic";
+          title: _("No Catalogues");
+          description: _("Add a catalogue by its address, or bring back the free ones Bookcase comes with");
+
+          child: Box {
+            orientation: vertical;
+            spacing: 12;
+            halign: center;
+
+            Button {
+              label: _("_Add Catalog…");
+              use-underline: true;
+              action-name: "discover.add";
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            }
+
+            Button {
+              label: _("_Restore Free Catalogues");
+              use-underline: true;
+              action-name: "discover.restore";
+
+              styles [
+                "pill",
+              ]
+            }
+          };
+        };
+      }
+    };
+  };
+}

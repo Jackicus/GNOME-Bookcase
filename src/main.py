@@ -7,6 +7,7 @@
     app.run(sys.argv)
 
     app.library, app.covers, app.importer, app.devices, app.settings, app.data_dir
+    app.sync                            # kosync.Sync: reading positions with KOReader's sync
     app.toast(text, undo=False)         # a toast on the library window (Undo runs app.undo)
     app.report(error, context=None)     # an error, in a sentence, and logged
     app.undo()                          # puts the newest change back; False when none
@@ -24,18 +25,24 @@ their accelerators (shortcuts.ACCELS) and the style sheet, and a few seconds lat
 the watched folders and linked Calibre libraries in the background, one after the other.
 do_activate builds the library window (imported only then).
 
-Book files opened from Files (HANDLES_OPEN): a file the library has (by path, else by
-content hash) opens in the reader; another is added (copied into the library folder, as Add
-Books does) and then opened, and a toast says it was added. Files that are not books are
-toasted. app.* actions: add-books (a file chooser of formats.SUFFIXES), add-folder (a folder
-to watch, scanned at once), link-calibre (a folder holding metadata.db), preferences,
-shortcuts, about, undo, quit.
+Book files opened from Files (HANDLES_OPEN) or with Open File… are read at once, without
+adding them: a file the library has (by path, else by content hash) opens as its book;
+another becomes a book opened without adding (importing.open_in_place, in a thread: read
+where it is, kept out of the library's lists, its place and highlights kept), and the reader
+offers Add to Library (app.keep_book). Files that are not books are toasted. app.* actions:
+add-books (a file chooser of formats.SUFFIXES), open-file (read without adding), add-folder
+(a folder to watch, scanned at once), link-calibre (a folder holding metadata.db),
+preferences, shortcuts, about, undo, quit.
+
+    app.open_path(path)                 # read a file from outside, without adding it
+    app.keep_book(book_id)              # add a book opened without adding (copied in)
 """
 
 import logging
 import os
 import pathlib
 import sys
+import threading
 from gettext import gettext as _
 
 import gi
@@ -53,6 +60,7 @@ log = logging.getLogger(__name__)
 
 RESOURCE_PATH = '/io/github/jackicus/Bookcase'
 RESCAN_DELAY_S = 3
+MAX_OPEN = 8  # reader windows opened at once from Files
 
 
 def default_data_dir(profile='default'):
@@ -107,6 +115,7 @@ class Application(Adw.Application):
         self.data_dir = None
         self.settings = None  # in do_startup: GSettings
         self.library = None  # in do_startup
+        self.sync = None  # in do_startup: kosync.Sync
         self.covers = None
         self.importer = None
         self.devices = None  # devices.DeviceMonitor, when it could start
@@ -144,11 +153,20 @@ class Application(Adw.Application):
         self.importer = Importer(self.library, self.covers, self.library_folder())
         self.settings.connect('changed::library-folder', self._on_library_folder_changed)
         self._start_devices()
+        self._start_sync()
         self._add_actions()
         for name, accels in ACCELS.items():
             self.set_accels_for_action(name, accels)
         self._load_css()
         self._rescan_source = GLib.timeout_add_seconds(RESCAN_DELAY_S, self._rescan_folders)
+
+    def _start_sync(self):
+        """app.sync; under --demo its key lives in memory only, so the demo library's
+        invented books never reach a real sync account."""
+        from . import kosync
+
+        self.sync = kosync.Sync(self.settings, self.data_dir / 'sync.json',
+                                keyring=kosync.MemoryKeyring() if self.demo else None)
 
     def library_folder(self):
         """The folder added books are copied into: build/demo/Books under --demo (never the
@@ -187,44 +205,89 @@ class Application(Adw.Application):
         window.present()
 
     def do_open(self, files, _hint):
-        self.do_activate()
-        paths, refused = book_files(files)
+        """Book files open in the reader alone (the library window stays closed if it was);
+        folders are added, as dropping them on the window does."""
+        folders = [gio_file for gio_file in files
+                   if gio_file.get_path() and os.path.isdir(gio_file.get_path())]
+        if folders:
+            self.do_activate()
+            self.add_files(folders)
+        paths, refused = book_files([gio_file for gio_file in files if gio_file not in folders])
         if refused:
+            self.do_activate()
             self.toast(_('“{name}” is not a book Bookcase can open').format(name=refused[0]))
-        for path in paths:
-            self.open_path(path)
+        for path in paths[:MAX_OPEN]:
+            self.hold()
 
-    def open_path(self, path):
-        """Open a book file from outside: the library's book when it has the file, else
-        the file is added and then opened."""
+            def opened(book_id):
+                if book_id is None:
+                    self.do_activate()  # for the toast that says why
+                self.release()
+
+            self.open_path(path, done=opened)
+
+    def open_path(self, path, done=None):
+        """Read a book file from outside without adding it: the library's book when it has
+        the file, else a book opened without adding (importing.open_in_place, in a thread).
+        `done(book_id or None)` is called after the reader opens."""
+        path = os.path.abspath(path)
         found = self.library.find_file(path)
-        book_id = found.book_id if found is not None else None
-        if book_id is None:
-            try:
-                from .importing import partial_md5
+        if found is not None:
+            self.open_book(found.book_id)
+            if done is not None:
+                done(found.book_id)
+            return None
+        library, covers, folder = self.library, self.covers, self.library_folder()
 
-                book_id = self.library.find_by_hash(partial_md5(path))
-            except OSError as error:
-                self.report(error, _('Could not open “{name}”').format(
-                    name=os.path.basename(path)))
-                return
-        if book_id is not None:
-            self.open_book(book_id)
-            return
-        name = os.path.basename(path)
+        def work():
+            from .importing import Importer
+
+            worker = library.open_worker()
+            try:
+                importer = Importer(worker, covers.with_library(worker), folder)
+                result = importer.open_in_place(path)
+            except Exception as error:
+                log.info('opening %s: %s', path, error)
+                result = error
+            finally:
+                worker.close()
+            GLib.idle_add(finish, result)
+
+        def finish(result):
+            if isinstance(result, Exception):
+                if done is not None:
+                    done(None)
+                self.toast(_('Could not open “{name}”: {error}').format(
+                    name=os.path.basename(path), error=result))
+                return GLib.SOURCE_REMOVE
+            if self.library is not None:
+                self.open_book(result)
+            if done is not None:
+                done(result)
+            return GLib.SOURCE_REMOVE
+
+        thread = threading.Thread(target=work, name='bookcase-open', daemon=True)
+        thread.start()
+        return thread
+
+    def keep_book(self, book_id):
+        """Add a book opened without adding to the library: copied into the library folder
+        (as Add Books does) with its place and highlights; a toast with Undo says so."""
+        book = self.library.book(book_id)
+        book_file = self.library.reading_file(book_id)
+        if book is None or book_file is None:
+            self.toast(_('The book’s file cannot be found'))
+            return None
 
         def done(report):
-            ids = list(report.added) + list(report.merged) + [
-                book for _path, book in report.duplicates]
-            if ids:
-                self.toast(_('“{name}” was added to your library').format(name=name),
-                           undo=bool(report.added))
-                self.open_book(ids[0])
+            if report.added:
+                self.toast(_('“{title}” was added to your library').format(title=book.title),
+                           undo=True)
             elif report.failed:
-                self.toast(_('Could not open “{name}”: {error}').format(
-                    name=name, error=report.failed[0][1]))
+                self.toast(_('Could not add “{title}”: {error}').format(
+                    title=book.title, error=report.failed[0][1]))
 
-        self.importer.add_async([path], copy=True, done=done)
+        return self.importer.add_async([book_file.path], copy=True, done=done)
 
     def do_shutdown(self):
         if self._rescan_source is not None:
@@ -236,6 +299,11 @@ class Application(Adw.Application):
                 stop()
             except Exception:
                 log.exception('stopping the device monitor')
+        if getattr(self, 'sync', None) is not None:
+            try:
+                self.sync.shutdown()
+            except Exception:
+                log.exception('stopping sync')
         if self.library is not None:
             try:
                 self.library.close()
@@ -288,21 +356,24 @@ class Application(Adw.Application):
 
     def _add_actions(self):
         for name, callback in (
-                ('add-books', self.on_add_books), ('add-folder', self.on_add_folder),
+                ('add-books', self.on_add_books), ('open-file', self.on_open_file),
+                ('add-folder', self.on_add_folder),
                 ('link-calibre', self.on_link_calibre), ('undo', self.on_undo),
                 ('preferences', self.on_preferences), ('shortcuts', self.on_shortcuts),
                 ('about', self.on_about), ('quit', self.on_quit)):
             action = Gio.SimpleAction.new(name, None)
             action.connect('activate', callback)
             self.add_action(action)
+        from .dialogs import highlights
+
+        highlights.add_actions(self)  # app.import-clippings, app.export-highlights
         self._update_undo()
         self.library.connect('changed', lambda *_args: self._update_undo())
 
     def _update_undo(self):
         self.lookup_action('undo').set_enabled(self.library.can_undo())
 
-    def on_add_books(self, *_args):
-        dialog = Gtk.FileDialog(title=_('Add Books'), accept_label=_('_Add'), modal=True)
+    def _book_filters(self, dialog):
         books = Gtk.FileFilter(name=_('E-books'))
         for suffix in formats.SUFFIXES:
             books.add_suffix(suffix.lstrip('.'))
@@ -313,6 +384,24 @@ class Application(Adw.Application):
         filters.append(everything)
         dialog.set_filters(filters)
         dialog.set_default_filter(books)
+
+    def on_open_file(self, *_args):
+        dialog = Gtk.FileDialog(title=_('Open File'), accept_label=_('_Open'), modal=True)
+        self._book_filters(dialog)
+
+        def chosen(dialog, result):
+            try:
+                files = dialog.open_multiple_finish(result)
+            except GLib.Error:
+                return  # dismissed
+            self.do_open([files.get_item(index) for index in range(files.get_n_items())],
+                         '')
+
+        dialog.open_multiple(self.get_active_window(), None, chosen)
+
+    def on_add_books(self, *_args):
+        dialog = Gtk.FileDialog(title=_('Add Books'), accept_label=_('_Add'), modal=True)
+        self._book_filters(dialog)
 
         def chosen(dialog, result):
             try:

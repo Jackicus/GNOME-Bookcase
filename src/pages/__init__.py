@@ -8,12 +8,13 @@ the first visit, and the pushed ones (a book's details, an author's or a series'
     app()                              # the Application, for a page that needs the library
     PageListener(page, kinds, Page.refresh)  # a debounced refresh while mapped
 
-Root keys: home, all, authors, series, tags, status:reading, status:unread, status:finished,
-shelf:ID, device:ID. A root page is an Adw.NavigationPage with its own Adw.ToolbarView and
-Adw.HeaderBar (window.py replaces the navigation stack with it). Its module is imported by
-its factory, never at the top of window.py (startup time). A page listens to `app().library`'s
-`changed` signal while it is mapped and refreshes itself from the library: it holds no state
-of its own that the library does not.
+Root keys: home, all, missing (the books whose files are gone), authors, series, tags,
+status:reading, status:unread, status:finished, stats, discover, shelf:ID, device:ID. A root
+page is an Adw.NavigationPage with its own Adw.ToolbarView and Adw.HeaderBar (window.py
+replaces the navigation stack with it). Its module is imported by its factory, never at the
+top of window.py (startup time). A page listens to `app().library`'s `changed` signal while
+it is mapped and refreshes itself from the library: it holds no state of its own that the
+library does not.
 """
 
 from gi.repository import Gio, GLib
@@ -35,6 +36,18 @@ def make_root(key):
         from .books import BooksPage
 
         return BooksPage(key=key)
+    if key == 'missing':
+        from .books import BooksPage
+
+        return BooksPage(key=key, query='has:missing')
+    if key == 'stats':
+        from .stats import StatsPage
+
+        return StatsPage()
+    if key == 'discover':
+        from .discover import DiscoverPage
+
+        return DiscoverPage()
     if key in ('authors', 'series', 'tags'):
         from .groups import GroupsPage
 

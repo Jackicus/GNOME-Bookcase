@@ -19,12 +19,17 @@ Platform behaviour worth knowing is in `gtk-notes.md`; the reader's in `reader.m
   (importing.Importer), `app.toast(text, undo=False)`, `app.report(error, context=None)`,
   `app.undo()`, `app.open_book(book_id)` (the reader window: one per book, raised when open),
   `app.add_files(gio_files)` (the import, with progress), `app.window()` (the library window).
-  app.* actions: add-books, add-folder, link-calibre, preferences, shortcuts, about, undo, quit.
+  `app.open_path(path, done=None)` (read a file without adding it: library.OPENED),
+  `app.keep_book(book_id)` (Add to Library for such a book).
+  app.* actions: add-books, open-file, add-folder, link-calibre, preferences, shortcuts, about,
+  undo, quit;
+  import-clippings and export-highlights (dialogs/highlights.add_actions).
 - The library window's seams (window.py): `show_root(key)`, `push(page)`, `pop()`,
   `show_book(book_id)` (pushes pages/book.py), `show_books(title, **filters)` (pushes a
   pages/books.py for an author, a series, a tag, a search), `search(query)`, `add_toast(toast)`,
-  `set_dialog_open(bool)`, `undone(label)`. Root keys: `home`, `all`, `authors`, `series`,
-  `tags`, `status:reading`, `status:unread`, `status:finished`, `shelf:ID`, `device:ID`.
+  `set_dialog_open(bool)`, `undone(label)`. Root keys: `home`, `all`, `missing`, `authors`, `series`,
+  `tags`, `status:reading`, `status:unread`, `status:finished`, `stats`, `discover`, `shelf:ID`,
+  `device:ID`.
   A page finds the app through `pages.app()`. Dialog modules expose `present*(app, parent,
   …)` functions returning the dialog; a dialog calls `parent.set_dialog_open()` on map and
   close.

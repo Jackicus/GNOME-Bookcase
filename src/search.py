@@ -36,7 +36,7 @@ The syntax (for the user guide):
   - `read:<7d` (opened in the last week), the same forms as `added:`
   - `published:>=2000`, `published:<1900-06`, `published:1999`
   - `has:cover`, `has:series`, `has:rating`, `has:tags`, `has:description`,
-    `has:annotations`
+    `has:annotations`; `has:missing` for books whose files cannot be found
 - A word with a colon that is not one of these fields is searched as a word (`re:zero`).
 - A field's value it cannot understand (`rating:many`) matches no book.
 """
@@ -64,6 +64,16 @@ HAS = {
     'description': "b.description != ''",
     'annotations': 'EXISTS (SELECT 1 FROM annotations n WHERE n.book_id = b.id)',
     'notes': "EXISTS (SELECT 1 FROM annotations n WHERE n.book_id = b.id AND n.note != '')",
+    'missing': 'NOT EXISTS (SELECT 1 FROM files f WHERE f.book_id = b.id AND f.missing = 0)',
+}
+# The filter bar's format choices (pages/books.py): a name and the formats it takes in.
+FORMAT_GROUPS = {
+    'epub': ('epub', 'kepub'),
+    'pdf': ('pdf',),
+    'comic': ('cbz', 'cbr'),
+    'kindle': ('mobi', 'azw3'),
+    'fb2': ('fb2', 'fbz'),
+    'txt': ('txt',),
 }
 NOTHING = '0'
 _COMPARISON = re.compile(r'^(>=|<=|>|<|=)?\s*(.*)$')
@@ -355,6 +365,25 @@ def to_sql(query, now=None):
     if result is None:
         return '1', []
     return result
+
+
+def filter_query(format=None, status=None, rating=None, language=None):
+    """The search the filter bar's choices make (pages/books.py), to put after what is typed:
+    a FORMAT_GROUPS name, a status, the least stars (1-5), a language code. '' for none."""
+    parts = []
+    group = FORMAT_GROUPS.get(format or '')
+    if group:
+        terms = ' or '.join(f'format:{name}' for name in group)
+        parts.append(f'({terms})' if len(group) > 1 else terms)
+    if status in ('unread', 'reading', 'finished'):
+        parts.append(f'status:{status}')
+    if rating:
+        parts.append(f'rating:>={int(rating)}')
+    if language:
+        code = ''.join(c for c in language if c.isalnum() or c == '-')
+        if code:
+            parts.append(f'language:{code}')
+    return ' '.join(parts)
 
 
 def words(query):

@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Jack Tully
+
+using Gtk 4.0;
+using Adw 1;
+
+// A page of a catalogue (pages/catalog.py): its sections as a list and its books as covers,
+// a search when the catalogue has one, its filters as menus, the next page on scrolling down.
+template $BookcaseCatalogPage: Adw.NavigationPage {
+  child: Adw.BreakpointBin {
+    width-request: 360;
+    height-request: 240;
+
+    Adw.Breakpoint compact_breakpoint {
+      condition ("max-width: 500sp")
+    }
+
+    child: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        title-widget: Adw.WindowTitle window_title {};
+
+        [end]
+        MenuButton more_button {
+          icon-name: "view-more-symbolic";
+          tooltip-text: _("More");
+        }
+
+        [end]
+        ToggleButton search_button {
+          icon-name: "system-search-symbolic";
+          tooltip-text: _("Search the Catalogue");
+          visible: false;
+          active: bind search_bar.search-mode-enabled bidirectional;
+        }
+      }
+
+      [top]
+      SearchBar search_bar {
+        child: Adw.Clamp {
+          maximum-size: 520;
+
+          child: SearchEntry search_entry {
+            hexpand: true;
+            placeholder-text: _("Search the catalogue");
+          };
+        };
+      }
+
+      [top]
+      ScrolledWindow facet_scroller {
+        vscrollbar-policy: never;
+        visible: false;
+
+        child: Box facet_box {
+          spacing: 6;
+          margin-start: 12;
+          margin-end: 12;
+          margin-top: 6;
+          margin-bottom: 6;
+        };
+      }
+
+      content: Stack stack {
+        StackPage {
+          name: "loading";
+
+          child: Adw.Spinner {
+            halign: center;
+            valign: center;
+            width-request: 32;
+            height-request: 32;
+          };
+        }
+
+        StackPage {
+          name: "feed";
+
+          child: ScrolledWindow scroller {
+            hscrollbar-policy: never;
+
+            child: Box {
+              orientation: vertical;
+              spacing: 18;
+              margin-top: 12;
+              margin-bottom: 24;
+
+              Adw.Clamp nav_clamp {
+                maximum-size: 720;
+                margin-start: 12;
+                margin-end: 12;
+
+                child: ListBox nav_list {
+                  selection-mode: none;
+
+                  styles [
+                    "boxed-list",
+                  ]
+                };
+              }
+
+              FlowBox book_box {
+                selection-mode: none;
+                activate-on-single-click: true;
+                homogeneous: true;
+                min-children-per-line: 2;
+                max-children-per-line: 30;
+                valign: start;
+
+                styles [
+                  "catalog-grid",
+                ]
+              }
+
+              Box more_box {
+                halign: center;
+
+                Adw.Spinner more_spinner {
+                  visible: false;
+                  width-request: 24;
+                  height-request: 24;
+                }
+
+                Button more_page_button {
+                  label: _("_More");
+                  use-underline: true;
+
+                  styles [
+                    "pill",
+                  ]
+                }
+              }
+            };
+          };
+        }
+
+        StackPage {
+          name: "message";
+
+          child: Adw.StatusPage status_page {
+            child: Button status_button {
+              halign: center;
+              use-underline: true;
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            };
+          };
+        }
+      };
+    };
+  };
+}

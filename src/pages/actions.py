@@ -10,12 +10,13 @@ on itself, and the menu that names them (a grid's context menu, the details page
     book_menu(app.library, shelf_id=None, details=True)   # a Gio.Menu of the actions
     popup_menu(widget, model, x, y)        # a context menu at a point of a widget
 
-Actions: read, details, edit, add-to-shelf (a shelf id), new-shelf, remove-from-shelf (on a
-manual shelf's page), mark-reading, mark-finished, mark-unread, send, export, show-in-files,
-remove, trash, select-all (when the page gives `select_all`). Each change goes through the
-library's undoable methods and toasts with Undo; Move to Trash asks first (and trashes the
-books' files through Gio, recoverable, then removes the books); the books of a linked Calibre
-library are never trashed (their files are Calibre's).
+Actions: read, details, edit, find-metadata (dialogs/bulk_metadata.py), add-to-shelf (a
+shelf id), new-shelf, remove-from-shelf (on a manual shelf's page), mark-reading,
+mark-finished, mark-unread, send, export, show-in-files, remove, trash, select-all (when the
+page gives `select_all`). Each change goes through the library's undoable methods and toasts
+with Undo; Move to Trash asks first (and trashes the books' files through Gio, recoverable,
+then removes the books); the books of a linked Calibre library are never trashed (their
+files are Calibre's).
 """
 
 import logging
@@ -51,6 +52,7 @@ def book_menu(library, shelf_id=None, details=True, read=True):
         menu.append_section(None, first)
     edit = Gio.Menu()
     edit.append(_('_Edit Details…'), 'book.edit')
+    edit.append(_('Find _Metadata…'), 'book.find-metadata')
     shelves = Gio.Menu()
     for shelf in library.shelves():
         if shelf.query is None and shelf.id != shelf_id:
@@ -100,9 +102,9 @@ def popup_menu(widget, model, x, y):
 class BookActions:
     """The `book` action group on `widget`, acting on the books `get_ids()` returns."""
 
-    NAMES = ('read', 'details', 'edit', 'new-shelf', 'remove-from-shelf', 'mark-reading',
-             'mark-finished', 'mark-unread', 'send', 'export', 'show-in-files', 'remove',
-             'trash')
+    NAMES = ('read', 'details', 'edit', 'find-metadata', 'new-shelf', 'remove-from-shelf',
+             'mark-reading', 'mark-finished', 'mark-unread', 'send', 'export', 'show-in-files',
+             'remove', 'trash')
 
     def __init__(self, widget, get_ids, shelf_id=None, select_all=None, details=None):
         self._widget = widget.weak_ref()
@@ -182,6 +184,11 @@ class BookActions:
         window = app().window()
         if window is not None:
             window.show_book(ids[0])
+
+    def find_metadata(self, ids):
+        from ..dialogs import bulk_metadata
+
+        bulk_metadata.present(app(), self._window(), ids)
 
     def edit(self, ids):
         from ..dialogs import edit_metadata

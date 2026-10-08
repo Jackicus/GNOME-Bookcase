@@ -13,7 +13,9 @@ the + buttons pick a folder and read it through add_books.present_scan or
 present_link_calibre). Reading: the reader's defaults, the same keys its Display popover
 sets (reader-theme, reader-font, reader-custom-font, reader-font-size, reader-line-height,
 reader-margin, reader-max-width, reader-justify, reader-hyphenate, reader-publisher-styles,
-reader-scrolled, reader-two-pages, reader-animate). Devices: send-kepub. Online: the Google
+reader-scrolled, reader-two-pages, reader-animate). Devices: send-kepub, and Send to Kindle
+(dialogs/kindle_mail.preferences_group). Sync: a page of its
+own (dialogs/sync_prefs.py). Online: the Google
 Books API key (google-books-key).
 
 Rows are bound with Gio.Settings.bind (numbers included: GSettings maps a spin row's double
@@ -138,6 +140,13 @@ class PreferencesDialog(Adw.PreferencesDialog):
         self.connect('closed', self._on_closed)
         self._show_library_folder()
         self.show_folders()
+        from .sync_prefs import SyncPage
+
+        self.add(SyncPage(app))
+        from . import kindle_mail
+
+        self.kepub_row.get_ancestor(Adw.PreferencesPage).add(
+            kindle_mail.preferences_group(app))
 
     def _watch(self, obj, signal, handler):
         self._handlers.append((obj, obj.connect(signal, handler)))

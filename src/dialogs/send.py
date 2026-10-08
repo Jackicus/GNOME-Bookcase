@@ -14,7 +14,14 @@ choice when there are several, with its free space), for a Kobo the Kobo EPUB sw
 why it cannot be. Send copies the books in a thread (devices.Device.send(), with a library
 connection of its own), showing progress; Cancel stops it between chunks, and the books
 sent so far stay. The dialog closes when done, with a toast ("Sent 3 books to Kobo Clara"),
-and tells the monitor the device's books changed.
+and tells the monitor the device's books changed. Each copy sent is remembered for reading
+sync (app.sync.remember_copy: KOReader on the device names the book by the copy's hash).
+
+Send to Kindle by e-mail (mail.py) is a destination beside the devices once it is set up
+(mail.KindleDestination, listed last): each book shows what Amazon gets (EPUB, PDF, TXT) or
+why it cannot go (MOBI, AZW3, over 50 MB); Send mails them one by one over one SMTP
+connection, with the password from the keyring. Until it is set up, a "Set Up Send to
+Kindle…" row (and a button when no e-reader is connected) opens dialogs/kindle_mail.py.
 """
 
 import logging
@@ -24,6 +31,7 @@ from gettext import ngettext
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
+from .. import mail
 from ..widgets.util import connect_weak
 
 log = logging.getLogger(__name__)
@@ -75,7 +83,13 @@ class SendDialog(Adw.Dialog):
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
         self.none_status = Adw.StatusPage(
             icon_name='tablet-symbolic', title=_('No E-Reader Connected'),
-            description=_('Connect your e-reader with a USB cable'))
+            description=_('Connect your e-reader with a USB cable, or e-mail books to a '
+                          'Kindle'))
+        setup_button = Gtk.Button(label=_('Set _Up Send to Kindle…'), use_underline=True,
+                                  halign=Gtk.Align.CENTER)
+        setup_button.add_css_class('pill')
+        connect_weak(setup_button, 'clicked', self._on_setup)
+        self.none_status.set_child(setup_button)
         self.stack.add_named(self.none_status, 'none')
 
         page = Adw.PreferencesPage()
@@ -93,7 +107,13 @@ class SendDialog(Adw.Dialog):
         else:
             self.kepub_row.set_active(True)
         connect_weak(self.kepub_row, 'notify::active', self._on_kepub_changed)
-        for row in (self.device_row, self.device_combo, self.kepub_row):
+        self.setup_row = Adw.ActionRow(
+            title=_('Set Up Send to Kindle…'), activatable=True,
+            subtitle=_('E-mail books to a Kindle, with or without a cable'))
+        self.setup_row.add_suffix(Gtk.Image(icon_name='go-next-symbolic',
+                                            accessible_role=Gtk.AccessibleRole.PRESENTATION))
+        connect_weak(self.setup_row, 'activated', self._on_setup)
+        for row in (self.device_row, self.device_combo, self.kepub_row, self.setup_row):
             device_group.add(row)
         page.add(device_group)
         self.books_group = Adw.PreferencesGroup()
@@ -127,7 +147,13 @@ class SendDialog(Adw.Dialog):
     def _update_devices(self):
         monitor = getattr(self.app, 'devices', None)
         self.devices = list(monitor.devices()) if monitor is not None else []
+        account = mail.Account.from_settings(getattr(self.app, 'settings', None))
+        if account.configured:
+            self.devices.append(mail.KindleDestination(account))
+        self.setup_row.set_visible(not account.configured)
         previous = self.device
+        if previous is not None and previous.kind == 'email':
+            previous = next((d for d in self.devices if d.kind == 'email'), None)
         if not self.devices:
             self.device = None
             self.stack.set_visible_child_name('none')
@@ -141,6 +167,7 @@ class SendDialog(Adw.Dialog):
         self.device_combo.set_selected(self.devices.index(previous))
         self._choosing = False
         self.device_combo.set_visible(len(self.devices) > 1)
+        self.device_combo.set_title(_('Send To') if account.configured else _('Device'))
         self.device_row.set_visible(len(self.devices) == 1)
         self._set_device(previous)
         self.stack.set_visible_child_name('form')
@@ -156,6 +183,9 @@ class SendDialog(Adw.Dialog):
         self.device = device
         free, _total = device.space()
         subtitle = _('{size} free').format(size=GLib.format_size(free)) if free else ''
+        if device.kind == 'email':
+            subtitle = device.account.kindle
+        self.device_row.set_title(_('Send To') if device.kind == 'email' else _('Device'))
         self.device_combo.set_subtitle(subtitle)
         self.device_row.set_subtitle(f'{device.name} · {subtitle}' if subtitle else device.name)
         self.kepub_row.set_visible(device.kind == 'kobo')
@@ -172,8 +202,14 @@ class SendDialog(Adw.Dialog):
             book = library.book(book_id)
             if book is None:
                 continue
-            formats = [file.format for file in library.files(book_id) if not file.missing]
-            plan = self.device.plan(formats, kepub=kepub) if self.device else None
+            files = [file for file in library.files(book_id) if not file.missing]
+            formats = [file.format for file in files]
+            if self.device is not None and self.device.kind == 'email':
+                sizes = {file.format: file.size for file in files}
+                plan = self.device.plan(formats, sizes=sizes)
+                formats = (formats, sizes)
+            else:
+                plan = self.device.plan(formats, kepub=kepub) if self.device else None
             result.append((book_id, book, plan, formats))
         return result
 
@@ -192,7 +228,8 @@ class SendDialog(Adw.Dialog):
                 row.set_subtitle(plan.label)
                 sendable += 1
             else:
-                row.set_subtitle(self.device.why_not(formats))
+                row.set_subtitle(self.device.why_not(*formats) if isinstance(formats, tuple)
+                                 else self.device.why_not(formats))
                 row.set_subtitle_lines(3)
                 icon = Gtk.Image(icon_name='dialog-warning-symbolic',
                                  tooltip_text=_('Cannot be sent'))
@@ -226,7 +263,8 @@ class SendDialog(Adw.Dialog):
         self.stack.set_visible_child_name('progress')
         device = self.device
         kepub = self.kepub_row.get_active()
-        thread = threading.Thread(target=self._work, args=(device, work, kepub),
+        target = self._mail_work if device.kind == 'email' else self._work
+        thread = threading.Thread(target=target, args=(device, work, kepub),
                                   name='bookcase-send', daemon=True)
         thread.start()
 
@@ -247,9 +285,12 @@ class SendDialog(Adw.Dialog):
                     GLib.idle_add(self._show_progress, index, len(work), title, fraction)
 
                 try:
-                    device.send(library, self.app.covers, book_id, kepub=kepub,
-                                progress=progress, cancellable=self.cancellable)
+                    copy = device.send(library, self.app.covers, book_id, kepub=kepub,
+                                       progress=progress, cancellable=self.cancellable)
                     sent.append(title)
+                    sync = getattr(self.app, 'sync', None)
+                    if sync is not None and copy:  # the copy's sync ids are the book's
+                        sync.remember_copy(book_id, copy)
                 except devices.Cancelled:
                     cancelled = True
                     break
@@ -266,6 +307,53 @@ class SendDialog(Adw.Dialog):
                 library.close()
         GLib.idle_add(self._finished, device, len(work), sent, failed, cancelled)
 
+    def _mail_work(self, destination, work, _kepub):
+        from . import kindle_mail
+
+        sent, failed, cancelled = [], [], False
+        account = destination.account
+        library = None
+        try:
+            library = self.app.library.open_worker()
+            password = kindle_mail.keyring(self.app).lookup(account.key)
+            GLib.idle_add(self._show_progress, 0, len(work), work[0][1], 0.0)
+            with mail.Sender(account, password,
+                             smtp=getattr(self.app, 'mail_smtp', None)) as sender:
+                for index, (book_id, title) in enumerate(work):
+                    if self.cancellable.is_cancelled():
+                        cancelled = True
+                        break
+                    GLib.idle_add(self._show_progress, index, len(work), title, 0.0)
+
+                    def progress(fraction, index=index, title=title):
+                        GLib.idle_add(self._show_progress, index, len(work), title, fraction)
+
+                    try:
+                        sender.send_book(library, self.app.covers, book_id, progress=progress)
+                        sent.append(title)
+                    except mail.MailError as error:
+                        failed.append((title, str(error)))
+                        if error.fatal:
+                            break
+        except mail.MailError as error:
+            failed.append(('', str(error)))
+        except Exception as error:
+            log.exception('mailing to %s', account.kindle)
+            failed.append(('', str(error)))
+        finally:
+            if library is not None:
+                library.close()
+        GLib.idle_add(self._finished, destination, len(work), sent, failed, cancelled)
+
+    def _on_setup(self, *_args):
+        from . import kindle_mail
+
+        kindle_mail.present_setup(self.app, self, on_saved=self._on_setup_saved)
+
+    def _on_setup_saved(self, _account):
+        if not self._closed and not self.sending:
+            self._update_devices()
+
     def _show_progress(self, index, total, title, fraction):
         self.progress_bar.set_fraction((index + fraction) / max(total, 1))
         # Translators: sending books: the book's title, then how far along the list.
@@ -276,9 +364,10 @@ class SendDialog(Adw.Dialog):
     def _finished(self, device, total, sent, failed, cancelled):
         self.sending = False
         monitor = getattr(self.app, 'devices', None)
-        if monitor is not None and sent:
+        if monitor is not None and sent and device.kind != 'email':
             monitor.books_changed(device.id)
-        self.app.toast(result_text(device.name, total, sent, failed, cancelled))
+        name = device.account.kindle if device.kind == 'email' else device.name
+        self.app.toast(result_text(name, total, sent, failed, cancelled))
         if not self._closed:
             self.force_close()
         return GLib.SOURCE_REMOVE

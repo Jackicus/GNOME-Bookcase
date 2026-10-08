@@ -8,6 +8,7 @@ window itself (its places, pushed pages, the sidebar)."""
 
 import time
 import unittest
+import uuid
 
 from tests import ROOT  # noqa: F401  (registers bookcase)
 from tests.gtk import pump, requires_gtk, wait_for
@@ -25,7 +26,9 @@ def stand_ins():
 
     class App(Adw.Application):
         def __init__(self):
-            super().__init__(application_id='io.github.jackicus.Bookcase.PagesTest',
+            # An ID of its own each time: two apps with one ID in a process clash on D-Bus.
+            super().__init__(application_id='io.github.jackicus.Bookcase.PagesTest_'
+                             + uuid.uuid4().hex,
                              flags=Gio.ApplicationFlags.NON_UNIQUE)
             self.settings = Gio.Settings.new(SCHEMA_ID)
             self.profile = 'default'
@@ -361,6 +364,138 @@ class PagesTest(unittest.TestCase):
         self.assertFalse(read_only._on_key(None, Gdk.KEY_Right, 0, 0))
         self.assertEqual(read_only.get_value(), 4)
 
+    # -- the filter bar, sorting, missing files, duplicates, the welcome, Go To -----------------
+
+    def test_filter_bar(self):
+        comic = add_book(self.library, 'Moth Lamp', ('Di Fen',), fmt='cbz', language='de')
+        self.library.update_book(self.moor, rating=8)
+        page = self.books_page(key='all')
+        page.set_filter('format', 'comic')
+        self.assertEqual(self.titles(page), ['Moth Lamp'])
+        self.assertTrue(page.filter_revealer.get_reveal_child())
+        self.assertEqual(page.format_chip.get_label(), 'Comics')
+        self.assertTrue(page.format_chip.has_css_class('active'))
+        page.set_filter('format', '')
+        page.set_filter('rating', '4')
+        self.assertEqual(self.titles(page), ['Salt Roads'])
+        page.search('harbour')
+        self.assertEqual(page.stack.get_visible_child_name(), 'empty')
+        self.assertEqual(page.empty_page.get_title(), 'No Results Found')
+        page.search('')
+        page.set_filter('rating', '')
+        page.set_filter('language', 'de')
+        self.assertEqual(self.titles(page), ['Moth Lamp'])
+        page.filter_revealer.set_reveal_child(False)  # hiding the bar clears it
+        self.assertEqual(len(self.titles(page)), 4)
+        self.assertFalse(any(page.chosen.values()))
+        status = self.books_page(key='status:unread', status='unread')
+        self.assertFalse(status.status_chip.get_visible())
+        self.assertIn(comic, [item.id for item in (status._store.get_item(n) for n in
+                                                   range(status._store.get_n_items()))])
+
+    def test_reverse_order_and_cover_size(self):
+        self.addCleanup(self.app.settings.reset, 'sort-reversed')
+        self.addCleanup(self.app.settings.reset, 'cover-size')
+        self.app.settings.set_string('sort-order', 'title')
+        page = self.books_page(key='all')
+        self.assertEqual(self.titles(page), ['Lantern Hill', 'A Quiet Harbour', 'Salt Roads'])
+        self.app.settings.set_boolean('sort-reversed', True)
+        self.assertEqual(self.titles(page), ['Salt Roads', 'A Quiet Harbour', 'Lantern Hill'])
+        page.cover_scale.set_value(200)
+        self.assertEqual(self.app.settings.get_int('cover-size'), 200)
+        self.app.settings.set_int('cover-size', 120)
+        self.assertEqual(page.cover_scale.get_value(), 120)
+
+    def test_missing_files_page(self):
+        from bookcase.pages import make_root
+
+        page = self.show(make_root('missing'))
+        self.assertEqual(page.get_title(), 'Missing Files')
+        self.assertEqual(page.stack.get_visible_child_name(), 'empty')
+        self.library.set_missing([self.library.files(self.hill)[0].id])
+        page.refresh()
+        self.assertEqual(self.titles(page), ['Lantern Hill'])
+
+    def test_duplicates_page(self):
+        from bookcase.pages.duplicates import DuplicatesPage
+
+        copy = add_book(self.library, 'A Quiet Harbour', ('Ada Lark',), fmt='pdf')
+        page = self.show(DuplicatesPage())
+        self.assertEqual([group.ids for group in page.groups], [[self.harbour, copy]])
+        self.assertEqual(page.groups[0].keep, self.harbour)  # the richer one
+        page.groups[0].choose(copy)
+        self.assertEqual(page.merge(page.groups[0]), 1)
+        self.assertIsNone(self.library.book(self.harbour))
+        self.assertEqual(self.library.book(copy).formats, ('epub', 'pdf'))
+        self.assertTrue(self.app.toasts[-1][1])
+        page.refresh()
+        self.assertEqual(page.stack.get_visible_child_name(), 'empty')
+        self.library.undo()
+        page.refresh()
+        self.assertEqual(len(page.groups), 1)
+
+    def test_welcome_offers_what_it_finds(self):
+        import os
+        import pathlib
+        import tempfile
+        from unittest import mock
+
+        from bookcase.pages.home import HomePage
+
+        home = pathlib.Path(tempfile.mkdtemp(prefix='bookcase-home-'))
+        self.addCleanup(__import__('shutil').rmtree, home, ignore_errors=True)
+        (home / 'Books').mkdir()
+        (home / 'Books' / 'a.epub').write_bytes(b'')
+        (home / 'Downloads').mkdir()
+        (home / 'Downloads' / 'b.mobi').write_bytes(b'')
+        patcher = mock.patch.dict(os.environ, {'BOOKCASE_HOME_HINTS': str(home)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.library.remove_books([self.harbour, self.hill, self.moor])
+        page = self.show(HomePage())
+        self.assertTrue(wait_for(lambda: page.sources is not None))
+        pump()
+        self.assertEqual([row.get_title() for row in page._source_rows], ['Books', 'Downloads'])
+        self.assertTrue(page.sources_box.get_visible())
+        self.assertTrue(page._source_rows[0].button.has_css_class('suggested-action'))
+        self.assertFalse(page.add_button.has_css_class('suggested-action'))
+        # Books arriving after the welcome: the tip, once.
+        self.addCleanup(self.app.settings.reset, 'welcome-tip-shown')
+        add_book(self.library, 'Lantern Hill')
+        page.refresh()
+        self.assertTrue(page.tip_banner.get_revealed())
+        self.assertTrue(self.app.settings.get_boolean('welcome-tip-shown'))
+        page.tip_banner.emit('button-clicked')
+        self.assertFalse(page.tip_banner.get_revealed())
+
+    def test_book_page_series_and_more(self):
+        from bookcase.pages.book import BookPage
+
+        page = self.show(BookPage(self.harbour))
+        self.assertTrue(page.series_nav.get_visible())
+        self.assertTrue(page.previous_button.get_visible())
+        self.assertFalse(page.next_button.get_visible())
+        self.assertEqual(page.previous_label.get_text(), 'Lantern Hill')
+        page.previous_button.emit('clicked')
+        self.assertEqual(self.window.books, [self.hill])
+        # Ada Lark's other book (Salt Roads) in a row of covers.
+        self.assertEqual(len(page._more_rows), 1)
+        page._more_rows[0].tiles[0].emit('clicked')
+        self.assertEqual(self.window.books[-1], self.moor)
+
+    def test_go_to_results(self):
+        from bookcase.dialogs.quick_open import results
+
+        self.assertEqual(results(self.library, '  '), [])
+        found = results(self.library, 'lark')
+        self.assertEqual([(r.kind, r.title) for r in found],
+                         [('author', 'Ada Lark'), ('book', 'Salt Roads'),
+                          ('book', 'A Quiet Harbour')])
+        shelf = self.library.add_shelf('Salt Marsh Reads')
+        found = results(self.library, 'salt')
+        self.assertEqual(found[0].kind, 'series')
+        self.assertIn(('shelf', shelf), [(r.kind, r.id) for r in found])
+
 
 @requires_gtk
 class WindowTest(unittest.TestCase):
@@ -382,6 +517,7 @@ class WindowTest(unittest.TestCase):
 
         window = Window(application=self.app)
         self.addCleanup(window.destroy)
+        self.addCleanup(window.sidebar_controller.cancel_refresh)
         self.app.the_window = window
         self.addCleanup(setattr, self.app, 'the_window', None)
         self.assertEqual(window.current_key, 'home')

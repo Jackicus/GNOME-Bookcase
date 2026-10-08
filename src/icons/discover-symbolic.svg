@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!-- SPDX-FileCopyrightText: 2026 Jack Tully -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill="#222222" fill-rule="evenodd" d="M 8 0.5 C 3.858 0.5 0.5 3.858 0.5 8 C 0.5 12.142 3.858 15.5 8 15.5 C 12.142 15.5 15.5 12.142 15.5 8 C 15.5 3.858 12.142 0.5 8 0.5 Z M 8 2.5 C 11.038 2.5 13.5 4.962 13.5 8 C 13.5 11.038 11.038 13.5 8 13.5 C 4.962 13.5 2.5 11.038 2.5 8 C 2.5 4.962 4.962 2.5 8 2.5 Z M 11.5 4.5 L 6.6 6.6 L 4.5 11.5 L 9.4 9.4 Z M 8 7 C 8.552 7 9 7.448 9 8 C 9 8.552 8.552 9 8 9 C 7.448 9 7 8.552 7 8 C 7 7.448 7.448 7 8 7 Z"/>
+</svg>

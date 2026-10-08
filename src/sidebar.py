@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # SPDX-FileCopyrightText: 2026 Jack Tully
 
-"""The library window's sidebar: Home and All Books; Browse (Authors, Series, Tags); Reading
-(Currently Reading, Unread, Finished); the user's shelves; connected devices.
+"""The library window's sidebar: Home and All Books (and Missing Files while some book's
+files are gone), Discover (online catalogues); Browse (Authors, Series, Tags); Reading
+(Currently Reading, Unread, Finished, Statistics); the user's shelves; connected devices.
 
     controller = SidebarController(window, adw_sidebar, app)
     controller.select('shelf:3'); controller.has_key(key); controller.key_at(index)
@@ -35,12 +36,15 @@ CHANGE_KINDS = ('books', 'shelves', 'progress', 'files', 'folders')
 ICONS = {
     'home': 'user-home-symbolic',
     'all': 'library-symbolic',
+    'missing': 'dialog-warning-symbolic',
     'authors': 'avatar-default-symbolic',
     'series': 'view-list-ordered-symbolic',
     'tags': 'tag-symbolic',
     'status:reading': 'book-open-symbolic',
     'status:unread': 'book-closed-symbolic',
     'status:finished': 'object-select-symbolic',
+    'stats': 'statistics-symbolic',
+    'discover': 'discover-symbolic',
     'shelf': 'folder-symbolic',
     'smart-shelf': 'folder-saved-search-symbolic',
     'device': 'drive-removable-media-symbolic',
@@ -84,8 +88,16 @@ def build_sections(library, devices=()):
                   library.count(status='unread')),
             Entry('status:finished', _('Finished'), ICONS['status:finished'],
                   library.count(status='finished')),
+            Entry('stats', _('Statistics'), ICONS['stats']),
         ]),
     ]
+    missing = library.count(query='has:missing')
+    if missing:
+        sections[0].entries.append(Entry('missing', _('Missing Files'), ICONS['missing'],
+                                         missing, tooltip=_('Books whose files cannot be '
+                                                            'found')))
+    sections[0].entries.append(Entry('discover', _('Discover'), ICONS['discover'],
+                                     tooltip=_('Books from online catalogues')))
     shelves = []
     for shelf in library.shelves():
         smart = shelf.query is not None
@@ -290,6 +302,12 @@ class SidebarController:
         except Exception:
             log.exception('refreshing the sidebar')
         return GLib.SOURCE_REMOVE
+
+    def cancel_refresh(self):
+        """Drop a refresh still to come (a window going away)."""
+        if self._refresh_pending is not None:
+            GLib.source_remove(self._refresh_pending)
+            self._refresh_pending = None
 
     def refresh_now(self):
         if self._refresh_pending is not None:

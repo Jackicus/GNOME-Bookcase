@@ -576,5 +576,103 @@ class ScaleTest(unittest.TestCase):
             self.assertEqual((counts['Ada Lark'], counts['Author 7']), (2000, 40))
 
 
+class MergeTest(unittest.TestCase):
+    """Duplicates and merging them, and books opened without adding."""
+
+    def test_duplicates_share_a_title_and_an_author(self):
+        with temporary_library() as library:
+            one = add_book(library, 'A Quiet Harbour', ('Ada Lark',))
+            two = add_book(library, 'A quiet  harbour', ('Lark, Ada',), fmt='pdf')
+            add_book(library, 'A Quiet Harbour', ('Ben Ross',))  # another author's
+            three = add_book(library, 'Salt Roads', ())
+            four = add_book(library, 'Salt Roads', ('Cy Moor',))
+            add_book(library, 'Lantern Hill')
+            self.assertEqual(library.duplicates(), [[one, two], [three, four]])
+            library.merge_books(one, [two])
+            self.assertEqual(library.duplicates(), [[three, four]])
+
+    def test_merge_keeps_everything_and_undoes(self):
+        with temporary_library() as library:
+            keep = add_book(library, 'A Quiet Harbour', ('Ada Lark',), tags=['Sea'],
+                            identifiers={'isbn': '9780000000002'})
+            other = add_book(library, 'A Quiet Harbour', ('Ada Lark',), fmt='pdf',
+                             tags=['Coast'], description='<p>Tides.</p>', series='Saltmarsh',
+                             series_index=2.0, identifiers={'google': 'abc', 'isbn': '1'},
+                             publisher='Lantern House')
+            library.update_book(other, rating=8)
+            library.set_progress(other, 0.4, 'epubcfi(/6/4)')
+            note = library.add_annotation(other, 'highlight', 'epubcfi(/6/4!/2)', text='tide')
+            library.log_session(other, 1000.0, 60, 0.3, 0.4)
+            shelf = library.add_shelf('Holiday')
+            library.add_to_shelf(shelf, [other])
+            before = library.book(keep)
+            self.assertEqual(library.richest([keep, other]), other)
+
+            self.assertEqual(library.merge_books(keep, [other]), 1)
+            book = library.book(keep)
+            self.assertIsNone(library.book(other))
+            self.assertEqual(book.formats, ('epub', 'pdf'))
+            self.assertEqual(book.tags, ('Coast', 'Sea'))
+            self.assertEqual(book.identifiers, {'isbn': '9780000000002', 'google': 'abc'})
+            self.assertEqual((book.series, book.series_index), ('Saltmarsh', 2.0))
+            self.assertEqual((book.description, book.publisher, book.rating),
+                             ('<p>Tides.</p>', 'Lantern House', 8))
+            self.assertEqual((book.status, book.progress, book.location),
+                             ('reading', 0.4, 'epubcfi(/6/4)'))
+            self.assertEqual(book.added, before.added)
+            self.assertEqual([a.id for a in library.annotations(keep)], [note])
+            self.assertEqual(len(library.sessions(keep)), 1)
+            self.assertEqual([s.id for s in library.book_shelves(keep)], [shelf])
+            self.assertEqual(library.count(), 1)
+            self.assertEqual(library.count(query='saltmarsh'), 1)
+
+            self.assertEqual(library.undo(), 'Merge Books')
+            self.assertEqual(library.book(keep), before)
+            self.assertEqual(library.book(other).formats, ('pdf',))
+            self.assertEqual([a.id for a in library.annotations(other)], [note])
+            self.assertEqual(library.annotations(keep), [])
+            self.assertEqual([s.id for s in library.book_shelves(other)], [shelf])
+            self.assertEqual(library.book_shelves(keep), [])
+            self.assertEqual(library.count(), 2)
+
+    def test_merge_of_nothing(self):
+        with temporary_library() as library:
+            keep = add_book(library, 'A Quiet Harbour')
+            self.assertEqual(library.merge_books(keep, [keep, 999]), 0)
+            self.assertFalse(library.can_undo() and library.undo_label == 'Merge Books')
+
+    def test_opened_books_are_kept_out_of_sight(self):
+        with temporary_library() as library:
+            add_book(library, 'Lantern Hill', ('Ben Ross',), tags=['Sea'])
+            undo_before = library.undo_label
+            info = BookInfo(title='A Quiet Harbour', authors=['Ada Lark'], format='epub',
+                            tags=['Coast'], series='Saltmarsh', language='en')
+            opened = library.add_opened(info, '/invented/harbour.epub', hash='h1', size=10)
+            self.assertEqual(library.undo_label, undo_before)  # no undo step
+            self.assertEqual(library.book(opened).source, 'opened')
+            self.assertEqual(library.count(), 1)
+            self.assertEqual(library.book_ids(), [opened - 1])
+            self.assertEqual([a.name for a in library.authors()], ['Ben Ross'])
+            self.assertEqual(library.series(), [])
+            self.assertEqual([t.name for t in library.tags()], ['Sea'])
+            self.assertEqual(library.languages(), [])
+            self.assertEqual(library.find_similar('A Quiet Harbour', ['Ada Lark']), [])
+            self.assertEqual(library.find_by_hash('h1'), opened)  # opened again: the same
+            library.set_progress(opened, 0.5, 'epubcfi(/6/2)')
+            self.assertEqual(library.continue_reading(), [])
+
+            self.assertTrue(library.keep_book(opened, path='/invented/Books/harbour.epub'))
+            self.assertEqual(library.undo_label, 'Add to Library')
+            book = library.book(opened)
+            self.assertEqual((book.source, book.progress), ('library', 0.5))
+            self.assertEqual(library.files(opened)[0].path, '/invented/Books/harbour.epub')
+            self.assertEqual(library.count(), 2)
+            self.assertFalse(library.keep_book(opened))  # already kept
+            library.undo()
+            self.assertEqual(library.book(opened).source, 'opened')
+            self.assertEqual(library.files(opened)[0].path, '/invented/harbour.epub')
+            self.assertEqual(library.count(), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

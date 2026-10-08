@@ -18,7 +18,9 @@ menu was opened on, else the shelf shown. Files dropped on the window are added
 (app.add_files). The size, maximized state and last page are kept in the settings. Keyed
 window actions are disabled while a dialog is open over the window, so a dialog's entry gets
 its keys. A sidebar toggle (F9) hides the sidebar in a wide window (collapsing the split
-view) and shows it again.
+view) and shows it again; the sidebar-hidden setting remembers it. Find Duplicates
+(win.find-duplicates, the main menu) pushes pages/duplicates.py; Ctrl+K (win.quick-open)
+opens the Go To search (dialogs/quick_open.py).
 """
 
 import logging
@@ -69,6 +71,8 @@ class Window(Adw.ApplicationWindow):
         self.connect('close-request', self._on_close_request)
         last = self.settings.get_string('last-page')
         self.show_root(last if self.sidebar_controller.has_key(last) else 'home')
+        if self.settings.get_boolean('sidebar-hidden'):
+            self._hide_sidebar()
 
     # -- size and closing ------------------------------------------------------------------
 
@@ -98,11 +102,14 @@ class Window(Adw.ApplicationWindow):
                 ('all', lambda *_a: self.show_root('all'), True),
                 ('authors', lambda *_a: self.show_root('authors'), True),
                 ('series', lambda *_a: self.show_root('series'), True),
+                ('stats', lambda *_a: self.show_root('stats'), True),
                 ('back', self.on_back, True),
                 ('toggle-sidebar', self.on_toggle_sidebar, True),
                 ('view-grid', lambda *_a: self.settings.set_string('view-mode', 'grid'), True),
                 ('view-list', lambda *_a: self.settings.set_string('view-mode', 'list'), True),
                 ('close', lambda *_a: self.close(), False),
+                ('find-duplicates', self.on_find_duplicates, False),
+                ('quick-open', self.on_quick_open, True),
                 ('shelf-new', self.on_shelf_new, False),
                 ('shelf-edit', self.on_shelf_edit, False),
                 ('shelf-remove', self.on_shelf_remove, False)):
@@ -145,10 +152,29 @@ class Window(Adw.ApplicationWindow):
         elif self._sidebar_hidden:
             self._sidebar_hidden = False
             self.split_view.set_collapsed(False)
+            self.settings.set_boolean('sidebar-hidden', False)
         else:
-            self._sidebar_hidden = True
-            self.split_view.set_collapsed(True)
-            self.split_view.set_show_content(True)
+            self._hide_sidebar()
+            self.settings.set_boolean('sidebar-hidden', True)
+
+    def _hide_sidebar(self):
+        self._sidebar_hidden = True
+        self.split_view.set_collapsed(True)
+        self.split_view.set_show_content(True)
+
+    def on_find_duplicates(self, *_args):
+        """Find Duplicates: pushes pages/duplicates.py."""
+        from .pages.duplicates import DuplicatesPage
+
+        page = DuplicatesPage()
+        self.push(page)
+        return page
+
+    def on_quick_open(self, *_args):
+        """Ctrl+K: go to a book, an author, a series or a shelf (dialogs/quick_open.py)."""
+        from .dialogs import quick_open
+
+        return quick_open.present(self.app, self)
 
     # -- shelves -----------------------------------------------------------------------------
 

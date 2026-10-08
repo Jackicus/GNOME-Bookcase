@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Jack Tully
+
+using Gtk 4.0;
+using Adw 1;
+
+// A book in a catalogue (dialogs/catalog_entry.py): its cover beside the title, authors and
+// series, Download (or Read once it is in the library), what it is about, and its formats.
+template $BookcaseCatalogEntryDialog: Adw.Dialog {
+  content-width: 620;
+  content-height: 680;
+  width-request: 360;
+  height-request: 294;
+
+  Adw.Breakpoint {
+    condition ("max-width: 520sp")
+
+    setters {
+      hero.orientation: vertical;
+      hero.spacing: 18;
+      cover_box.halign: center;
+      title_label.xalign: 0.5;
+      title_label.justify: center;
+      authors_label.xalign: 0.5;
+      authors_label.justify: center;
+      series_label.xalign: 0.5;
+      series_label.justify: center;
+      facts_label.xalign: 0.5;
+      facts_label.justify: center;
+      action_stack.halign: center;
+    }
+  }
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-title: false;
+    }
+
+    content: ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Box {
+        orientation: vertical;
+        spacing: 24;
+        margin-top: 6;
+        margin-bottom: 24;
+        margin-start: 18;
+        margin-end: 18;
+
+        Box hero {
+          spacing: 24;
+
+          Box cover_box {
+            valign: start;
+          }
+
+          Box {
+            orientation: vertical;
+            spacing: 6;
+            hexpand: true;
+            valign: center;
+
+            Label title_label {
+              xalign: 0;
+              wrap: true;
+              wrap-mode: word_char;
+
+              styles [
+                "title-2",
+              ]
+            }
+
+            Label authors_label {
+              xalign: 0;
+              wrap: true;
+
+              styles [
+                "heading",
+              ]
+            }
+
+            Label series_label {
+              xalign: 0;
+              wrap: true;
+
+              styles [
+                "dimmed",
+              ]
+            }
+
+            Label facts_label {
+              xalign: 0;
+              wrap: true;
+
+              styles [
+                "caption",
+                "dimmed",
+              ]
+            }
+
+            Stack action_stack {
+              halign: start;
+              margin-top: 12;
+              hhomogeneous: false;
+              vhomogeneous: false;
+
+              StackPage {
+                name: "download";
+
+                child: Button download_button {
+                  use-underline: true;
+                  halign: start;
+
+                  styles [
+                    "pill",
+                    "suggested-action",
+                  ]
+                };
+              }
+
+              StackPage {
+                name: "progress";
+
+                child: Box {
+                  spacing: 12;
+
+                  ProgressBar progress_bar {
+                    valign: center;
+                    width-request: 160;
+                  }
+
+                  Button cancel_button {
+                    icon-name: "process-stop-symbolic";
+                    tooltip-text: _("Cancel Download");
+                    valign: center;
+
+                    styles [
+                      "circular",
+                      "flat",
+                    ]
+                  }
+                };
+              }
+
+              StackPage {
+                name: "library";
+
+                child: Box {
+                  spacing: 12;
+
+                  Button read_button {
+                    label: _("_Read");
+                    use-underline: true;
+
+                    styles [
+                      "pill",
+                      "suggested-action",
+                    ]
+                  }
+
+                  Button show_button {
+                    label: _("_Show in Library");
+                    use-underline: true;
+
+                    styles [
+                      "pill",
+                    ]
+                  }
+                };
+              }
+
+              StackPage {
+                name: "none";
+
+                child: Label none_label {
+                  xalign: 0;
+                  wrap: true;
+
+                  styles [
+                    "dimmed",
+                  ]
+                };
+              }
+            }
+
+            Label status_label {
+              xalign: 0;
+              wrap: true;
+              visible: false;
+
+              styles [
+                "caption",
+              ]
+            }
+          }
+        }
+
+        Label summary_label {
+          xalign: 0;
+          wrap: true;
+          wrap-mode: word_char;
+          use-markup: true;
+          selectable: true;
+
+          styles [
+            "book-description",
+          ]
+        }
+
+        Label categories_label {
+          xalign: 0;
+          wrap: true;
+
+          styles [
+            "caption",
+            "dimmed",
+          ]
+        }
+
+        Adw.PreferencesGroup formats_group {
+          title: _("Formats");
+        }
+      };
+    };
+  };
+}

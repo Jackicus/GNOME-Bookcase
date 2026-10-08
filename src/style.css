@@ -324,3 +324,91 @@ progressbar.book-progress > trough > progress {
   font-family: monospace;
   font-size: 0.9em;
 }
+
+/* The Statistics page (pages/stats.py): padding in its cards (a card has none of its own),
+   tiles of a number and a caption, the finished books' covers as plain buttons, and the
+   share bars of the most read authors and tags in the accent. */
+.stats-card {
+  padding: 18px;
+}
+
+.stats-tile {
+  padding: 12px 15px;
+  min-width: 112px;
+}
+
+progressbar.stats-tile-bar,
+progressbar.stats-tile-bar > trough {
+  min-width: 0;
+}
+
+progressbar.stats-tile-bar > trough,
+progressbar.stats-tile-bar > trough > progress {
+  min-height: 6px;
+}
+
+button.stats-cover {
+  padding: 2px;
+}
+
+levelbar.stats-share > trough > block.filled {
+  background-color: var(--accent-bg-color);
+}
+
+/* The home page's reading goal card (widgets/goal_card.py): a card that is a button. */
+button.goal-card {
+  padding: 12px 15px;
+}
+
+/* The filter bar's chips (pages/books.blp): a chip with a choice made takes the accent, as
+   a toggled button would. */
+.filter-chip > button {
+  padding-left: 12px;
+  padding-right: 10px;
+  border-radius: 999px;
+}
+
+.filter-chip.active > button {
+  color: var(--accent-fg-color);
+  background-color: var(--accent-bg-color);
+}
+
+/* The previous and next book in a series, under the series on a book's page. */
+.series-step {
+  padding-left: 6px;
+  padding-right: 6px;
+  font-weight: normal;
+}
+
+/* Discover's catalogue cards (pages/discover.py): room inside the card, the same height for
+   a row of them. */
+.catalog-card {
+  padding: 12px 6px 12px 14px;
+  min-height: 72px;
+}
+
+flowbox.catalog-cards > flowboxchild {
+  padding: 0;
+  border-radius: 12px;
+}
+
+/* A catalogue's covers (pages/catalog.py): the library grid's room and highlight, in a
+   FlowBox. */
+flowbox.catalog-grid {
+  padding: 0 18px;
+}
+
+flowbox.catalog-grid > flowboxchild {
+  padding: 12px 10px;
+  border-radius: 12px;
+}
+
+flowbox.catalog-grid > flowboxchild:hover {
+  background-color: alpha(currentColor, 0.05);
+}
+
+/* A catalogue's filters (OPDS facets) under its header bar: small menu buttons. */
+menubutton.small-pill > button {
+  padding: 2px 12px;
+  min-height: 28px;
+}

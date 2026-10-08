@@ -18,7 +18,8 @@ in-process. make_app() does what the scripts need:
   (io.github.jackicus.Bookcase.<suffix>, NON_UNIQUE: beside a running app);
 - at startup: the colour scheme forced dark (or light), animations off, stock GNOME's icon
   theme and font (Adwaita, Adwaita Sans 11) instead of the desktop's; the installed icons
-  findable; each window made non-resizable, a fixed size a tiling window manager leaves alone.
+  findable; the demo's reading goals (DEMO_GOALS) set; each window made non-resizable, a
+  fixed size a tiling window manager leaves alone.
 
 Call make_app() before importing Gtk: importing it starts GTK, which may read the settings
 schemas once and for all.
@@ -39,6 +40,8 @@ ICONS = os.path.join(PREFIX, 'share', 'icons')
 DEMO_DIR = os.path.join(ROOT, 'build', 'demo')
 DEVICE_DIR = os.path.join(ROOT, 'build', 'demo-device')
 BASE_ID = 'io.github.jackicus.Bookcase'
+# The demo's reading goals, set at startup: books a year, minutes a day.
+DEMO_GOALS = {'goal-books': 15, 'goal-minutes': 30}
 
 
 def ensure_demo_library():
@@ -123,6 +126,8 @@ def make_app(suffix, light=False, animations=False, stock_look=True, size=None, 
             settings.set_property('gtk-icon-theme-name', 'Adwaita')
             settings.set_property('gtk-font-name', 'Adwaita Sans 11')
         Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(ICONS)
+        for key, value in DEMO_GOALS.items():
+            app.settings.set_int(key, value)
         if size is not None:
             app.settings.set_int('window-width', size[0])
             app.settings.set_int('window-height', size[1])

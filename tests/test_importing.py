@@ -240,5 +240,51 @@ class TestScan(ImporterTestCase):
         self.assertEqual(self.library.files(book_id)[0].path, str(watched / 'x.epub'))
 
 
+class TestOpenInPlace(ImporterTestCase):
+
+    def test_open_then_add(self):
+        source = make_epub(self.source / 'harbour.epub', cover=make_png(3, 4))
+        before = source.read_bytes()
+        book_id = self.importer.open_in_place(source)
+        book = self.library.book(book_id)
+        self.assertEqual(book.source, 'opened')
+        self.assertTrue(book.has_cover)
+        self.assertFalse(self.library.can_undo())
+        self.assertEqual(self.library.count(), 0)
+        self.assertEqual(self.library.files(book_id)[0].path, str(source))
+        self.assertEqual(self.importer.open_in_place(source), book_id)  # the same again
+        self.assertFalse(self.books.exists())  # nothing copied
+
+        self.library.set_progress(book_id, 0.25, 'epubcfi(/6/2)')
+        report = self.importer.add([source])  # Add to Library: copied in
+        self.assertEqual(report.added, [book_id])
+        book = self.library.book(book_id)
+        self.assertEqual((book.source, book.progress), ('library', 0.25))
+        path = self.library.files(book_id)[0].path
+        self.assertTrue(path.startswith(str(self.books)))
+        self.assertEqual(source.read_bytes(), before)
+        self.assertEqual(self.library.count(), 1)
+
+    def test_open_a_book_in_the_library(self):
+        source = make_epub(self.source / 'harbour.epub')
+        report = self.importer.add([source])
+        self.assertEqual(self.importer.open_in_place(source), report.added[0])
+
+    def test_open_then_watch(self):
+        watched = self.root / 'watched'
+        watched.mkdir()
+        source = make_epub(watched / 'harbour.epub')
+        book_id = self.importer.open_in_place(source)
+        report = self.importer.scan(watched)
+        self.assertEqual(report.added, [book_id])
+        self.assertEqual(self.library.book(book_id).source, 'watched')
+
+    def test_not_a_book(self):
+        path = self.source / 'notes.odt'
+        path.write_bytes(b'x')
+        with self.assertRaises(importing.FormatError):
+            self.importer.open_in_place(path)
+
+
 if __name__ == '__main__':
     unittest.main()

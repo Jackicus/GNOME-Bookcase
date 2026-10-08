@@ -35,8 +35,10 @@ paths:
   the open in progress (a call racing the open was lost before). Methods: open, setStyle,
   next, prev, goLeft, goRight, scroll, start, end, nextSection, prevSection, back, forward,
   goTo, goToFraction, select, clearSelection, search, clearSearch, setAnnotations,
-  addAnnotation, removeAnnotation, setBookmarks, showProgress, getTOC, getSectionFractions
-  (and `_contents`, `_cfi` for tests and the demo, through `BookView.evaluate`).
+  addAnnotation, removeAnnotation, setBookmarks, showProgress, getTOC, getSectionFractions,
+  ttsStart, ttsNext (the next sentence's text, highlighted and turned to; null at the end),
+  ttsStop, findTexts ([{id, text}] → [{id, cfi, fraction}]: imported Kindle highlights
+  found by their words, on load; the window stores the CFI, no undo step) (and `_contents`, `_cfi` for tests and the demo, through `BookView.evaluate`).
 - JS → Python: one handler, `bookcase`, JSON `{type, …}`: ready, loaded (title, dir,
   fixedLayout, sectionFractions, toc), relocated (fraction, cfi, start, reason, chapter,
   page, section, location, time, atStart, atEnd, bookmark, jumpedFrom, canGoBack,
@@ -72,9 +74,32 @@ paths:
   page). Tests: `terminate_web_process()`.
 - Paper themes live in `reading.THEMES` and in style.css's `.reader-page.theme-*` (a test checks
   they agree); highlight colours in reader.js's `HIGHLIGHTS` and style.css's `.color-*`.
-- Not done: PDF (pdf.js not vendored; a status page opens it in the system viewer), TXT/CBR,
-  text-to-speech (tts.js is vendored, not wired), fixed-layout zoom controls, custom themes.
+- PDFs: `widgets/pdf_view.py`'s `PdfView` (Poppler: a render thread with its own document,
+  an LRU of textures, a GSK colour matrix for the paper themes) has BookView's methods and
+  signals; the window swaps it into `content_stack` for the BookView and drives `self.view`
+  (`window.is_pdf`; `self.book_view` stays the template's BookView). Locations are
+  `pdf_location` strings (`page:N@offset`, highlights `page:N#x0,y0,x1,y1;…` in PDF points
+  from the page's top-left). PDFs have their own reader-pdf-scrolled; the bigger/smaller
+  keys and Ctrl+scroll zoom; the Text and Layout popover hides the typography for them.
+  relocated adds `pages` (progress_text says "Page 3 of 120").
+- TXT and CBR open as EPUB/CBZ copies from `converting.prepare()` (a thread; the 'loading'
+  spinner), cached in `$XDG_CACHE_HOME/bookcase/converted`; progress stays the book's.
+- Not done: fixed-layout zoom controls for EPUB/CBZ, custom themes.
 - Screenshots: `scripts/headless.sh scripts/screenshot.py OUT --read TITLE`, or
-  `scripts/reader_demo.py OUT [--light] [--size WxH] [--theme T] [--select] [--popover]
-  [--search Q] [--sidebar PAGE] [--missing] [--pdf] …` (no library window, its own book).
+  `scripts/reader_demo.py OUT [--light] [--size WxH] [--theme T] [--select] [--lookup]
+  [--read-aloud] [--popover] [--search Q] [--sidebar PAGE] [--missing] [--pdf] …` (no
+  library window, its own book).
   WebKit tests skip with `BOOKCASE_NO_WEBKIT=1` or when the web process cannot start.
+- Look Up (widgets/lookup_popover.py over lookup.py): a selected word's definition in the
+  selection popover in a wide window, a bottom sheet (`Adw.Dialog`, BOTTOM_SHEET) in a narrow
+  one; any view's 'selection' signal feeds it. A dialog over a window that cannot be resized
+  opens in a window of its own (reader_demo.py makes its window resizable for --lookup).
+- Read Aloud (widgets/read_aloud.py, speech.py): offered only when speech.engine() finds
+  speech-dispatcher (python-speechd, else `spd-say`); the page's TTS (foliate-js tts.js at
+  sentence granularity) highlights each sentence with an overlayer key that starts with
+  foliate-js's search prefix, so a click on it is no annotation's.
+- Sync (reader_sync.py over kosync.py, app.sync): `ReaderSync(window)` adds an Adw.Banner
+  top bar (another device's newer place, Go There) and a section in the main menu (status,
+  Sync Now); the window calls its `relocated(place)` and `close()`. The first relocation is
+  the opening place: it pulls, never pushes. `reader_demo.py --sync` shows the banner from a
+  fake server (tests/fake_kosync.py).

@@ -62,6 +62,19 @@
       <default>150</default>
       <summary>Width of the covers in the grid, in pixels</summary>
     </key>
+    <key name="sort-reversed" type="b">
+      <default>false</default>
+      <summary>Reverse the order of book lists</summary>
+      <description>Each sort has its own direction (newest, latest and best first; titles and names A to Z); this turns it round.</description>
+    </key>
+    <key name="sidebar-hidden" type="b">
+      <default>false</default>
+      <summary>Whether the sidebar is hidden in a wide window</summary>
+    </key>
+    <key name="welcome-tip-shown" type="b">
+      <default>false</default>
+      <summary>Whether the tip after the first books were added has been seen</summary>
+    </key>
     <key name="reader-width" type="i">
       <default>900</default>
       <summary>Reader window width</summary>
@@ -120,6 +133,11 @@
       <default>false</default>
       <summary>Scroll instead of turning pages</summary>
     </key>
+    <key name="reader-pdf-scrolled" type="b">
+      <default>true</default>
+      <summary>Scroll through PDFs instead of turning pages</summary>
+      <description>PDFs scroll from page to page unless this is off; then they show a page (or two, with reader-two-pages) at a time.</description>
+    </key>
     <key name="reader-two-pages" type="b">
       <default>true</default>
       <summary>Show two pages side by side when the window is wide</summary>
@@ -138,6 +156,12 @@
       <default>'percent'</default>
       <summary>What the reader's progress label shows</summary>
     </key>
+    <key name="reader-speech-rate" type="i">
+      <range min="-60" max="100"/>
+      <default>0</default>
+      <summary>The speed of Read Aloud</summary>
+      <description>Speech Dispatcher's rate: 0 is the voice's normal speed.</description>
+    </key>
     <key name="send-kepub" type="b">
       <default>true</default>
       <summary>Send EPUBs to a Kobo as Kobo EPUBs</summary>
@@ -147,6 +171,101 @@
       <default>''</default>
       <summary>Google Books API key</summary>
       <description>When set, Find Metadata also asks Google Books. Open Library needs no key.</description>
+    </key>
+    <key name="goal-books" type="i">
+      <range min="0" max="1000"/>
+      <default>0</default>
+      <summary>Books to finish this year</summary>
+      <description>The yearly reading goal on the Statistics page; 0 means none.</description>
+    </key>
+    <key name="goal-minutes" type="i">
+      <range min="0" max="1440"/>
+      <default>0</default>
+      <summary>Minutes to read a day</summary>
+      <description>The daily reading goal on the Statistics page; 0 means none.</description>
+    </key>
+    <key name="kindle-address" type="s">
+      <default>''</default>
+      <summary>Send to Kindle address</summary>
+      <description>The Kindle's own e-mail address (name@kindle.com) books are mailed to.</description>
+    </key>
+    <key name="mail-provider" type="s">
+      <choices>
+        <choice value="gmail"/>
+        <choice value="outlook"/>
+        <choice value="fastmail"/>
+        <choice value="icloud"/>
+        <choice value="proton"/>
+        <choice value="custom"/>
+      </choices>
+      <default>'custom'</default>
+      <summary>The mail provider Send to Kindle's settings came from</summary>
+    </key>
+    <key name="mail-sender" type="s">
+      <default>''</default>
+      <summary>The address books are mailed from</summary>
+      <description>It must be on the Approved Personal Document E-mail List of the Amazon account.</description>
+    </key>
+    <key name="mail-server" type="s">
+      <default>''</default>
+      <summary>Outgoing mail (SMTP) server</summary>
+    </key>
+    <key name="mail-port" type="i">
+      <range min="1" max="65535"/>
+      <default>587</default>
+      <summary>Outgoing mail server port</summary>
+    </key>
+    <key name="mail-security" type="s">
+      <choices>
+        <choice value="starttls"/>
+        <choice value="ssl"/>
+        <choice value="none"/>
+      </choices>
+      <default>'starttls'</default>
+      <summary>How the connection to the mail server is encrypted</summary>
+    </key>
+    <key name="mail-username" type="s">
+      <default>''</default>
+      <summary>Outgoing mail server user name</summary>
+      <description>Empty means the sending address. The password is kept in the keyring.</description>
+    </key>
+    <key name="kindle-mail-explained" type="b">
+      <default>false</default>
+      <summary>Whether Amazon's approved sender list has been explained</summary>
+    </key>
+    <key name="sync-server" type="s">
+      <default>'https://sync.koreader.rocks'</default>
+      <summary>KOReader sync server</summary>
+      <description>The progress sync server reading positions are kept on: KOReader's public server or one of your own.</description>
+    </key>
+    <key name="sync-username" type="s">
+      <default>''</default>
+      <summary>Sync user name</summary>
+      <description>Empty when signed out. The password's key is kept in the keyring.</description>
+    </key>
+    <key name="sync-document-match" type="s">
+      <choices>
+        <choice value="content"/>
+        <choice value="filename"/>
+      </choices>
+      <default>'content'</default>
+      <summary>How books are matched with other devices</summary>
+      <description>By the file's content (KOReader's default, “Binary”) or by its file name.</description>
+    </key>
+    <key name="sync-device-name" type="s">
+      <default>''</default>
+      <summary>This computer's name for sync</summary>
+      <description>Shown on other devices. Empty: the computer's name.</description>
+    </key>
+    <key name="sync-device-id" type="s">
+      <default>''</default>
+      <summary>This computer's sync id</summary>
+      <description>Made once, at random, so other devices tell this one apart.</description>
+    </key>
+    <key name="catalogs" type="s">
+      <default>''</default>
+      <summary>Online catalogues</summary>
+      <description>The OPDS catalogues on the Discover page, as JSON: [{"id", "title", "url", "username"}]. Empty means the free catalogues Bookcase comes with. Passwords are kept in the keyring, not here.</description>
     </key>
   </schema>
 </schemalist>

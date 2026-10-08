@@ -6,13 +6,21 @@
     reader_window.open(app, book_id)    # the book's window, raised if open; returns it
     window.show_annotations()           # the sidebar open on highlights and bookmarks
     window.book_id
-    window.view                         # its widgets.book_view.BookView
+    window.view                         # its view: the BookView, or a PdfView for a PDF
+    window.is_pdf
 
-The book (library.reading_file()) shows in a BookView. The header bar has the title and the
+The book (library.reading_file()) shows in a BookView (WebKit and foliate-js); a PDF in a
+widgets/pdf_view.PdfView (Poppler), which has the same methods and signals, so the window
+drives either through `self.view` (`self.book_view` is the template's BookView, swapped out
+of the stack for a PDF). A TXT or CBR is converted first (converting.py, in a thread: a
+spinner meanwhile) into an EPUB or CBZ in the cache; its place is the book's as for any
+other. The header bar has the title and the
 chapter, the sidebar button, a bookmark toggle, the Text and Layout popover (the reader-*
 settings, applied as they change: the paper theme, typeface, size, spacing, margins, width,
-justification, hyphenation, pages or scrolling, two pages, the publisher's styles) and the
-main menu. The sidebar (an Adw.OverlaySplitView, docked when the window is wide) has the
+justification, hyphenation, pages or scrolling, two pages, the publisher's styles; for a
+PDF the paper, the zoom, Fit Width or Fit Page, and pages or scrolling, kept in
+reader-pdf-scrolled) and the main menu (Open With… hands the file to another app). The
+sidebar (an Adw.OverlaySplitView, docked when the window is wide) has the
 contents (the current chapter selected), the highlights and bookmarks (click to go, edit a
 note, change a colour, remove with Undo) and the search (results as they come, Ctrl+G and
 Ctrl+Shift+G through them). The bottom bar has the scrubber (with a mark per chapter) and a
@@ -22,35 +30,48 @@ setting. After a jump (the contents, a search result, a link, the scrubber) a bu
 back to where the reader was.
 
 Selecting text opens a popover: a highlight colour, Add Note… (dialogs/note.py), Copy, Look
-Up (Wiktionary for a word, Wikipedia for more, in the browser) and Search; clicking a
-highlight opens it for that highlight, with Remove. Clicking the middle of the page hides or
-shows the bars; F11 is fullscreen, the bars hidden until the pointer reaches the top edge.
+Up and Search; clicking a highlight opens it for that highlight, with Remove. In a wide
+window a selected word's definition shows in the popover (widgets/lookup_popover.py: an
+offline dictionary or Wiktionary, and Wikipedia), and Look Up shows a longer selection's
+Wikipedia summary there; a narrow window's Look Up opens them in a bottom sheet. With a
+speech engine installed (speech.py), Read Aloud (the main menu, Ctrl+Shift+S) reads from
+the page shown, a sentence at a time, with a bar of controls (widgets/read_aloud.py).
+Clicking the middle of the page hides or shows the bars; F11 is fullscreen, the bars hidden
+until the pointer reaches the top edge.
+
+A book opened without adding it (from Files, or Open File…: library.OPENED) has a banner
+over the page offering Add to Library (app.keep_book), gone once it is added.
 
 The keys are shortcuts.READER, read by the window's own key controller in the capture phase
-(the web view takes no focus); Ctrl+scroll changes the text size; mouse buttons 8 and 9 go
-back and forward.
+(the web view takes no focus); Ctrl+scroll changes the text size (a PDF's zoom, as do the
+bigger and smaller keys); Ctrl+C copies the selected text; mouse buttons 8 and 9 go back and
+forward.
 
 The place is saved with library.set_progress() a second after the last move and on closing
 (the library marks an unread book as reading); the time spent is logged with
 library.log_session() on closing and after five idle minutes (reading.SessionClock).
+When signed in to a KOReader sync server, reader_sync.py offers another device's newer place
+in a banner (Go There) and pushes this one (kosync.py; Sync Now in the menu).
 Reaching the end marks the book finished, with Undo. A book whose file is missing gets a
-status page with Locate File…; PDF and other formats foliate-js cannot show open in another
-app; without WebKitGTK a status page says so.
+status page with Locate File…; a format Bookcase cannot show (CB7), a PDF without Poppler, a
+CBR without bsdtar and any book without WebKitGTK get a status page with Open With….
 """
 
 import logging
 import os
+import threading
 import time
-import urllib.parse
 from gettext import gettext as _
 from xml.sax.saxutils import escape
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from . import reading, stats
-from .library import COLORS, LibraryError
+from . import converting, lookup, pdf_location, reader_sync, reading, speech, stats
+from .formats import FormatError
+from .library import COLORS, OPENED, LibraryError
 from .shortcuts import READER
 from .widgets import book_view as book_view_module
+from .widgets import lookup_popover, pdf_view, read_aloud
 from .widgets.book_view import BookView  # noqa: F401  (the template's child)
 from .widgets.util import connect_weak
 
@@ -118,6 +139,7 @@ class ReaderWindow(Adw.ApplicationWindow):
     window_title = Gtk.Template.Child()
     typography_button = Gtk.Template.Child()
     bookmark_button = Gtk.Template.Child()
+    menu_button = Gtk.Template.Child()
     content_stack = Gtk.Template.Child()
     book_view = Gtk.Template.Child()
     status_page = Gtk.Template.Child()
@@ -188,17 +210,25 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._build_controllers()
         self._build_typography()
         self._build_selection_popover()
+        self._build_read_aloud()
+        self._build_keep_banner()
         self._connect_signals()
         self._apply_theme_classes()
         self._update_title()
         self._open_book()
+        if self._read_aloud is not None and self.view is not self.book_view:
+            self.lookup_action('read-aloud').set_enabled(False)  # a PDF: no page to read
+        self._sync = reader_sync.ReaderSync(self)  # kosync: the banner, pushes, the menu
 
     # -- setting up ------------------------------------------------------------------------
 
     def _build_actions(self):
         for name, callback in (('fullscreen', self._toggle_fullscreen),
+                               ('open-with', self._launch_file),
                                ('go-to', self._go_to_location),
                                ('info', self._show_details),
+                               ('export-highlights', self._export_highlights),
+                               ('copy-highlights', self._copy_highlights),
                                ('close', self._close)):
             action = Gio.SimpleAction.new(name, None)
             action.connect('activate', _weak_callback(self, callback))
@@ -231,16 +261,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self.add_controller(motion)
 
     def _connect_signals(self):
-        view = self.book_view
-        connect_weak(view, 'loaded', self._on_loaded)
-        connect_weak(view, 'toc-ready', self._on_toc)
-        connect_weak(view, 'relocated', self._on_relocated)
-        connect_weak(view, 'selection', self._on_selection)
-        connect_weak(view, 'annotation-activated', self._on_annotation_activated)
-        connect_weak(view, 'search-result', self._on_search_result)
-        connect_weak(view, 'search-done', self._on_search_done)
-        connect_weak(view, 'error', self._on_view_error)
-        connect_weak(view, 'toggle-chrome', self._on_toggle_chrome)
+        self._connect_view(self.view)
         connect_weak(self.toc_list, 'row-activated', self._on_toc_activated)
         connect_weak(self.annotations_list, 'row-activated', self._on_annotation_row)
         connect_weak(self.search_list, 'row-activated', self._on_search_row)
@@ -254,6 +275,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         connect_weak(self.progress_scale, 'change-value', self._on_scrub)
         connect_weak(self.progress_button, 'clicked', self._on_progress_clicked)
         connect_weak(self, 'close-request', self._on_close_request)
+        connect_weak(self, 'destroy', self._release_popover)
         connect_weak(self, 'notify::fullscreened', self._on_fullscreened)
         connect_weak(self.split_view, 'notify::show-sidebar', self._on_sidebar_shown)
         # The library, the settings and the style manager outlive the window: held weakly,
@@ -262,6 +284,17 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._settings_handler = connect_weak(self.settings, 'changed', self._on_setting_changed)
         self._style_handler = connect_weak(Adw.StyleManager.get_default(), 'notify::dark',
                                            self._on_dark_changed)
+
+    def _connect_view(self, view):
+        connect_weak(view, 'loaded', self._on_loaded)
+        connect_weak(view, 'toc-ready', self._on_toc)
+        connect_weak(view, 'relocated', self._on_relocated)
+        connect_weak(view, 'selection', self._on_selection)
+        connect_weak(view, 'annotation-activated', self._on_annotation_activated)
+        connect_weak(view, 'search-result', self._on_search_result)
+        connect_weak(view, 'search-done', self._on_search_done)
+        connect_weak(view, 'error', self._on_view_error)
+        connect_weak(view, 'toggle-chrome', self._on_toggle_chrome)
 
     # -- opening ---------------------------------------------------------------------------
 
@@ -288,31 +321,99 @@ class ReaderWindow(Adw.ApplicationWindow):
                                   _('Only the details of this book are in the library'))
             return
         fmt = (self.file.format or '').lower()
-        if not reading.readable(fmt):
-            if fmt == 'pdf':
-                self._show_status('x-office-document-symbolic', _('PDF Opens Elsewhere'),
-                                  _('Bookcase cannot show PDF pages yet'),
-                                  [(_('Open in Document Viewer'), True, self._launch_file)])
-            else:
-                self._show_status(
-                    'x-office-document-symbolic', _('Format Not Supported'),
-                    _('Bookcase cannot show {format} books').format(format=fmt.upper()),
-                    [(_('Open in Another App'), True, self._launch_file)])
+        if fmt == 'pdf':
+            if not pdf_view.available():
+                self._show_status('dialog-warning-symbolic', _('Reading PDFs Needs Poppler'),
+                                  _('Install Poppler and its GObject bindings to read PDFs '
+                                    'in Bookcase'),
+                                  [(_('Open With…'), True, self._launch_file)])
+                return
+            self._use_pdf_view()
+            self._show_book(self.file.path, fmt)
+            return
+        if not reading.readable(fmt) and not converting.needs_conversion(fmt):
+            self._show_status(
+                'x-office-document-symbolic', _('Format Not Supported'),
+                _('Bookcase cannot show {format} books').format(format=fmt.upper()),
+                [(_('Open With…'), True, self._launch_file)])
             return
         if not book_view_module.available():
             self._show_status('dialog-warning-symbolic', _('Reading Needs WebKitGTK'),
                               _('Install WebKitGTK 6.0 to read books in Bookcase'),
-                              [(_('Open in Another App'), True, self._launch_file)])
+                              [(_('Open With…'), True, self._launch_file)])
             return
+        if converting.needs_conversion(fmt):
+            self._convert(self.file.path, fmt)
+            return
+        self._show_book(self.file.path, fmt)
+
+    def _show_book(self, path, fmt):
+        """Open the file in the view, at the saved place."""
+        book = self.book
         self._annotations = self.library.annotations(self.book_id)
         self._refresh_annotation_list()
         self.content_stack.set_visible_child_name('book')
-        self.book_view.open(self.file.path, fmt, location=book.location or None,
-                            fraction=book.progress or None,
-                            annotations=self._highlights(), bookmarks=self._bookmarks(),
-                            style=self._style())
+        self.view.open(path, fmt, location=book.location or None,
+                       fraction=book.progress or None,
+                       annotations=self._highlights(), bookmarks=self._bookmarks(),
+                       style=self._style())
         self._clock = reading.SessionClock(book.progress or 0.0, time.time())
         self._update_rate()
+
+    def _use_pdf_view(self):
+        """Show the book in a PdfView (Poppler) in place of the BookView (WebKit)."""
+        if self.is_pdf:
+            return
+        view = pdf_view.PdfView()
+        self.content_stack.remove(self.book_view)
+        self.content_stack.add_named(view, 'book')
+        self.view = view
+        self._connect_view(view)
+        connect_weak(view, 'zoom-changed', self._on_zoom_changed)
+        popover = self._selection_popover
+        popover.unparent()
+        popover.set_parent(view)
+        self._show_pdf_controls()
+
+    @property
+    def is_pdf(self):
+        return self.view is not self.book_view
+
+    def _convert(self, path, fmt):
+        """A TXT or CBR is converted (converting.py, in a thread) before it opens."""
+        self.content_stack.set_visible_child_name('loading')
+        book = self.book
+        title, language = book.title, book.language or ''
+        author = ', '.join(getattr(book, 'authors', None) or ())
+        done = _weak_callback(self, self._converted, argument=0)
+
+        def work():
+            try:
+                result = converting.prepare(path, fmt, title=title, author=author,
+                                            language=language)
+            except (FormatError, OSError) as error:
+                result = error
+            GLib.idle_add(done, result)
+
+        threading.Thread(target=work, name='bookcase-convert', daemon=True).start()
+
+    def _converted(self, result):
+        if self._closed:
+            return GLib.SOURCE_REMOVE
+        if isinstance(result, Exception):
+            log.warning('converting %s: %s', self.file.path if self.file else '?', result)
+            needs_bsdtar = 'bsdtar' in str(result)
+            self._show_status(
+                'dialog-warning-symbolic',
+                _('Reading CBR Comics Needs bsdtar') if needs_bsdtar
+                else _('This Book Cannot Be Opened'),
+                _('Install libarchive (bsdtar) to read CBR comics in Bookcase') if needs_bsdtar
+                else _('The file may be damaged, or in a format Bookcase cannot read'),
+                [(_('Open With…'), True, self._launch_file)])
+            return GLib.SOURCE_REMOVE
+        path, fmt = result
+        self._show_book(path, fmt)
+        return GLib.SOURCE_REMOVE
 
     def _show_status(self, icon, title, description, buttons=()):
         self.status_page.set_icon_name(icon)
@@ -363,6 +464,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         if not files:
             return
         launcher = Gtk.FileLauncher.new(Gio.File.new_for_path(files[0].path))
+        launcher.set_always_ask(True)
         launcher.launch(self, None, None)
 
     def _highlights(self):
@@ -377,7 +479,17 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _style(self):
         dark = Adw.StyleManager.get_default().get_dark()
         title = self.book.title if self.book else ''
-        return reading.build_style(self._setting, dark, title)
+        style = reading.build_style(self._setting, dark, title)
+        if self.is_pdf:
+            style['flow'] = 'scrolled' if self._layout_key_value() else 'paginated'
+        return style
+
+    def _layout_key(self):
+        """The setting of the Pages/Scrolled switch: PDFs have their own."""
+        return 'reader-pdf-scrolled' if self.is_pdf else 'reader-scrolled'
+
+    def _layout_key_value(self):
+        return self.settings.get_boolean(self._layout_key())
 
     def _setting(self, key):
         return self.settings.get_value(key).unpack() if key not in (
@@ -385,7 +497,7 @@ class ReaderWindow(Adw.ApplicationWindow):
 
     def _apply_style(self):
         self._style_source = 0
-        self.book_view.set_style(self._style())
+        self.view.set_style(self._style())
         self._apply_theme_classes()
         return GLib.SOURCE_REMOVE
 
@@ -398,11 +510,12 @@ class ReaderWindow(Adw.ApplicationWindow):
         self.toolbar_view.add_css_class(f'theme-{name}')
 
     def _on_setting_changed(self, _settings, key):
-        if key in reading.STYLE_KEYS and not self._style_source:
+        if (key in reading.STYLE_KEYS or key == 'reader-pdf-scrolled') \
+                and not self._style_source:
             self._style_source = GLib.idle_add(self._apply_style)
         if key == 'reader-font-size':
             self._update_size_label()
-        elif key == 'reader-scrolled':
+        elif key == self._layout_key():
             self._update_layout_group()
         elif key == 'reader-theme':
             self._update_theme_chips()
@@ -463,22 +576,83 @@ class ReaderWindow(Adw.ApplicationWindow):
             self.settings.set_string('reader-theme', name)
 
     def _update_layout_group(self):
-        name = 'scrolled' if self.settings.get_boolean('reader-scrolled') else 'paginated'
+        name = 'scrolled' if self._layout_key_value() else 'paginated'
         if self.layout_group.get_active_name() != name:
             self.layout_group.set_active_name(name)
 
     def _on_layout_changed(self, group, _pspec):
         scrolled = group.get_active_name() == 'scrolled'
-        if self.settings.get_boolean('reader-scrolled') != scrolled:
-            self.settings.set_boolean('reader-scrolled', scrolled)
+        if self._layout_key_value() != scrolled:
+            self.settings.set_boolean(self._layout_key(), scrolled)
+
+    def _show_pdf_controls(self):
+        """The Text and Layout popover for a PDF: the paper, the zoom (out, in, fit width
+        or page), pages or scrolling and two pages; no typeface or spacing."""
+        self.typography_button.set_tooltip_text(_('Zoom and Layout'))
+        for widget in (self.font_group, self.line_height_row.get_parent(), self.justify_row,
+                       self.hyphenate_row, self.publisher_row):
+            widget.set_visible(False)
+        for button, icon, tooltip in ((self.smaller_button, 'zoom-out-symbolic', _('Zoom Out')),
+                                      (self.bigger_button, 'zoom-in-symbolic', _('Zoom In'))):
+            button.set_icon_name(icon)
+            button.set_tooltip_text(tooltip)
+            button.remove_css_class('reader-size-smaller')
+            button.remove_css_class('reader-size-bigger')
+        self.size_label.set_tooltip_text(_('Zoom'))
+        self._fit_group = Adw.ToggleGroup()
+        for name, label in (('width', _('Fit Width')), ('page', _('Fit Page'))):
+            self._fit_group.add(Adw.Toggle(name=name, label=label))
+        self._sync_fit_group()
+        connect_weak(self._fit_group, 'notify::active-name', self._on_fit_changed)
+        size_box = self.size_label.get_parent()
+        size_box.get_parent().insert_child_after(self._fit_group, size_box)
+        self.two_pages_row.set_subtitle(_('Side by side when the window is wide, the first '
+                                          'page alone'))
+        self._update_layout_group()
+        self._update_size_label()
+
+    def _on_fit_changed(self, group, _pspec):
+        name = group.get_active_name()
+        if name in ('width', 'page') and self.view.fit != name:
+            self.view.set_fit(name)
+
+    def _on_zoom_changed(self, _view):
+        self._update_size_label()
+        self._sync_fit_group()
+
+    def _sync_fit_group(self):
+        """Fit Width or Fit Page active as the view fits; neither for the automatic zoom
+        or a percentage."""
+        fit = self.view.fit
+        if fit in ('width', 'page'):
+            if self._fit_group.get_active_name() != fit:
+                self._fit_group.set_active_name(fit)
+        elif self._fit_group.get_active() != Gtk.INVALID_LIST_POSITION:
+            self._fit_group.set_active(Gtk.INVALID_LIST_POSITION)
 
     def _update_size_label(self):
+        if self.is_pdf:
+            percent = self.view.zoom_percent
+            self.size_label.set_label(_('{}%').format(percent))
+            self.smaller_button.set_sensitive(percent > round(pdf_view.ZOOM_STEPS[0] * 100))
+            self.bigger_button.set_sensitive(percent < round(pdf_view.ZOOM_STEPS[-1] * 100))
+            return
         size = self.settings.get_int('reader-font-size')
         self.size_label.set_label(_('{} px').format(size))
         self.smaller_button.set_sensitive(size > FONT_SIZES[0])
         self.bigger_button.set_sensitive(size < FONT_SIZES[1])
 
     def _change_font_size(self, step=0):
+        """Bigger or smaller text (step 1 or -1; 0 resets it); a PDF zooms instead (0: the
+        automatic zoom)."""
+        if self.is_pdf:
+            if step > 0:
+                self.view.zoom_in()
+            elif step < 0:
+                self.view.zoom_out()
+            else:
+                self.view.set_fit('auto')
+            return
         if step == 0:
             self.settings.reset('reader-font-size')
             return
@@ -497,6 +671,7 @@ class ReaderWindow(Adw.ApplicationWindow):
                 scale.add_mark(min(1.0, fraction), Gtk.PositionType.BOTTOM, None)
         if loaded.get('dir') == 'rtl':
             scale.set_inverted(True)
+        self._find_imported_highlights()
 
     def _on_toc(self, _view, toc):
         while (row := self.toc_list.get_first_child()) is not None:
@@ -549,6 +724,7 @@ class ReaderWindow(Adw.ApplicationWindow):
                 self._hide_return()
         if place.get('atEnd') and fraction >= 0.5:
             self._mark_finished()
+        self._sync.relocated(place)
 
     def _on_view_error(self, _view, message):
         log.warning('the book could not be opened: %s', message)
@@ -650,7 +826,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._scrub_source = 0
         fraction, self._scrub_fraction = self._scrub_fraction, None
         if fraction is not None:
-            self.book_view.go_to_fraction(fraction)
+            self.view.go_to_fraction(fraction)
         return GLib.SOURCE_REMOVE
 
     def _update_title(self):
@@ -665,7 +841,11 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _show_return(self, cfi, previous):
         self._return_cfi = cfi
         self._turns_since_jump = 0
-        label = reading.progress_text('page' if previous.get('page') else 'percent', previous)
+        if previous.get('pages'):  # a PDF's page, without "of 300"
+            label = _('Page {}').format(previous['page'])
+        else:
+            label = reading.progress_text('page' if previous.get('page') else 'percent',
+                                          previous)
         self.return_content.set_label(_('Back to {}').format(label))
         self.return_revealer.set_reveal_child(True)
 
@@ -677,7 +857,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         cfi = self._return_cfi
         self._hide_return()
         if cfi:
-            self.book_view.go_to(cfi)
+            self.view.go_to(cfi)
             # going back is a jump too: hide the button it brings
             GLib.timeout_add(400, _weak_callback(self, self._hide_return_once))
 
@@ -699,7 +879,7 @@ class ReaderWindow(Adw.ApplicationWindow):
 
     def _on_toc_activated(self, _list, row):
         if row.href:
-            self.book_view.go_to(row.href)
+            self.view.go_to(row.href)
         if self.split_view.get_collapsed():
             self.split_view.set_show_sidebar(False)
 
@@ -707,10 +887,10 @@ class ReaderWindow(Adw.ApplicationWindow):
         self.close()
 
     def _go_left(self):
-        self.book_view.go_left()
+        self.view.go_left()
 
     def _go_right(self):
-        self.book_view.go_right()
+        self.view.go_right()
 
     def _show_sidebar(self, page):
         shown = self.sidebar_stack.get_visible_child_name()
@@ -732,8 +912,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         if kind == 'annotations':
             self._annotations = self.library.annotations(self.book_id)
             self._refresh_annotation_list()
-            self.book_view.set_annotations(self._highlights())
-            self.book_view.set_bookmarks(self._bookmarks(),
+            self.view.set_annotations(self._highlights())
+            self.view.set_bookmarks(self._bookmarks(),
                                          _weak_callback(self, self._set_bookmark_state,
                                                         argument=0))
         elif kind == 'books':
@@ -741,6 +921,22 @@ class ReaderWindow(Adw.ApplicationWindow):
             if book is not None:
                 self.book = book
                 self._update_title()
+                self._keep_banner.set_revealed(book.source == OPENED)
+
+    def _build_keep_banner(self):
+        """A book opened without adding (library.OPENED: from Files, or Open File…)
+        offers Add to Library over the page (app.keep_book)."""
+        self._keep_banner = Adw.Banner(
+            title=_('This book is not in your library'), button_label=_('_Add to Library'),
+            revealed=self.book is not None and self.book.source == OPENED, use_markup=False,
+            button_style=Adw.BannerButtonStyle.SUGGESTED)
+        self._keep_banner.connect('button-clicked', _weak_callback(self, self._keep_book))
+        self.toolbar_view.add_top_bar(self._keep_banner)
+
+    def _keep_book(self):
+        keep = getattr(self.app, 'keep_book', None)
+        if keep is not None:
+            keep(self.book_id)
 
     def _refresh_annotation_list(self):
         listbox = self.annotations_list
@@ -776,8 +972,10 @@ class ReaderWindow(Adw.ApplicationWindow):
                              ellipsize=Pango.EllipsizeMode.END, max_width_chars=30)
             note.add_css_class('dimmed')
             texts.append(note)
-        where = Gtk.Label(label=reading.progress_text('percent',
-                                                      {'fraction': annotation.position}),
+        page = pdf_location.parse(annotation.location)
+        where = Gtk.Label(label=_('Page {}').format(page.page) if page is not None
+                          else reading.progress_text('percent',
+                                                     {'fraction': annotation.position}),
                           xalign=0)
         where.add_css_class('caption')
         where.add_css_class('dimmed')
@@ -801,14 +999,45 @@ class ReaderWindow(Adw.ApplicationWindow):
         row = Gtk.ListBoxRow(child=box)
         row.annotation_id = annotation.id
         row.location = annotation.location
+        row.position = annotation.position
         return row
+
+    def _find_imported_highlights(self):
+        """Highlights imported without a place (a Kindle's): the page finds their text and
+        the library keeps the CFI (not an undo step), which draws them."""
+        items = [{'id': a.id, 'text': a.text} for a in self._annotations
+                 if a.kind == 'highlight' and not a.location and a.text.strip()]
+        find = getattr(self.view, 'find_texts', None)
+        if items and find is not None:
+            find(items, _weak_callback(self, self._on_texts_found, argument=0))
+
+    def _on_texts_found(self, found):
+        for item in found or ():
+            try:
+                self.library.set_annotation_location(int(item['id']), item['cfi'],
+                                                     item.get('fraction'))
+            except (KeyError, TypeError, ValueError):
+                log.warning('a found highlight without its place: %r', item)
+
+    def _export_highlights(self):
+        from .dialogs import highlights
+
+        highlights.export_book(self.app, self, self.book_id, toast=self.toast)
+
+    def _copy_highlights(self):
+        from .dialogs import highlights
+
+        if highlights.copy_book(self.app, self, self.book_id):
+            self.toast(_('Highlights copied as Markdown'))
 
     def _annotation(self, annotation_id):
         return next((a for a in self._annotations if a.id == annotation_id), None)
 
     def _on_annotation_row(self, _list, row):
         if row.location:
-            self.book_view.go_to(row.location)
+            self.view.go_to(row.location)
+        elif row.position:  # an imported highlight not found in the book: about there
+            self.view.go_to_fraction(row.position)
         if self.split_view.get_collapsed():
             self.split_view.set_show_sidebar(False)
 
@@ -875,6 +1104,31 @@ class ReaderWindow(Adw.ApplicationWindow):
         except LibraryError as error:
             self.toast(str(error))
 
+    # -- reading aloud ---------------------------------------------------------------------
+
+    def _build_read_aloud(self):
+        """Read Aloud (widgets/read_aloud.py): its bar, action and menu item, only when a
+        speech engine is installed."""
+        self._read_aloud = None
+        if not read_aloud.available(self.book_view):
+            return
+        self._read_aloud = read_aloud.ReadAloudBar(self.book_view, speech.engine(),
+                                                   self.settings, self._lookup_language())
+        self.toolbar_view.add_bottom_bar(self._read_aloud)
+        action = Gio.SimpleAction.new('read-aloud', None)
+        action.connect('activate', _weak_callback(self, self._toggle_read_aloud))
+        self.add_action(action)
+        section = self.menu_button.get_menu_model().get_item_link(0, Gio.MENU_LINK_SECTION)
+        if isinstance(section, Gio.Menu):
+            section.append(_('Read Aloud'), 'win.read-aloud')
+
+    def _toggle_read_aloud(self):
+        if self._read_aloud is None or self.content_stack.get_visible_child_name() != 'book' \
+                or self.view is not self.book_view:
+            return False
+        self._read_aloud.toggle()
+        return True
+
     # -- the selection popover -------------------------------------------------------------
 
     def _build_selection_popover(self):
@@ -911,13 +1165,17 @@ class ReaderWindow(Adw.ApplicationWindow):
             actions.append(button)
             self._selection_buttons[name] = button
         box.append(actions)
+        self._lookup_panel = lookup_popover.LookupPanel(
+            on_search=_weak_callback(self, self._search_for, argument=0), visible=False)
+        box.append(self._lookup_panel)
         popover.set_child(box)
-        popover.set_parent(self.book_view)
+        popover.set_parent(self.view)
         popover.connect('closed', _weak_callback(self, self._on_selection_closed))
         self._selection_popover = popover
 
     def _popup_selection(self, rect, annotation=None):
         popover = self._selection_popover
+        self._show_lookup((self._selection or {}).get('text') if annotation is None else None)
         for color, button in self._color_buttons.items():
             button.get_child().set_visible(annotation is not None and annotation.color == color)
         self._selection_buttons['remove'].set_visible(annotation is not None)
@@ -929,8 +1187,10 @@ class ReaderWindow(Adw.ApplicationWindow):
             area.width = max(1, int(rect.get('width', 1)))
             area.height = max(1, int(rect.get('height', 1)))
             popover.set_pointing_to(area)
-            # Above the line, unless it is too near the top of the page.
-            popover.set_position(Gtk.PositionType.TOP if area.y > 140
+            # Above the line, unless it is too near the top of the page (for the popover with
+            # a definition in it, the upper half).
+            room = 480 if self._lookup_panel.get_visible() else 140
+            popover.set_position(Gtk.PositionType.TOP if area.y > room
                                  else Gtk.PositionType.BOTTOM)
         popover.popup()
 
@@ -956,8 +1216,9 @@ class ReaderWindow(Adw.ApplicationWindow):
 
     def _on_selection_closed(self):
         if self._selection is not None and self._selection.get('annotation_id') is None:
-            self.book_view.clear_selection()
+            self.view.clear_selection()
         self._selection = None
+        self._lookup_panel.cancel()
 
     def _take_selection(self):
         selection = self._selection
@@ -971,7 +1232,7 @@ class ReaderWindow(Adw.ApplicationWindow):
                                         position=selection['fraction'])
         except LibraryError as error:
             self.toast(str(error))
-        self.book_view.clear_selection()
+        self.view.clear_selection()
 
     def _on_color(self, color):
         selection = self._take_selection()
@@ -999,20 +1260,38 @@ class ReaderWindow(Adw.ApplicationWindow):
             self.get_clipboard().set(selection['text'])
             self.toast(_('Copied'))
 
+    def _lookup_language(self):
+        language = ((self.book.language if self.book else '') or 'en').split('-')[0][:3]
+        return language.lower() if language.isalpha() else 'en'
+
+    def _show_lookup(self, text, force=False):
+        """The definition of a selected word in the popover, in a wide window (else Look Up
+        opens a bottom sheet); with force, the summary of a longer selection too."""
+        shown = bool(text) and lookup_popover.inline(self) and (force or lookup.is_word(text))
+        self._lookup_panel.set_visible(shown)
+        self._selection_buttons['lookup'].set_visible(not shown)
+        if shown:
+            self._lookup_panel.show_text(text, self._lookup_language())
+        else:
+            self._lookup_panel.cancel()
+
     def _on_lookup(self):
-        selection = self._take_selection()
+        selection = self._selection
         if selection is None or not selection['text']:
             return
-        text = ' '.join(selection['text'].split())
-        language = ((self.book.language if self.book else '') or 'en').split('-')[0][:3]
-        language = language.lower() if language.isalpha() else 'en'
-        if ' ' not in text and len(text) < 40:
-            uri = (f'https://{language}.wiktionary.org/wiki/'
-                   f'{urllib.parse.quote(text.strip(".,;:!?«»“”‘’\"()").lower())}')
-        else:
-            uri = (f'https://{language}.wikipedia.org/w/index.php?search='
-                   f'{urllib.parse.quote_plus(text[:200])}')
-        Gtk.UriLauncher.new(uri).launch(self, None, None, None)
+        if lookup_popover.inline(self):
+            self._show_lookup(selection['text'], force=True)
+            return
+        self._take_selection()
+        lookup_popover.present_sheet(self, selection['text'], self._lookup_language(),
+                                     _weak_callback(self, self._search_for, argument=0))
+
+    def _search_for(self, text):
+        self._selection_popover.popdown()
+        self.sidebar_stack.set_visible_child_name('search')
+        self.split_view.set_show_sidebar(True)
+        self.search_entry.set_text(' '.join(text.split())[:100])
+        self._start_search()
 
     def _on_search_selection(self):
         selection = self._take_selection()
@@ -1054,12 +1333,12 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._search_count = 0
         self.search_status.set_visible(False)
         if not text:
-            self.book_view.clear_search()
+            self.view.clear_search()
             self.search_stack.set_visible_child_name('start')
             return
         self.search_status.set_label(_('Searching…'))
         self.search_status.set_visible(True)
-        self.book_view.search(text)
+        self.view.search(text)
 
     def _on_search_result(self, _view, result):
         heading = Gtk.Label(label=result.get('label') or _('Untitled'), xalign=0,
@@ -1097,7 +1376,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         cfi = getattr(row, 'cfi', None)
         if cfi:
             self._search_index = self._search_rows.index(row)
-            self.book_view.select(cfi)
+            self.view.select(cfi)
             if self.split_view.get_collapsed():
                 self.split_view.set_show_sidebar(False)
 
@@ -1107,7 +1386,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._search_index = (self._search_index + step) % len(self._search_rows)
         row = self._search_rows[self._search_index]
         self.search_list.select_row(row)
-        self.book_view.select(row.cfi)
+        self.view.select(row.cfi)
 
     # -- keys, the pointer, chrome ---------------------------------------------------------
 
@@ -1130,15 +1409,28 @@ class ReaderWindow(Adw.ApplicationWindow):
         if typing and not (mods & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) \
                 and name not in ('fullscreen', 'leave-fullscreen'):
             return False
-        if typing and name == 'leave-fullscreen':
-            return False  # the search entry's stop-search
+        if typing and name in ('leave-fullscreen', 'copy'):
+            return False  # the search entry's stop-search, its own copy
         if self.content_stack.get_visible_child_name() != 'book' and name not in (
                 'fullscreen', 'leave-fullscreen', 'close', 'info'):
             return False
         return self._run_key(name, lower) is not False
 
+    def _copy_selection(self):
+        """Ctrl+C: the selected text to the clipboard; False when nothing is selected."""
+        text = (self._selection or {}).get('text') or ''
+        if not text and self.is_pdf:
+            text = self.view.selected_text()
+        if not text:
+            return False
+        self.get_clipboard().set(text)
+        self.toast(_('Copied'))
+        return True
+
     def _run_key(self, name, keyval):
-        view = self.book_view
+        view = self.view
+        if name == 'copy':
+            return self._copy_selection()
         if name == 'next':
             if keyval in (Gdk.KEY_Right, Gdk.KEY_l):
                 view.go_right()
@@ -1200,6 +1492,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             self._go_to_location()
         elif name == 'info':
             self._show_details()
+        elif name == 'read-aloud':
+            return self._toggle_read_aloud()
         elif name == 'close':
             self.close()
         else:
@@ -1216,9 +1510,9 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _on_button(self, gesture, _n_press, _x, _y):
         button = gesture.get_current_button()
         if button == 8:
-            self.book_view.back()
+            self.view.back()
         elif button == 9:
-            self.book_view.forward()
+            self.view.forward()
         else:
             return
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
@@ -1245,7 +1539,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self.toolbar_view.set_reveal_top_bars(visible)
         self.toolbar_view.set_reveal_bottom_bars(visible)
         if self.content_stack.get_visible_child_name() == 'book':
-            self.book_view.show_progress(not visible)
+            self.view.show_progress(not visible)
 
     def _toggle_fullscreen(self):
         if self.is_fullscreen():
@@ -1286,7 +1580,7 @@ class ReaderWindow(Adw.ApplicationWindow):
                 percent = float(entry.get_text().strip().rstrip('%').replace(',', '.'))
             except ValueError:
                 return
-            window.book_view.go_to_fraction(max(0.0, min(100.0, percent)) / 100)
+            window.view.go_to_fraction(max(0.0, min(100.0, percent)) / 100)
 
         dialog.connect('response', response)
         self.set_dialog_open(True)
@@ -1331,6 +1625,7 @@ class ReaderWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._save_source)
             self._save_source = 0
         self._save_progress()
+        self._sync.close()
         if self._clock is not None:
             session = self._clock.finish(time.time())
             if session is not None:
@@ -1350,9 +1645,22 @@ class ReaderWindow(Adw.ApplicationWindow):
                              (Adw.StyleManager.get_default(), self._style_handler)):
             if obj.handler_is_connected(handler):
                 obj.disconnect(handler)
-        self._selection_popover.unparent()
-        self.book_view.close()
+        self._release_popover()
+        if self._read_aloud is not None:
+            self._read_aloud.close()
+        self.view.close()
+        if self.view is not self.book_view:
+            self.book_view.close()
         return False
+
+
+    def _release_popover(self, *_args):
+        """Take the selection popover off the view, which a popover does not leave on its
+        own: a view finalized with one still attached frees it twice. On close, and on
+        destroy for a window that is never closed (tests)."""
+        popover = self._selection_popover
+        if popover is not None and popover.get_parent() is not None:
+            popover.unparent()
 
 
 def _weak_callback(widget, method, argument=None, **kwargs):

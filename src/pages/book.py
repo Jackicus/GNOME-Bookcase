@@ -13,18 +13,24 @@ Again) and Mark as Finished (or Unread). Under them: the description (its HTML a
 markup, widgets/markup.py), the tags (each opens its books), Details (publisher, published,
 language, identifiers: an ISBN opens Open Library, added, the shelves), Reading (highlights
 and bookmarks, which open the reader at its annotations) and Files (each format's size and
-path, with Show in Files). The header has Edit Details and the book menu (pages/actions.py).
+path, with Show in Files and a menu: Open With… another app, Open in the default one, Copy
+Path; a file that cannot be found has Locate…, which points the library at it again). Under
+the series, the books before and after this one in it; under the tags, rows of covers: the
+rest of the series, and more by the author (each opens its details). The header has Edit
+Details and the book menu (pages/actions.py).
 A book that leaves the library takes its page with it.
 """
 
 import datetime
 import logging
+import os
 from gettext import gettext as _
 from gettext import ngettext
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import stats
+from ..library import LibraryError
 from ..widgets.book_tile import duration_text, format_index
 from ..widgets.cover import Cover
 from ..widgets.markup import html_to_markup
@@ -37,6 +43,8 @@ log = logging.getLogger(__name__)
 
 CHANGE_KINDS = ('books', 'files', 'shelves', 'progress', 'annotations')
 COVER_WIDTH = 220
+MORE_COVER = 96
+MORE_LIMIT = 12
 
 LANGUAGES = {
     'ar': 'العربية', 'ca': 'Català', 'cs': 'Čeština', 'da': 'Dansk', 'de': 'Deutsch',
@@ -163,6 +171,12 @@ class BookPage(Adw.NavigationPage):
     details_group = Gtk.Template.Child()
     reading_group = Gtk.Template.Child()
     files_group = Gtk.Template.Child()
+    series_nav = Gtk.Template.Child()
+    previous_button = Gtk.Template.Child()
+    previous_label = Gtk.Template.Child()
+    next_button = Gtk.Template.Child()
+    next_label = Gtk.Template.Child()
+    more_box = Gtk.Template.Child()
 
     def __init__(self, book_id):
         super().__init__()
@@ -179,6 +193,11 @@ class BookPage(Adw.NavigationPage):
         connect_weak(self.authors_label, 'activate-link', self._on_activate_link)
         connect_weak(self.series_label, 'activate-link', self._on_activate_link)
         connect_weak(self.finished_button, 'clicked', self._on_finished_clicked)
+        connect_weak(self.previous_button, 'clicked', self._on_series_step)
+        connect_weak(self.next_button, 'clicked', self._on_series_step)
+        self._more_rows = []
+        self._add_file_actions()
+        self._add_highlight_actions()
         self.listener = PageListener(self, CHANGE_KINDS, BookPage.refresh)
         self.refresh()
 
@@ -236,6 +255,8 @@ class BookPage(Adw.NavigationPage):
         self._fill_details(library, book)
         self._fill_reading(library, book)
         self._fill_files(library, book)
+        self._fill_series(library, book)
+        self._fill_more(library, book)
         self.book_actions.update()
         # Rebuilt with the page: Add to Shelf lists the shelves as they are now.
         self.more_button.set_menu_model(book_menu(library, details=False, read=False))
@@ -294,8 +315,38 @@ class BookPage(Adw.NavigationPage):
         if shelves:
             self._row(group, _('Shelves'), ', '.join(shelf.name for shelf in shelves))
 
+    def _add_highlight_actions(self):
+        """Export Highlights… and Copy as Markdown, in a menu beside Reading's title."""
+        group = Gio.SimpleActionGroup()
+        for name, method in (('export', self._export_highlights),
+                             ('copy', self._copy_highlights)):
+            action = Gio.SimpleAction.new(name, None)
+            connect_weak(action, 'activate', method)
+            group.add_action(action)
+        self.insert_action_group('highlights', group)
+        menu = Gio.Menu()
+        menu.append(_('_Export Highlights…'), 'highlights.export')
+        menu.append(_('_Copy as Markdown'), 'highlights.copy')
+        self.highlights_button = Gtk.MenuButton(icon_name='view-more-symbolic', menu_model=menu,
+                                                valign=Gtk.Align.CENTER,
+                                                tooltip_text=_('Highlights'))
+        self.highlights_button.add_css_class('flat')
+        self.reading_group.set_header_suffix(self.highlights_button)
+
+    def _export_highlights(self, *_args):
+        from ..dialogs import highlights
+
+        highlights.export_book(app(), self, self.book_id)
+
+    def _copy_highlights(self, *_args):
+        from ..dialogs import highlights
+
+        if highlights.copy_book(app(), self, self.book_id):
+            app().toast(_('Highlights copied as Markdown'))
+
     def _fill_reading(self, library, book):
         annotations = library.annotations(book.id)
+        self.highlights_button.set_visible(bool(annotations))
         row = self._row(self.reading_group, _('Highlights and Bookmarks'),
                         annotations_text(annotations), activatable=bool(annotations),
                         icon='go-next-symbolic' if annotations else None)
@@ -327,6 +378,12 @@ class BookPage(Adw.NavigationPage):
                                  tooltip_text=_('This file cannot be found'))
                 icon.add_css_class('warning')
                 row.add_prefix(icon)
+                locate = Gtk.Button(label=_('_Locate…'), use_underline=True,
+                                    valign=Gtk.Align.CENTER,
+                                    tooltip_text=_('Show Bookcase where the file is now'),
+                                    action_name='file.locate',
+                                    action_target=GLib.Variant('x', book_file.id))
+                row.add_suffix(locate)
             else:
                 button = Gtk.Button(icon_name='folder-open-symbolic', valign=Gtk.Align.CENTER,
                                     tooltip_text=_('Show in Files'))
@@ -334,14 +391,186 @@ class BookPage(Adw.NavigationPage):
                 button.path = book_file.path
                 connect_weak(button, 'clicked', self._on_show_file)
                 row.add_suffix(button)
+                menu = Gio.Menu()
+                target = GLib.Variant('s', book_file.path)
+                for label, action in ((_('_Open With…'), 'file.open-with'),
+                                      (_('Open in the _Default App'), 'file.open'),
+                                      (_('_Copy Path'), 'file.copy-path')):
+                    item = Gio.MenuItem.new(label, None)
+                    item.set_action_and_target_value(action, target)
+                    menu.append_item(item)
+                more = Gtk.MenuButton(icon_name='view-more-symbolic', menu_model=menu,
+                                      valign=Gtk.Align.CENTER,
+                                      tooltip_text=_('More for This File'))
+                more.add_css_class('flat')
+                more.update_property([Gtk.AccessibleProperty.LABEL], [
+                    _('More for the {format} file').format(format=book_file.format.upper())])
+                row.add_suffix(more)
             self.files_group.add(row)
             self._rows.append((self.files_group, row))
         self.files_group.set_visible(bool(files))
+
+    def _fill_series(self, library, book):
+        """The books before and after this one in its series."""
+        self._series_books = []
+        previous = following = None
+        if book.series:
+            group = next((group for group in library.series() if group.name == book.series),
+                         None)
+            if group is not None:
+                self._series_books = library.books(series=group.id, sort='series')
+                ids = [each.id for each in self._series_books]
+                if book.id in ids:
+                    index = ids.index(book.id)
+                    previous = self._series_books[index - 1] if index > 0 else None
+                    following = (self._series_books[index + 1]
+                                 if index + 1 < len(ids) else None)
+        for button, label, step, text in (
+                (self.previous_button, self.previous_label, previous,
+                 _('Previous in the series: {title}')),
+                (self.next_button, self.next_label, following,
+                 _('Next in the series: {title}'))):
+            button.set_visible(step is not None)
+            button.step_id = step.id if step is not None else None
+            if step is not None:
+                label.set_text(step.title)
+                button.set_tooltip_text(text.format(title=step.title))
+                button.update_property([Gtk.AccessibleProperty.LABEL],
+                                       [text.format(title=step.title)])
+        self.series_nav.set_visible(previous is not None or following is not None)
+
+    def _fill_more(self, library, book):
+        """Rows of covers: the rest of the series, then more by the first author."""
+        from .home import ShelfRow
+
+        for row in self._more_rows:
+            self.more_box.remove(row)
+        self._more_rows = []
+        shown = {book.id}
+        others = [each for each in getattr(self, '_series_books', []) if each.id != book.id]
+        if len(others) > 1 or (others and not self.series_nav.get_visible()):
+            self._add_more_row(ShelfRow, _('More in {series}').format(series=book.series),
+                               others)
+            shown.update(each.id for each in others)
+        if book.authors:
+            group = next((group for group in library.authors()
+                          if group.name == book.authors[0]), None)
+            if group is not None and group.count > 1:
+                books = [each for each in library.books(author=group.id, sort='series',
+                                                        limit=MORE_LIMIT + len(shown))
+                         if each.id not in shown][:MORE_LIMIT]
+                if books:
+                    self._add_more_row(ShelfRow, _('More by {author}').format(
+                        author=book.authors[0]), books)
+        self.more_box.set_visible(bool(self._more_rows))
+
+    def _add_more_row(self, row_class, title, books):
+        row = row_class(title)
+        row.get_first_child().set_margin_start(0)
+        row.box.set_margin_start(6)
+        row.box.set_margin_end(6)
+        for each in books[:MORE_LIMIT]:
+            button = row.add_tile(each, MORE_COVER)
+            connect_weak(button, 'clicked', self._on_more_clicked)
+        self.more_box.append(row)
+        self._more_rows.append(row)
 
     # -- actions -----------------------------------------------------------------------------
 
     def _window(self):
         return self.get_root()
+
+    def _on_series_step(self, button):
+        window = self._window()
+        if button.step_id is not None and window is not None and hasattr(window, 'show_book'):
+            window.show_book(button.step_id)
+
+    def _on_more_clicked(self, button):
+        window = self._window()
+        if window is not None and hasattr(window, 'show_book'):
+            window.show_book(button.book_id)
+
+    def _add_file_actions(self):
+        """file.open-with, file.open, file.copy-path (a path); file.locate (a file id)."""
+        group = Gio.SimpleActionGroup()
+        ref = self.weak_ref()
+        for name, kind, method in (('open-with', 's', BookPage._open_with),
+                                   ('open', 's', BookPage._open_file),
+                                   ('copy-path', 's', BookPage._copy_path),
+                                   ('locate', 'x', BookPage._locate)):
+            action = Gio.SimpleAction.new(name, GLib.VariantType.new(kind))
+
+            def activate(_action, value, method=method):
+                page = ref()
+                if page is not None:
+                    method(page, value.unpack())
+
+            action.connect('activate', activate)
+            group.add_action(action)
+        self.insert_action_group('file', group)
+
+    def _launch(self, path, always_ask):
+        launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(path), always_ask=always_ask)
+
+        def done(launcher, result):
+            try:
+                launcher.launch_finish(result)
+            except GLib.Error as error:
+                if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
+                    app().report(error, _('Could not open the file'))
+
+        launcher.launch(self._window(), None, done)
+
+    def _open_with(self, path):
+        self._launch(path, True)
+
+    def _open_file(self, path):
+        self._launch(path, False)
+
+    def _copy_path(self, path):
+        self.get_clipboard().set_content(Gdk.ContentProvider.new_for_value(path))
+        app().toast(_('Path copied'))
+
+    def _locate(self, file_id):
+        """Ask where a missing file is now, and point the library at it."""
+        library = app().library
+        book_file = next((each for each in library.files(self.book_id) if each.id == file_id),
+                         None)
+        if book_file is None:
+            return
+        dialog = Gtk.FileDialog(title=_('Locate the File'), accept_label=_('_Locate'),
+                                modal=True)
+        books = Gtk.FileFilter(name=book_file.format.upper())
+        books.add_suffix(book_file.path.rsplit('.', 1)[-1] if '.' in book_file.path
+                         else book_file.format)
+        everything = Gtk.FileFilter(name=_('All Files'))
+        everything.add_pattern('*')
+        filters = Gio.ListStore(item_type=Gtk.FileFilter)
+        filters.append(books)
+        filters.append(everything)
+        dialog.set_filters(filters)
+        folder = os.path.dirname(book_file.path)
+        while folder and folder != '/' and not os.path.isdir(folder):
+            folder = os.path.dirname(folder)
+        if folder and os.path.isdir(folder):
+            dialog.set_initial_folder(Gio.File.new_for_path(folder))
+
+        def chosen(dialog, result):
+            try:
+                gfile = dialog.open_finish(result)
+            except GLib.Error:
+                return
+            if gfile is None or gfile.get_path() is None:
+                return
+            try:
+                app().library.set_file_path(file_id, gfile.get_path())
+            except LibraryError as error:
+                app().report(error)
+                return
+            app().toast(_('Found the file of “{title}”').format(title=self.book.title
+                                                                 if self.book else ''))
+
+        dialog.open(self._window(), None, chosen)
 
     def _on_rating_changed(self, rating, _pspec):
         if getattr(self, '_setting_rating', False) or self.book is None:

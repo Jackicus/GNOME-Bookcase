@@ -1,0 +1,379 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Jack Tully
+
+using Gtk 4.0;
+using Adw 1;
+
+// The Statistics page: this year's goal (a ring) and the books finished, today's reading and
+// the streak in tiles, a year of reading days, time read per month, when the reading
+// happens, the most read authors and tags (pages/stats.py fills them from stats.py). With
+// no reading yet, a status page.
+template $BookcaseStatsPage: Adw.NavigationPage {
+  title: _("Statistics");
+  tag: "stats";
+
+  child: Adw.BreakpointBin {
+    width-request: 360;
+    height-request: 240;
+
+    Adw.Breakpoint narrow {
+      condition ("max-width: 560sp")
+
+      setters {
+        when_box.orientation: vertical;
+        most_box.orientation: vertical;
+        ring.size: 120;
+      }
+    }
+
+    child: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        [end]
+        Button {
+          icon-name: "document-edit-symbolic";
+          tooltip-text: _("Edit Reading Goals");
+          clicked => $_on_edit_goals();
+        }
+      }
+
+      content: Stack stack {
+        transition-type: crossfade;
+
+        StackPage {
+          name: "stats";
+
+          child: ScrolledWindow scroller {
+            hscrollbar-policy: never;
+
+            child: Adw.Clamp {
+              maximum-size: 860;
+              tightening-threshold: 600;
+              margin-start: 12;
+              margin-end: 12;
+              margin-top: 12;
+              margin-bottom: 30;
+
+              child: Box {
+                orientation: vertical;
+                spacing: 24;
+
+                // This year's goal, and the books finished.
+                Box {
+                  orientation: vertical;
+                  spacing: 18;
+
+                  styles [
+                    "card",
+                    "stats-card",
+                  ]
+
+                  Box {
+                    spacing: 18;
+
+                    $BookcaseRing ring {
+                      valign: center;
+                    }
+
+                    Box {
+                      orientation: vertical;
+                      spacing: 4;
+                      valign: center;
+                      hexpand: true;
+
+                      Label goal_title {
+                        xalign: 0;
+                        wrap: true;
+
+                        styles [
+                          "title-2",
+                        ]
+                      }
+
+                      Label goal_status {
+                        xalign: 0;
+                        wrap: true;
+                      }
+
+                      Label goal_caption {
+                        xalign: 0;
+                        wrap: true;
+
+                        styles [
+                          "caption",
+                          "dimmed",
+                        ]
+                      }
+
+                      Button goal_button {
+                        label: _("Set a Goal…");
+                        halign: start;
+                        margin-top: 8;
+                        clicked => $_on_edit_goals();
+
+                        styles [
+                          "pill",
+                        ]
+                      }
+                    }
+                  }
+
+                  Box finished_section {
+                    orientation: vertical;
+                    spacing: 8;
+
+                    Label finished_label {
+                      xalign: 0;
+
+                      styles [
+                        "caption-heading",
+                        "dimmed",
+                      ]
+                    }
+
+                    Adw.WrapBox finished_box {
+                      child-spacing: 6;
+                      line-spacing: 6;
+                    }
+                  }
+                }
+
+                Adw.WrapBox tiles {
+                  child-spacing: 12;
+                  line-spacing: 12;
+                  justify: fill;
+                  justify-last-line: true;
+                }
+
+                // A year of reading days.
+                Box {
+                  orientation: vertical;
+                  spacing: 12;
+
+                  Label {
+                    label: _("Reading Days");
+                    xalign: 0;
+                    accessible-role: heading;
+
+                    styles [
+                      "heading",
+                    ]
+                  }
+
+                  Box {
+                    orientation: vertical;
+                    spacing: 12;
+
+                    styles [
+                      "card",
+                      "stats-card",
+                    ]
+
+                    ScrolledWindow heatmap_scroller {
+                      hscrollbar-policy: automatic;
+                      vscrollbar-policy: never;
+
+                      child: $BookcaseHeatmap heatmap {
+                        halign: center;
+                      };
+                    }
+
+                    Label heatmap_caption {
+                      xalign: 0;
+                      wrap: true;
+
+                      styles [
+                        "caption",
+                        "dimmed",
+                      ]
+                    }
+                  }
+                }
+
+                // Hours read per month.
+                Box {
+                  orientation: vertical;
+                  spacing: 12;
+
+                  Label {
+                    label: _("Hours per Month");
+                    xalign: 0;
+                    accessible-role: heading;
+
+                    styles [
+                      "heading",
+                    ]
+                  }
+
+                  Box {
+                    orientation: vertical;
+                    spacing: 12;
+
+                    styles [
+                      "card",
+                      "stats-card",
+                    ]
+
+                    $BookcaseBarChart months_chart {}
+
+                    Label months_caption {
+                      xalign: 0;
+                      wrap: true;
+
+                      styles [
+                        "caption",
+                        "dimmed",
+                      ]
+                    }
+                  }
+                }
+
+                // When the reading happens.
+                Box {
+                  orientation: vertical;
+                  spacing: 12;
+
+                  Label {
+                    label: _("When You Read");
+                    xalign: 0;
+                    accessible-role: heading;
+
+                    styles [
+                      "heading",
+                    ]
+                  }
+
+                  Box when_box {
+                    spacing: 12;
+                    homogeneous: true;
+
+                    Box {
+                      orientation: vertical;
+                      spacing: 12;
+
+                      styles [
+                        "card",
+                        "stats-card",
+                      ]
+
+                      Label {
+                        label: _("Days of the Week");
+                        xalign: 0;
+
+                        styles [
+                          "caption-heading",
+                        ]
+                      }
+
+                      $BookcaseBarChart weekdays_chart {}
+                    }
+
+                    Box {
+                      orientation: vertical;
+                      spacing: 12;
+
+                      styles [
+                        "card",
+                        "stats-card",
+                      ]
+
+                      Label {
+                        label: _("Time of Day");
+                        xalign: 0;
+
+                        styles [
+                          "caption-heading",
+                        ]
+                      }
+
+                      $BookcaseBarChart hours_chart {}
+                    }
+                  }
+
+                  Label when_caption {
+                    xalign: 0;
+                    wrap: true;
+
+                    styles [
+                      "caption",
+                      "dimmed",
+                    ]
+                  }
+                }
+
+                // The most read authors and tags this year.
+                Box most_section {
+                  orientation: vertical;
+                  spacing: 12;
+
+                  Label most_heading {
+                    xalign: 0;
+                    accessible-role: heading;
+
+                    styles [
+                      "heading",
+                    ]
+                  }
+
+                  Box most_box {
+                    spacing: 12;
+                    homogeneous: true;
+
+                    ListBox authors_list {
+                      selection-mode: none;
+                      valign: start;
+                      row-activated => $_on_author_activated();
+
+                      accessibility {
+                        label: _("Authors");
+                      }
+
+                      styles [
+                        "boxed-list",
+                      ]
+                    }
+
+                    ListBox tags_list {
+                      selection-mode: none;
+                      valign: start;
+                      row-activated => $_on_tag_activated();
+
+                      accessibility {
+                        label: _("Tags");
+                      }
+
+                      styles [
+                        "boxed-list",
+                      ]
+                    }
+                  }
+                }
+              };
+            };
+          };
+        }
+
+        StackPage {
+          name: "empty";
+
+          child: Adw.StatusPage {
+            icon-name: "statistics-symbolic";
+            title: _("Your Reading Will Show Up Here");
+            description: _("Open a book to begin: the time you read, your streaks and the books you finish gather on this page.");
+
+            child: Button {
+              label: _("Set a Reading _Goal…");
+              use-underline: true;
+              halign: center;
+              clicked => $_on_edit_goals();
+
+              styles [
+                "pill",
+              ]
+            };
+          };
+        }
+      };
+    };
+  };
+}

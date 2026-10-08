@@ -17,15 +17,18 @@ from gettext import gettext as _
 ACCELS = {
     'app.add-books': ['<primary>o'],
     'app.add-folder': ['<primary><shift>o'],
+    'app.open-file': ['<primary><alt>o'],
     'app.undo': ['<primary>z'],
     'app.preferences': ['<primary>comma'],
     'app.shortcuts': ['<primary>question'],
     'app.quit': ['<primary>q'],
     'win.search': ['<primary>f'],
+    'win.quick-open': ['<primary>k'],
     'win.home': ['<primary>1'],
     'win.all': ['<primary>2'],
     'win.authors': ['<primary>3'],
     'win.series': ['<primary>4'],
+    'win.stats': ['<primary>5'],
     'win.back': ['<alt>Left'],
     'win.toggle-sidebar': ['F9'],
     'win.view-grid': ['<primary>g'],
@@ -50,6 +53,7 @@ READER = {
     'search-next': ['<primary>g'],
     'search-previous': ['<primary><shift>g'],
     'bookmark': ['<primary>d'],
+    'copy': ['<primary>c'],
     'annotations': ['<primary>b'],
     'bigger': ['<primary>plus', '<primary>equal'],
     'smaller': ['<primary>minus'],
@@ -58,6 +62,7 @@ READER = {
     'leave-fullscreen': ['Escape'],
     'go-to': ['<primary>j'],
     'info': ['<primary>i'],
+    'read-aloud': ['<primary><shift>s'],
     'close': ['<primary>w'],
 }
 
@@ -68,6 +73,7 @@ GRID = {
     'edit': ['<primary>e'],
     'remove': ['Delete'],
     'select-all': ['<primary>a'],
+    'select-none': ['<primary><shift>a'],
 }
 
 
@@ -85,11 +91,14 @@ def sections():
         (_('General'), [
             (_('Add Books'), accelerator('app.add-books')),
             (_('Add a Folder'), accelerator('app.add-folder')),
+            (_('Read a File Without Adding It'), accelerator('app.open-file')),
             (_('Search'), accelerator('win.search')),
+            (_('Go to a Book, Author, Series or Shelf'), accelerator('win.quick-open')),
             (_('Home'), accelerator('win.home')),
             (_('All Books'), accelerator('win.all')),
             (_('Authors'), accelerator('win.authors')),
             (_('Series'), accelerator('win.series')),
+            (_('Statistics'), accelerator('win.stats')),
             (_('Show as Covers'), accelerator('win.view-grid')),
             (_('Show as a List'), accelerator('win.view-list')),
             (_('Undo'), accelerator('app.undo')),
@@ -106,6 +115,7 @@ def sections():
             (_('Edit Details'), accelerator('edit')),
             (_('Remove from Library'), accelerator('remove')),
             (_('Select All'), accelerator('select-all')),
+            (_('Select None'), accelerator('select-none')),
         ]),
         (_('Reading'), [
             (_('Next Page'), accelerator('next')),
@@ -121,12 +131,14 @@ def sections():
             (_('Next Result'), accelerator('search-next')),
             (_('Previous Result'), accelerator('search-previous')),
             (_('Add a Bookmark'), accelerator('bookmark')),
+            (_('Copy the Selected Text'), accelerator('copy')),
             (_('Highlights and Bookmarks'), accelerator('annotations')),
-            (_('Larger Text'), accelerator('bigger')),
-            (_('Smaller Text'), accelerator('smaller')),
-            (_('Reset Text Size'), accelerator('reset-size')),
+            (_('Larger Text (Zoom In, for a PDF)'), accelerator('bigger')),
+            (_('Smaller Text (Zoom Out)'), accelerator('smaller')),
+            (_('Reset Text Size (Zoom)'), accelerator('reset-size')),
             (_('Go to a Location'), accelerator('go-to')),
             (_('Book Details'), accelerator('info')),
+            (_('Read Aloud'), accelerator('read-aloud')),
             (_('Fullscreen'), accelerator('fullscreen')),
         ]),
     ]

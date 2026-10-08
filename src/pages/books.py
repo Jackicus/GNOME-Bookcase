@@ -14,14 +14,21 @@ The books are a Gio.ListStore of BookItems under one Gtk.MultiSelection, shown b
 Gtk.GridView of BookTiles (covers load as tiles are bound) or a Gtk.ColumnView, as the
 view-mode setting says (win.view-grid, win.view-list, the Sort and View menu); the order is
 the sort-order setting's (library.SORTS; a series' page is always in series order and shows
-each book's number). The search entry filters as you type, through library.books(query=…).
+each book's number), turned round by the sort-reversed setting (Reverse Order); the menu
+also has the cover size (a slider on the cover-size setting). The search entry filters as
+you type, through library.books(query=…). The filter bar (the funnel button) narrows the
+books by format, reading state, least rating and language: search.filter_query() of its
+choices joins what is typed; hiding the bar clears them. The Missing Files page (key
+'missing', shown in the sidebar while there are any) is the books whose files are gone
+(`has:missing`); a book's page has Locate….
 A refresh asks the library again; when the same books come back in the same order, each
 item only takes its new Book (the tiles follow), so neither the scroll position nor the
 selection moves; otherwise the store is refilled and the selection kept by book id.
 
 Clicking selects (Ctrl and Shift add, the rubber band too); a double click or Enter opens the
 reader; a right click (or a long press) opens the book menu (pages/actions.py) on the
-selection; the keys are shortcuts.GRID's. Books dragged out (the selection, or the book under
+selection; the keys are shortcuts.GRID's (Ctrl+A selects all, Ctrl+Shift+A none, Delete
+removes from the library with Undo). Books dragged out (the selection, or the book under
 the pointer) drop on the sidebar's shelves and reading states.
 """
 
@@ -30,9 +37,11 @@ import logging
 from gettext import gettext as _
 from gettext import ngettext
 
-from gi.repository import Adw, Gdk, Gio, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
+from .. import search as search_syntax
 from .. import shortcuts
+from ..library import DESCENDING
 from ..widgets.book_item import BookIds, BookItem
 from ..widgets.book_tile import BookTile, CoverSize, format_index, progress_text
 from ..widgets.cover import Cover
@@ -46,6 +55,39 @@ log = logging.getLogger(__name__)
 CHANGE_KINDS = ('books', 'files', 'shelves', 'progress')
 COMPACT_COVER = 112
 LIST_COVER = 28
+FILTER_NAMES = ('format', 'status', 'rating', 'language')
+
+
+def filter_choices(name):
+    """A filter chip's choices: [(value, menu label, chip label)]; '' is no filter. The
+    languages are the library's."""
+    if name == 'format':
+        return [('', _('Any Format'), _('Format')), ('epub', 'EPUB', 'EPUB'),
+                ('pdf', 'PDF', 'PDF'), ('comic', _('Comics (CBZ, CBR)'), _('Comics')),
+                ('kindle', _('Kindle (MOBI, AZW3)'), _('Kindle')), ('fb2', 'FB2', 'FB2'),
+                ('txt', _('Plain Text'), _('Text'))]
+    if name == 'status':
+        return [('', _('Any Status'), _('Status')), ('unread', _('Unread'), _('Unread')),
+                ('reading', _('Reading'), _('Reading')),
+                ('finished', _('Finished'), _('Finished'))]
+    if name == 'rating':
+        choices = [('', _('Any Rating'), _('Rating')), ('5', _('5 Stars'), _('5 Stars'))]
+        for stars in (4, 3, 2, 1):
+            text = ngettext('{n} Star and Up', '{n} Stars and Up', stars).format(n=stars)
+            # Translators: a filter chip: books rated at least {n} stars ("4+ Stars").
+            short = ngettext('{n}+ Star', '{n}+ Stars', stars).format(n=stars)
+            choices.append((str(stars), text, short))
+        return choices
+    from .book import language_name
+
+    choices = [('', _('Any Language'), _('Language'))]
+    seen = set()
+    for code in app().library.languages():
+        base = code.lower().replace('_', '-').split('-')[0]
+        if base and base not in seen:
+            seen.add(base)
+            choices.append((base, language_name(base), language_name(base)))
+    return choices
 
 
 def root_title(key, library=None):
@@ -58,6 +100,8 @@ def root_title(key, library=None):
         return _('Unread')
     if key == 'status:finished':
         return _('Finished')
+    if key == 'missing':
+        return _('Missing Files')
     if key and key.startswith('shelf:') and library is not None:
         shelf = library.shelf(int(key[6:]))
         if shelf is not None:
@@ -80,6 +124,9 @@ def empty_state(key, filters, shelf=None):
     if key == 'status:finished':
         return ('object-select-symbolic', _('No Finished Books'),
                 _('Books you finish, or mark as finished, appear here'))
+    if key == 'missing':
+        return ('object-select-symbolic', _('No Missing Files'),
+                _('Every book’s file is where Bookcase last saw it'))
     if shelf is not None and shelf.query is not None:
         return ('folder-saved-search-symbolic', _('No Matching Books'),
                 _('No book matches this shelf’s search'))
@@ -124,6 +171,13 @@ class BooksPage(Adw.NavigationPage):
     progress_column = Gtk.Template.Child()
     empty_page = Gtk.Template.Child()
     empty_button = Gtk.Template.Child()
+    filter_button = Gtk.Template.Child()
+    filter_revealer = Gtk.Template.Child()
+    format_chip = Gtk.Template.Child()
+    status_chip = Gtk.Template.Child()
+    rating_chip = Gtk.Template.Child()
+    language_chip = Gtk.Template.Child()
+    clear_filters_button = Gtk.Template.Child()
 
     def __init__(self, key=None, title=None, query='', shelf=None, status=None, author=None,
                  series=None, tag=None):
@@ -144,11 +198,15 @@ class BooksPage(Adw.NavigationPage):
         self._compact = False
         self._last_query = None
         self._loaded = False
+        self._first_fill = None  # the idle that fills a page shown before its layout
+        self.chosen = dict.fromkeys(FILTER_NAMES, '')  # the filter bar's choices
 
         self._setup_grid()
         self._setup_list()
         self._add_actions()
         self._add_keys()
+        self._setup_filters()
+        self._setup_cover_size()
         connect_weak(self.selection, 'selection-changed', self._on_selection_changed)
         # Connected weakly, not as template callbacks: a pushed page must be able to go.
         connect_weak(self.search_entry, 'search-changed', self.on_search_changed)
@@ -158,7 +216,7 @@ class BooksPage(Adw.NavigationPage):
         connect_weak(self.column_view, 'activate', self.on_activate)
         connect_weak(self.compact_breakpoint, 'apply', self._on_compact_apply)
         connect_weak(self.compact_breakpoint, 'unapply', self._on_compact_unapply)
-        for name in ('sort-order', 'view-mode', 'cover-size'):
+        for name in ('sort-order', 'sort-reversed', 'view-mode', 'cover-size'):
             connect_weak(self.settings, f'changed::{name}', self._on_setting_changed)
         self.listener = PageListener(self, CHANGE_KINDS, BooksPage.refresh)
         self._update_title()
@@ -188,11 +246,9 @@ class BooksPage(Adw.NavigationPage):
         factory.connect('bind', bind)
         factory.connect('unbind', unbind)
         self.grid_view.set_factory(factory)
-        self.grid_view.set_model(self.selection)
         self._add_context_menu(self.grid_view)
 
     def _setup_list(self):
-        self.column_view.set_model(self.selection)
         self.title_column.set_factory(_cell_factory(_TitleCell))
         self.author_column.set_factory(_cell_factory(
             lambda: _TextCell(lambda book: book.author if book.authors else '')))
@@ -221,6 +277,7 @@ class BooksPage(Adw.NavigationPage):
         group = Gio.SimpleActionGroup()
         group.add_action(self.settings.create_action('sort-order'))
         group.add_action(self.settings.create_action('view-mode'))
+        group.add_action(self.settings.create_action('sort-reversed'))
         self.insert_action_group('books', group)
         self.book_actions = BookActions(self, self.selected_ids, shelf_id=self._manual_shelf(),
                                         select_all=self.selection.select_all)
@@ -233,6 +290,12 @@ class BooksPage(Adw.NavigationPage):
             page = ref()
             return page._on_menu_key(widget) if page is not None else False
 
+        def on_select_none(_widget, _args, *_data):
+            page = ref()
+            if page is not None:
+                page.selection.unselect_all()
+            return True
+
         for view in (self.grid_view, self.column_view):
             controller = Gtk.ShortcutController(scope=Gtk.ShortcutScope.LOCAL)
             for key, action in (('details', 'book.details'), ('edit', 'book.edit'),
@@ -243,7 +306,105 @@ class BooksPage(Adw.NavigationPage):
             controller.add_shortcut(Gtk.Shortcut.new(
                 Gtk.ShortcutTrigger.parse_string('Menu|<Shift>F10'),
                 Gtk.CallbackAction.new(on_menu_key)))
+            controller.add_shortcut(Gtk.Shortcut.new(
+                Gtk.ShortcutTrigger.parse_string(shortcuts.GRID['select-none'][0]),
+                Gtk.CallbackAction.new(on_select_none)))
             view.add_controller(controller)
+
+    # -- the filter bar --------------------------------------------------------------------
+
+    def _setup_filters(self):
+        group = Gio.SimpleActionGroup()
+        ref = self.weak_ref()
+        for name in FILTER_NAMES:
+            action = Gio.SimpleAction.new_stateful(name, GLib.VariantType.new('s'),
+                                                   GLib.Variant('s', ''))
+
+            def change(action, value, name=name):
+                page = ref()
+                action.set_state(value)
+                if page is not None:
+                    page.set_filter(name, value.get_string())
+
+            action.connect('change-state', change)
+            group.add_action(action)
+            chip = self._chip(name)
+            if name == 'language':
+                def rebuild(chip, *_args):
+                    chip.set_menu_model(_filter_menu('language'))
+                chip.set_create_popup_func(rebuild)
+            chip.set_menu_model(_filter_menu(name))
+        self.insert_action_group('filter', group)
+        self._filter_group = group
+        # The reading state's chip says nothing on a reading state's page.
+        self.status_chip.set_visible(self.filters['status'] is None)
+        connect_weak(self.clear_filters_button, 'clicked', self._on_clear_filters)
+        connect_weak(self.filter_revealer, 'notify::reveal-child', self._on_filter_revealed)
+
+    def _chip(self, name):
+        return getattr(self, f'{name}_chip')
+
+    def set_filter(self, name, value):
+        """Choose a filter (FILTER_NAMES; '' for none), as the chip's menu does."""
+        if self.chosen.get(name) == value:
+            return
+        self.chosen[name] = value
+        action = self._filter_group.lookup_action(name)
+        if action.get_state().get_string() != value:
+            action.set_state(GLib.Variant('s', value))
+        chip = self._chip(name)
+        label = next((short for choice, _text, short in filter_choices(name)
+                      if choice == value), value)
+        chip.set_label(label)
+        if value:
+            chip.add_css_class('active')
+        else:
+            chip.remove_css_class('active')
+        self.clear_filters_button.set_visible(any(self.chosen.values()))
+        if value and not self.filter_revealer.get_reveal_child():
+            self.filter_revealer.set_reveal_child(True)
+        if self._loaded:
+            self.refresh()
+
+    def _on_clear_filters(self, *_args):
+        for name in FILTER_NAMES:
+            self.set_filter(name, '')
+
+    def _on_filter_revealed(self, revealer, _pspec):
+        if not revealer.get_reveal_child():
+            self._on_clear_filters()
+
+    def _filter_query(self):
+        rating = self.chosen['rating']
+        return search_syntax.filter_query(format=self.chosen['format'],
+                                          status=self.chosen['status'],
+                                          rating=int(rating) if rating else None,
+                                          language=self.chosen['language'])
+
+    # -- the cover size ----------------------------------------------------------------------
+
+    def _setup_cover_size(self):
+        """The Sort and View menu's cover size slider (the cover-size setting)."""
+        key = self.settings.props.settings_schema.get_key('cover-size')
+        _kind, limits = key.get_range().unpack()
+        low, high = limits
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, low, high, 8)
+        scale.set_draw_value(False)
+        scale.set_size_request(200, -1)
+        scale.set_margin_start(12)
+        scale.set_margin_end(12)
+        scale.update_property([Gtk.AccessibleProperty.LABEL], [_('Cover Size')])
+        scale.set_value(self.settings.get_int('cover-size'))
+        settings = self.settings
+
+        def changed(scale):
+            value = int(round(scale.get_value()))
+            if settings.get_int('cover-size') != value:
+                settings.set_int('cover-size', value)
+
+        scale.connect('value-changed', changed)
+        self.cover_scale = scale
+        self.sort_button.get_popover().add_child(scale, 'cover-size')
 
     def _manual_shelf(self):
         if self.shelf_id is None:
@@ -262,9 +423,15 @@ class BooksPage(Adw.NavigationPage):
             self.refresh()  # an unmapped page refreshes when it is shown again
 
     def _apply_view_mode(self):
+        mode = self.settings.get_string('view-mode')
+        # Only the view shown has the model: a hidden one would make and bind its rows too.
+        shown, hidden = ((self.column_view, self.grid_view) if mode == 'list'
+                         else (self.grid_view, self.column_view))
+        if shown.get_model() is not self.selection:
+            hidden.set_model(None)
+            shown.set_model(self.selection)
         if self.stack.get_visible_child_name() == 'empty':
             return
-        mode = self.settings.get_string('view-mode')
         self.stack.set_visible_child_name('list' if mode == 'list' else 'grid')
 
     def _on_compact_apply(self, _breakpoint):
@@ -284,6 +451,8 @@ class BooksPage(Adw.NavigationPage):
 
     def _apply_cover_size(self):
         width = self.settings.get_int('cover-size')
+        if int(self.cover_scale.get_value()) != width:
+            self.cover_scale.set_value(width)
         if self._compact:
             width = min(width, COMPACT_COVER)
         self._size.props.width = width
@@ -295,21 +464,45 @@ class BooksPage(Adw.NavigationPage):
             return 'series'
         return self.settings.get_string('sort-order')
 
+    def _descending(self):
+        """The sort's direction: its own (None), or turned round by Reverse Order."""
+        if self.series_page or not self.settings.get_boolean('sort-reversed'):
+            return None
+        return not DESCENDING.get(self._sort(), False)
+
     def _query(self):
-        typed = self.search_entry.get_text().strip()
-        base = self.filters['query'] or ''
-        return f'{base} {typed}'.strip() if base and typed else (typed or base)
+        parts = [self.filters['query'] or '', self.search_entry.get_text().strip(),
+                 self._filter_query()]
+        return ' '.join(part for part in parts if part)
 
     def refresh(self):
         library = app().library
         self._update_title()
         if self.shelf_id is not None and library.shelf(self.shelf_id) is None:
             return  # gone: the window drops the page
+        if not self._loaded and self.get_height() == 0:
+            # Not laid out yet: a grid with no height would make a tile for every book it
+            # might show (a thousand), so the books come once it has its size.
+            if self._first_fill is None:
+                ref = self.weak_ref()
+
+                def fill():
+                    page = ref()
+                    if page is not None:
+                        page._first_fill = False
+                        if page.get_mapped():
+                            page.refresh()
+                    return GLib.SOURCE_REMOVE
+
+                self._first_fill = GLib.idle_add(fill)
+            if self._first_fill is not False:
+                return
         filters = dict(self.filters)
         filters['query'] = self._query()
         self._last_query = filters['query']
         try:
-            books = library.books(sort=self._sort(), **filters)
+            books = library.books(sort=self._sort(), descending=self._descending(),
+                                  **filters)
         except Exception as error:
             log.exception('listing books')
             app().report(error)
@@ -355,14 +548,14 @@ class BooksPage(Adw.NavigationPage):
 
     def _update_state(self):
         count = len(self._ids)
-        searching = bool(self.search_entry.get_text().strip())
+        searching = bool(self.search_entry.get_text().strip()) or any(self.chosen.values())
         if count:
             self._apply_view_mode()
         else:
             shelf = app().library.shelf(self.shelf_id) if self.shelf_id is not None else None
             if searching:
                 icon, title, description = ('edit-find-symbolic', _('No Results Found'),
-                                            _('Try a different search'))
+                                            _('Try a different search or filter'))
             else:
                 icon, title, description = empty_state(self.key, self.filters, shelf)
             self.empty_page.set_icon_name(icon)
@@ -596,6 +789,15 @@ class _RatingCell(Gtk.Box, _Cell):
         self.book = book
         self.rating.set_value(book.rating)
         self.rating.set_visible(book.rating > 0)
+
+
+def _filter_menu(name):
+    menu = Gio.Menu()
+    for value, text, _short in filter_choices(name):
+        item = Gio.MenuItem.new(text.replace('_', '__'), None)
+        item.set_action_and_target_value(f'filter.{name}', GLib.Variant('s', value))
+        menu.append_item(item)
+    return menu
 
 
 def _cell_factory(make):

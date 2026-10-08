@@ -32,6 +32,13 @@ template $BookcaseBooksPage: Adw.NavigationPage {
         }
 
         [end]
+        ToggleButton filter_button {
+          icon-name: "funnel-symbolic";
+          tooltip-text: _("Filter");
+          active: bind filter_revealer.reveal-child bidirectional;
+        }
+
+        [end]
         ToggleButton search_button {
           icon-name: "system-search-symbolic";
           tooltip-text: _("Search");
@@ -50,6 +57,82 @@ template $BookcaseBooksPage: Adw.NavigationPage {
             placeholder-text: _("Search title, author, series, tags…");
             hexpand: true;
             search-delay: 200;
+          };
+        };
+      }
+
+      // The filter bar: a chip per filter, each a menu of choices (pages/books.py fills
+      // them), turned into a search added to what is typed.
+      [top]
+      Revealer filter_revealer {
+        transition-type: slide_down;
+
+        child: ScrolledWindow {
+          hscrollbar-policy: external;
+          vscrollbar-policy: never;
+
+          child: Box filter_box {
+            spacing: 6;
+            margin-start: 12;
+            margin-end: 12;
+            margin-top: 6;
+            margin-bottom: 6;
+            halign: center;
+
+            styles [
+              "filter-bar",
+            ]
+
+            MenuButton format_chip {
+              label: _("Format");
+              always-show-arrow: true;
+              tooltip-text: _("Filter by Format");
+
+              styles [
+                "filter-chip",
+              ]
+            }
+
+            MenuButton status_chip {
+              label: _("Status");
+              always-show-arrow: true;
+              tooltip-text: _("Filter by Reading Status");
+
+              styles [
+                "filter-chip",
+              ]
+            }
+
+            MenuButton rating_chip {
+              label: _("Rating");
+              always-show-arrow: true;
+              tooltip-text: _("Filter by Rating");
+
+              styles [
+                "filter-chip",
+              ]
+            }
+
+            MenuButton language_chip {
+              label: _("Language");
+              always-show-arrow: true;
+              tooltip-text: _("Filter by Language");
+
+              styles [
+                "filter-chip",
+              ]
+            }
+
+            Button clear_filters_button {
+              label: _("_Clear");
+              use-underline: true;
+              visible: false;
+              tooltip-text: _("Clear the Filters");
+
+              styles [
+                "flat",
+              ]
+            }
           };
         };
       }
@@ -205,6 +288,13 @@ menu view_menu {
   }
 
   section {
+    item {
+      label: _("Re_verse Order");
+      action: "books.sort-reversed";
+    }
+  }
+
+  section {
     label: _("Show As");
 
     item {
@@ -217,6 +307,14 @@ menu view_menu {
       label: _("L_ist");
       action: "books.view-mode";
       target: "list";
+    }
+  }
+
+  section {
+    label: _("Cover Size");
+
+    item {
+      custom: "cover-size";
     }
   }
 }

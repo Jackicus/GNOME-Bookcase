@@ -17,23 +17,48 @@ where you keep them.
 ## What it does
 
 - **A library of covers,** with authors, series in order, tags, and the books you are
-  reading, have not started, or have finished, a click away in the sidebar.
-- **A reader** for EPUB, Kobo EPUB, MOBI, AZW3, FB2 and CBZ comics: pages side by side when
-  the window is wide, your choice of typeface, size, spacing and paper (light, sepia, dark,
-  black), and a scrolled mode. It opens where you left off.
-- **Highlights, notes and bookmarks,** in five colours, listed beside the book. Look a word
-  up, search the whole book, and jump back to where you were.
+  reading, have not started, or have finished, a click away in the sidebar. Filter by
+  format, status, rating and language; Ctrl+K goes to any book, author, series or shelf.
+- **A first run that finds your books:** an existing Calibre library, a folder of books,
+  the e-books in Downloads, each offered with one click.
+- **Open a file without adding it:** a book opened from Files is read where it is, with Add
+  to Library a click away.
+- **Duplicates found and merged,** files, highlights, progress and shelves kept, with Undo.
+- **A reader** for EPUB, Kobo EPUB, MOBI, AZW3, FB2, plain text and CBZ and CBR comics:
+  pages side by side when the window is wide, your choice of typeface, size, spacing and
+  paper (light, sepia, dark, black), and a scrolled mode. It opens where you left off.
+- **PDFs read in Bookcase,** not handed to another app: sharp pages, continuous scrolling or
+  spreads, zoom and fit, the PDF's outline and links, search, selection, highlights and
+  notes, and the dark papers as a night mode.
+- **Highlights, notes and bookmarks,** in five colours, listed beside the book. Search the
+  whole book, and jump back to where you were. Export them as Markdown, and import a
+  Kindle's highlights from its `My Clippings.txt`.
+- **Look Up and Read Aloud:** double-click a word for its definition (from your StarDict
+  dictionaries offline, else Wiktionary) and Wikipedia's summary, right in the reader; have
+  the book read to you, sentence by sentence, through speech-dispatcher.
 - **Shelves** of your own, and **smart shelves** that fill themselves from a search
   (`tag:fantasy status:unread`).
 - **Metadata by hand or from Open Library:** titles, authors, series and number, tags,
   publisher, date, language, rating, description and cover, for one book or many at once.
-  Google Books too, with a key of your own.
+  Google Books too, with a key of your own. **Find Metadata for a whole selection,** gently
+  (Open Library's rate limit kept), reviewed book by book and applied as one undoable step.
 - **E-readers over USB:** a Kobo, a Kindle or any reader that shows a books folder appears
   in the sidebar. Send books to it (as Kobo EPUBs for a Kobo), see what is on it, add what
   is only on it.
+- **Send to Kindle by e-mail:** EPUBs (with your edits) mailed to your Kindle's address
+  through your own mail account, the password in your keyring. Works for every Kindle,
+  including those that no longer connect as a drive.
+- **Discover books in online catalogues (OPDS):** Project Gutenberg, ManyBooks and your
+  own Calibre-Web, Kavita, Komga or Calibre server; download straight into the library.
+- **Reading sync with KOReader:** your place follows you between Bookcase, a KOReader
+  e-reader and apps like Readest, over KOReader's free sync server or your own; "Your Kobo
+  is at 62% — Go There".
 - **Calibre libraries read in place,** and folders of books watched for new arrivals.
 - **Undo everything,** from an edit to a removed shelf.
 - **How long is left,** in the chapter and the book, from how fast you read.
+- **Reading goals and statistics:** a yearly goal of books (kindly told: "2 books ahead of
+  schedule"), minutes a day, your streak, a year of reading days, hours per month, and the
+  authors and tags you read most.
 
 It fits right in: light and dark styles, your accent colour, and windows down to phone size.
 
@@ -45,6 +70,10 @@ It fits right in: light and dark styles, your accent colour, and windows down to
   <tr>
     <td><img src="data/screenshots/book-light.png" alt="A book's details: series, rating, progress and description"></td>
     <td><img src="data/screenshots/device-light.png" alt="A Kobo plugged in, with the books on it"></td>
+  </tr>
+  <tr>
+    <td><img src="data/screenshots/stats-light.png" alt="Statistics: this year's reading goal as a ring, the books finished, the streak and a year of reading days"></td>
+    <td></td>
   </tr>
 </table>
 
@@ -66,7 +95,7 @@ The two get along:
 - **Edits stay in Bookcase.** Changing a linked book's title or cover changes Bookcase's
   record of it, not Calibre's. A copy you send to an e-reader or export carries the edits.
 - Bookcase does not convert between formats. For a Kindle, an EPUB is converted with
-  Calibre's `ebook-convert` when it is installed.
+  Calibre's `ebook-convert` when it is installed, or sent by e-mail, which Amazon converts.
 
 ## Your files are yours
 
@@ -87,7 +116,7 @@ It isn't on Flathub yet. To build and install it yourself you need Python 3.12, 
 3.50, pycairo, GTK 4.20, libadwaita 1.9, WebKitGTK 6.0 (for the reader), python-lxml,
 Meson 1.2 and `blueprint-compiler` 0.22 (Meson downloads its own when the installed one is
 missing or older). Poppler's GObject bindings are optional: with them, PDFs get their covers
-and details. Fedora 44, Ubuntu 26.04, Arch Linux and openSUSE Tumbleweed ship all of these.
+and details and open in the reader. `bsdtar` (libarchive) is needed to read CBR comics. Fedora 44, Ubuntu 26.04, Arch Linux and openSUSE Tumbleweed ship all of these.
 
 ```sh
 git clone https://github.com/Jackicus/GNOME-Bookcase.git
@@ -120,10 +149,12 @@ searches, <kbd>Enter</kbd> reads the selected book and <kbd>Ctrl</kbd> <kbd>Z</k
 
 ## Privacy
 
-Nothing leaves your computer unless you ask. Bookcase has no account, no sync and no
+Nothing leaves your computer unless you ask. Bookcase has no account of its own and no
 telemetry. It goes online only when you press *Find Metadata* (it sends the book's title,
-authors or ISBN to Open Library, and to Google Books if you gave it a key), when you open a
-link from a book, and when you look a word up (Wiktionary or Wikipedia, in your browser).
+authors or ISBN to Open Library, and to Google Books if you gave it a key), when you send a
+book to your Kindle by e-mail (through the mail server you set up), when you have signed in to a KOReader sync server (it
+gets a fingerprint of the book's file, how far in you are and the computer's name), when you
+open a link from a book, and when you look a word up (Wiktionary or Wikipedia, in your browser).
 Books are shown with their own scripts switched off and the network closed to them.
 
 ## How it works

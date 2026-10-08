@@ -93,6 +93,10 @@
       <caption>A Kobo plugged in: what is on it, and what to send</caption>
       <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/device-light.png</image>
     </screenshot>
+    <screenshot environment="gnome">
+      <caption>Reading goals and statistics: the year's goal, the books finished, the streak</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/main/data/screenshots/stats-light.png</image>
+    </screenshot>
   </screenshots>
 
   <releases>

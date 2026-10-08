@@ -14,6 +14,7 @@
     importer.add_async(paths, copy=True, progress=None, done=None) -> Job
     importer.scan_async(folder, progress=None, done=None) -> Job
     importer.link_calibre_async(path, progress=None, done=None) -> Job
+    importer.open_in_place(path) -> book id  a file from outside, read without adding it
     describe(report) -> str                  one sentence for a toast
 
 `progress(done, total, path)` is called after each file and `cancelled()` asked before each;
@@ -25,7 +26,9 @@ no longer found), and `cancelled`.
 add(): directories are walked for book files. A file whose content hash is already in the
 library is a duplicate (skipped). A file of a book already there (formats.read() title and
 an author in common, Library.find_similar()) in a format that book lacks becomes its new
-format ('merged'); in a format it has, a duplicate. Anything else is a new book. With
+format ('merged'); in a format it has, a duplicate. The file of a book opened without
+adding (open_in_place) makes that book a library book, its place and highlights kept
+('added'). Anything else is a new book. With
 copy=True the file is copied into the library folder as 'Author/Title.ext' (a CBR is
 converted to CBZ there when bsdtar is installed, since the reader opens zips only; without
 bsdtar it is stored as it is, and cannot be read in Bookcase); with copy=False it is added
@@ -70,7 +73,7 @@ from gi.repository import GLib
 
 from . import calibre, formats
 from .formats import FormatError, comic
-from .library import READING_ORDER
+from .library import OPENED, READING_ORDER
 
 log = logging.getLogger(__name__)
 
@@ -229,11 +232,15 @@ class Importer:
             raise FormatError(_('Not a book Bookcase can read'))
         known = self.library.find_file(path)
         if known is not None:
+            if self._keep_opened(known.book_id, path, copy, report):
+                return known.book_id
             report.duplicates.append((path, known.book_id))
             return None
         file_hash = partial_md5(path)
         existing = self.library.find_by_hash(file_hash)
         if existing is not None:
+            if self._keep_opened(existing, path, copy, report):
+                return existing
             report.duplicates.append((path, existing))
             return None
         info = formats.read(path)
@@ -268,6 +275,54 @@ class Importer:
             self._save_cover(book_id, info.cover)
         report.added.append(book_id)
         return book_id
+
+    def _keep_opened(self, book_id, path, copy, report):
+        """A book opened without adding, added now: copied into the library folder (with
+        `copy`) or kept where it is, and in the library from now on."""
+        book = self.library.book(book_id)
+        if book is None or book.source != OPENED:
+            return False
+        if copy:
+            files = self.library.files(book_id)
+            source = files[0].path if files and not files[0].missing else path
+            destination, _hash, _size, _format = self._place(
+                source, book, formats.format_of(source), True, '')
+            try:
+                self.library.keep_book(book_id, path=destination)
+            except BaseException:
+                self._unplace(source, destination)
+                raise
+        else:
+            self.library.keep_book(book_id, source=self._source_of(path))
+        report.added.append(book_id)
+        return True
+
+    def open_in_place(self, path):
+        """The id of the book to read a file from outside in, without adding it: the
+        library's book when it has the file (by path, else content), else a new book opened
+        without adding (Library.add_opened: read where it is, kept out of the lists). Raises
+        OSError or FormatError."""
+        path = os.path.abspath(str(path))
+        known = self.library.find_file(path)
+        if known is not None:
+            return known.book_id
+        file_hash = partial_md5(path)
+        existing = self.library.find_by_hash(file_hash)
+        if existing is not None:
+            return existing
+        if formats.format_of(path) is None:
+            raise FormatError(_('Not a book Bookcase can read'))
+        info = formats.read(path)
+        book_id = self.library.add_opened(info, path, hash=file_hash,
+                                          size=os.path.getsize(path))
+        if info.cover:
+            self._save_cover_quietly(book_id, info.cover)
+        return book_id
+
+    def _save_cover_quietly(self, book_id, data):
+        """A cover saved with no undo step (covers.save makes one)."""
+        with self.library.undoable(None):
+            self._save_cover(book_id, data)
 
     def _place(self, path, book, format, copy, file_hash):
         """Where the file goes (a copy in the library folder, or where it is), and that
@@ -326,6 +381,10 @@ class Importer:
         back = [file.id for path, file in known.items() if path in present and file.missing]
         if back:
             self.library.set_missing(back, False)
+        opened = self.library.opened_ids()
+        for path, file in known.items():
+            if file.book_id in opened and path in present:
+                self._keep_opened(file.book_id, path, False, report)
         new = sorted(path for path in present if path not in known)
         for number, path in enumerate(new, 1):
             if cancelled is not None and cancelled():

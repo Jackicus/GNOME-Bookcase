@@ -8,6 +8,7 @@
 
     make_epub(path, title='A Quiet Harbour', authors=('Ada Lark',), cover=make_png(4, 6))
     make_png(4, 6, (200, 40, 40))           # a PNG's bytes; path=… also writes it there
+    make_paged_pdf(path, pages=6)           # a PDF with text, an outline and links (pycairo)
 
 The EPUBs are valid (mimetype first and stored, container.xml, an OPF, a nav document and an
 NCX, XHTML chapters of invented filler text); the PNGs are built with zlib and struct, no GTK.
@@ -195,4 +196,45 @@ def make_epub(path, title='A Quiet Harbour', authors=('Ada Lark',), series=None,
                              f'<title>Chapter {number}</title></head><body>'
                              f'<h1>Chapter {number}</h1>{paragraphs}</body></html>\n',
                              compress_type=deflated)
+    return path
+
+
+PDF_TEXT = ('The lamps along the harbour wall were lit one by one.',
+            'Nobody on the quay said much; the gulls said enough.')
+
+
+def make_paged_pdf(path, pages=6, outline=True, link=True):
+    """A PDF of `pages` A6 pages drawn with pycairo, page N saying "Page N of the
+    harbour" and PDF_TEXT; with outline, an outline entry per two pages ("Part 1" at page 1,
+    "Part 2" at page 3…); with link, page 1 links to the last page and to example.org.
+    None when pycairo is missing."""
+    try:
+        import cairo
+    except ImportError:
+        return None
+    surface = cairo.PDFSurface(str(path), 298, 420)
+    surface.set_metadata(cairo.PDFMetadata.TITLE, 'A Quiet Harbour')
+    context = cairo.Context(surface)
+    context.select_font_face('Sans')
+    context.set_font_size(11)
+    for number in range(1, pages + 1):
+        if outline and number % 2 == 1:
+            surface.add_outline(cairo.PDF_OUTLINE_ROOT, f'Part {number // 2 + 1}',
+                                f'page={number}', 0)
+        context.move_to(30, 60)
+        context.show_text(f'Page {number} of the harbour')
+        for line, text in enumerate(PDF_TEXT):
+            context.move_to(30, 90 + 20 * line)
+            context.show_text(text)
+        if link and number == 1:
+            context.tag_begin(cairo.TAG_LINK, f'page={pages}')
+            context.move_to(30, 200)
+            context.show_text('To the end')
+            context.tag_end(cairo.TAG_LINK)
+            context.tag_begin(cairo.TAG_LINK, "uri='https://example.org/'")
+            context.move_to(30, 230)
+            context.show_text('A website')
+            context.tag_end(cairo.TAG_LINK)
+        context.show_page()
+    surface.finish()
     return path

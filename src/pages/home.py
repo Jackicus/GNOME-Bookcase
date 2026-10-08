@@ -7,22 +7,35 @@
     page.refresh()                     # from the library (also on map and on `changed`)
     page.rows                          # [(key, ShelfRow)], for tests
 
-Rows of covers, each scrolling sideways: Continue Reading (the books being read, most
+Over them, the reading goal card (widgets/goal_card.py: a click opens Statistics), then
+rows of covers, each scrolling sideways: Continue Reading (the books being read, most
 recently read first, large, each with its progress and the time left from stats.py), Recently
 Added, then each shelf with books (smart shelves first). A row's Show All opens its page (the
 reading state, All Books, the shelf). A cover in Continue Reading opens the reader; elsewhere
 it opens the book's details; a right click (or a long press) opens the book menu
-(pages/actions.py). An empty library shows the welcome: Add Books…, Add a Folder…, Link a
-Calibre Library….
+(pages/actions.py).
+
+An empty library shows the welcome. It looks for the books already on the computer
+(existing_books.find(), in a thread, once per page) and offers each in a row: a Calibre library to
+link, a folder of books to read in place (watched) or copy in, the e-books in Downloads or
+Documents to copy in; then Add Books…, Add a Folder…, Link a Calibre Library…. When books
+arrive after the welcome was shown, a banner suggests smart shelves and e-readers, once
+ever (the welcome-tip-shown setting).
+
+    page.sources                       # [existing_books.Source] found; None until the look ends
 """
 
 import logging
+import os
+import threading
 from gettext import gettext as _
+from gettext import ngettext
 
-from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from .. import stats
+from .. import existing_books, stats
 from ..widgets.book_tile import BookTile, progress_text
+from ..widgets.goal_card import GoalCard
 from ..widgets.util import connect_weak
 from . import PageListener, app
 from .actions import BookActions, book_menu, popup_menu
@@ -97,15 +110,27 @@ class HomePage(Adw.NavigationPage):
     scroller = Gtk.Template.Child()
     shelves_box = Gtk.Template.Child()
     empty_page = Gtk.Template.Child()
+    tip_banner = Gtk.Template.Child()
+    sources_box = Gtk.Template.Child()
+    sources_list = Gtk.Template.Child()
+    looking_box = Gtk.Template.Child()
+    add_button = Gtk.Template.Child()
 
     def __init__(self):
         super().__init__()
         self.rows = []
+        self.sources = None
+        self._looking = False
+        self._was_empty = False
+        self._source_rows = []
+        self._add_welcome_actions()
+        connect_weak(self.tip_banner, 'button-clicked', self._on_tip_dismissed)
         self._compact = False
         self._menu_ids = []
         self.book_actions = BookActions(self, self._get_menu_ids)
         connect_weak(self.compact_breakpoint, 'apply', self._on_compact_apply)
         connect_weak(self.compact_breakpoint, 'unapply', self._on_compact_unapply)
+        self.shelves_box.prepend(GoalCard())  # the reading goal, above the rows
         self.listener = PageListener(self, CHANGE_KINDS, HomePage.refresh)
 
     def _get_menu_ids(self):
@@ -132,8 +157,11 @@ class HomePage(Adw.NavigationPage):
         if library.count() == 0:
             self._clear()
             self.stack.set_visible_child_name('empty')
+            self._was_empty = True
+            self._look_for_sources()
             return
         self.stack.set_visible_child_name('home')
+        self._maybe_show_tip()
         large, small = (LARGE_COMPACT, SMALL_COMPACT) if self._compact else (LARGE, SMALL)
         adjustment = self.scroller.get_vadjustment()
         scrolled = adjustment.get_value()
@@ -169,6 +197,153 @@ class HomePage(Adw.NavigationPage):
             self._fill(row, books, small)
             shown += 1
         GLib.idle_add(lambda: (adjustment.set_value(scrolled), GLib.SOURCE_REMOVE)[1])
+
+    # -- the welcome ---------------------------------------------------------------------------
+
+    def _add_welcome_actions(self):
+        """welcome.link, .watch, .copy-folder, .copy-files: each takes a source's path."""
+        group = Gio.SimpleActionGroup()
+        ref = self.weak_ref()
+        for name, method in (('link', HomePage._on_link), ('watch', HomePage._on_watch),
+                             ('copy-folder', HomePage._on_copy_folder),
+                             ('copy-files', HomePage._on_copy_files)):
+            action = Gio.SimpleAction.new(name, GLib.VariantType.new('s'))
+
+            def activate(_action, value, method=method):
+                page = ref()
+                if page is not None:
+                    method(page, value.get_string())
+
+            action.connect('activate', activate)
+            group.add_action(action)
+        self.insert_action_group('welcome', group)
+
+    def _look_for_sources(self):
+        """existing_books.find() in a thread, once; its rows when it is done."""
+        if self.sources is not None or self._looking:
+            self._show_sources()
+            return
+        self._looking = True
+        self._show_sources()
+        ref = self.weak_ref()
+
+        def work():
+            try:
+                found = existing_books.find()
+            except Exception:
+                log.exception('looking for books')
+                found = []
+            GLib.idle_add(done, found)
+
+        def done(found):
+            page = ref()
+            if page is not None:
+                page._looking = False
+                page.sources = found
+                page._show_sources()
+            return GLib.SOURCE_REMOVE
+
+        threading.Thread(target=work, name='bookcase-existing-books', daemon=True).start()
+
+    def _show_sources(self):
+        self.looking_box.set_visible(self._looking)
+        for row in self._source_rows:
+            self.sources_list.remove(row)
+        self._source_rows = []
+        known = {folder.path for folder in app().library.folders()}
+        for source in self.sources or ():
+            if os.path.abspath(source.path).rstrip('/') in known:
+                continue
+            row = self._source_row(source)
+            self.sources_list.append(row)
+            self._source_rows.append(row)
+        self.sources_box.set_visible(bool(self._source_rows))
+        # What was found comes first: its first row's button is the one to press.
+        if self._source_rows:
+            self._source_rows[0].button.add_css_class('suggested-action')
+            self.add_button.remove_css_class('suggested-action')
+        else:
+            self.add_button.add_css_class('suggested-action')
+
+    def _source_row(self, source):
+        home = existing_books.home_dir().rstrip('/')
+        shown = source.path
+        if shown == home or shown.startswith(home + '/'):
+            shown = '~' + shown[len(home):]
+        if source.count is None:
+            subtitle = shown
+        else:
+            number = f'{source.count:n}' + ('' if source.complete else '+')
+            if source.kind == 'files':
+                count = ngettext('{n} e-book', '{n} e-books', source.count).format(n=number)
+            else:
+                count = ngettext('{n} book', '{n} books', source.count).format(n=number)
+            # Translators: a place books were found: "12 books · ~/Books".
+            subtitle = _('{count} · {path}').format(count=count, path=shown)
+        name = os.path.basename(source.path.rstrip('/')) or source.path
+        target = GLib.Variant('s', source.path)
+        if source.kind == 'calibre':
+            title = _('Calibre Library')
+            if name.casefold() not in ('calibre library', 'calibre'):
+                title = _('Calibre Library “{name}”').format(name=name)
+            icon = 'library-symbolic'
+            button = Gtk.Button(label=_('_Link'), use_underline=True,
+                                tooltip_text=_('Read the Calibre library where it is'),
+                                action_name='welcome.link', action_target=target)
+        elif source.kind == 'folder':
+            title, icon = name, 'folder-symbolic'
+            menu = Gio.Menu()
+            item = Gio.MenuItem.new(_('_Copy into Library Folder'), None)
+            item.set_action_and_target_value('welcome.copy-folder', target)
+            menu.append_item(item)
+            button = Adw.SplitButton(label=_('_Add'), use_underline=True, menu_model=menu,
+                                     dropdown_tooltip=_('More Ways to Add'),
+                                     tooltip_text=_('Read the books where they are, and the '
+                                                    'new ones the folder gets'),
+                                     action_name='welcome.watch', action_target=target)
+        else:
+            title = name
+            downloads = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD)
+            icon = ('folder-download-symbolic' if source.path == downloads
+                    or name == 'Downloads' else 'folder-documents-symbolic')
+            button = Gtk.Button(label=_('_Add'), use_underline=True,
+                                tooltip_text=_('Copy these e-books into your library folder'),
+                                action_name='welcome.copy-files', action_target=target)
+        button.set_valign(Gtk.Align.CENTER)
+        row = Adw.ActionRow(title=title, subtitle=subtitle, use_markup=False)
+        row.add_prefix(Gtk.Image(icon_name=icon,
+                                 accessible_role=Gtk.AccessibleRole.PRESENTATION))
+        row.add_suffix(button)
+        row.button = button
+        return row
+
+    def _source(self, path):
+        return next((source for source in self.sources or () if source.path == path), None)
+
+    def _on_link(self, path):
+        app().link_calibre(path)
+
+    def _on_watch(self, path):
+        app().add_folder(path)
+
+    def _on_copy_folder(self, path):
+        app().add_files([Gio.File.new_for_path(path)])
+
+    def _on_copy_files(self, path):
+        source = self._source(path)
+        if source is not None:
+            app().add_files([Gio.File.new_for_path(each) for each in source.paths])
+
+    def _maybe_show_tip(self):
+        settings = app().settings
+        if self._was_empty and not settings.get_boolean('welcome-tip-shown'):
+            settings.set_boolean('welcome-tip-shown', True)
+            self.tip_banner.set_revealed(True)
+
+    def _on_tip_dismissed(self, banner):
+        banner.set_revealed(False)
+
+    # -- rows ----------------------------------------------------------------------------------
 
     def _clear(self):
         for _key, row in self.rows:

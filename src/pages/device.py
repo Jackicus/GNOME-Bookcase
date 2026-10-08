@@ -12,7 +12,8 @@ and matched to the library on the main thread (Device.match()): those not in the
 listed first, each with Add (a copy imported through app.add_files) and Add All in the
 group's header; those in the library open the book's page. The page reads the device again
 on map, when the monitor says its books changed (a send, a removal), and re-matches when the
-library's books change. Removing books from the device asks first (they are deleted from
+library's books change. A Kindle with a documents/My Clippings.txt offers Import Highlights…
+(dialogs/highlights.py). Removing books from the device asks first (they are deleted from
 it, not trashed), runs in a thread and toasts. When the device goes, the page shows Device
 Disconnected and asks the window for Home.
 """
@@ -77,6 +78,8 @@ class DevicePage(Adw.NavigationPage):
     space_bar = Gtk.Template.Child()
     space_label = Gtk.Template.Child()
     empty_status = Gtk.Template.Child()
+    clippings_group = Gtk.Template.Child()
+    clippings_row = Gtk.Template.Child()
     outside_group = Gtk.Template.Child()
     add_all_button = Gtk.Template.Child()
     outside_list = Gtk.Template.Child()
@@ -99,6 +102,7 @@ class DevicePage(Adw.NavigationPage):
         connect_weak(self.select_button, 'toggled', self._on_select_toggled)
         connect_weak(self.add_all_button, 'clicked', self._on_add_all)
         connect_weak(self.remove_button, 'clicked', self._on_remove)
+        connect_weak(self.clippings_row, 'activated', self._on_import_clippings)
         connect_weak(self.inside_list, 'row-activated', self._on_row_activated)
         connect_weak(self.outside_list, 'row-activated', self._on_row_activated)
         monitor = getattr(app(), 'devices', None)
@@ -128,6 +132,7 @@ class DevicePage(Adw.NavigationPage):
         self.space_bar.set_value((total - free) / total if total else 0)
         self.space_bar.set_visible(bool(total))
         self.space_label.set_text(space_text(free, total))
+        self.clippings_group.set_visible(device.clippings_path() is not None)
 
     def _show_gone(self):
         self._gone = True
@@ -147,6 +152,15 @@ class DevicePage(Adw.NavigationPage):
     def _on_device_changed(self, _monitor, device_id):
         if device_id == self.device_id and self.get_mapped():
             self.refresh()
+
+    def _on_import_clippings(self, *_args):
+        device = self.device
+        path = device.clippings_path() if device is not None else None
+        if path is None:
+            return
+        from ..dialogs import highlights
+
+        highlights.import_file(app(), self, path)
 
     # -- reading the books -------------------------------------------------------------------
 

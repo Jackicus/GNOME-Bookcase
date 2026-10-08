@@ -24,7 +24,8 @@ import dataclasses
 from gettext import gettext as _
 from gettext import ngettext
 
-# What foliate-js opens (PDF and text open in another app; CBR and CB7 are unsupported).
+# What foliate-js opens as it is (PDFs open in widgets/pdf_view.py; TXT and CBR are
+# converted first, converting.py; CB7 is unsupported).
 READABLE = ('epub', 'kepub', 'azw3', 'azw', 'mobi', 'prc', 'fb2', 'fbz', 'cbz')
 
 # The paper themes: background, text, links. "auto" is light or dark by the system's style.
@@ -119,6 +120,8 @@ def progress_text(kind, place, chapter_minutes=None, book_minutes=None):
     fraction = place.get('fraction') or 0.0
     if kind == 'page':
         page = place.get('page')
+        if page and place.get('pages'):  # a PDF
+            return _('Page {page} of {pages}').format(page=page, pages=place['pages'])
         if page:
             return _('Page {}').format(page)
         location = place.get('location') or {}

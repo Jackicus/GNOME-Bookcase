@@ -4,6 +4,7 @@
 """Highlights and notes out, as Markdown; a Kindle's My Clippings.txt in.
 
     text = annotations.to_markdown(book, library.annotations(book.id))
+    book_ids = annotations.annotated_books(library)   # books with any, by title
     clippings = annotations.parse_kindle_clippings(text)   # [Clipping]
     matches = annotations.match_clippings(library, clippings)   # [ClippingMatch]
 
@@ -18,6 +19,19 @@ match_clippings() pairs clippings with the library's books by normalised title a
 clipping's location over the highest location clipped in that book, since a Kindle location
 cannot be turned into a CFI without the Kindle's own file. Adding them as annotations is up
 to the caller (location '', that position).
+
+    groups = annotations.clipping_groups(library, matches)   # [ClippingGroup], one a book
+    plan = annotations.import_plan(library, groups, chosen={})   # {book_id: [Clipping…]}
+    count = annotations.import_clippings(library, plan)   # one undo step
+
+clipping_groups() gathers the highlights and notes (bookmarks are left out: a Kindle
+location is no place in the book here) by the book they came from, with the library book
+matched (or None) and how many are new. import_plan() takes the groups to import, with
+`chosen` mapping a group's key to a book the user picked for it, and drops clippings the
+book already has (the same text, whitespace aside; for a note on its own the same note) or
+that come twice. import_clippings() adds them as highlights (location '' — the reader finds
+the place on first open — the estimated position, the clipping's date) in one undo step,
+"Import Highlights", and returns how many it added.
 """
 
 import dataclasses
@@ -226,3 +240,112 @@ def match_clippings(library, clippings):
         position = place[0] / highest[key] if place is not None and highest.get(key) else 0.0
         matches.append(ClippingMatch(clip, books[key], min(1.0, position)))
     return matches
+
+
+# -- importing clippings -----------------------------------------------------------------------
+
+def _fold(text):
+    return ' '.join((text or '').split()).casefold()
+
+
+def _clip_key(clip):
+    return ('text', _fold(clip.text)) if clip.text.strip() else ('note', _fold(clip.note))
+
+
+def _annotation_key(annotation):
+    if (annotation.text or '').strip():
+        return ('text', _fold(annotation.text))
+    return ('note', _fold(annotation.note))
+
+
+@dataclasses.dataclass
+class ClippingGroup:
+    title: str  # as the Kindle has it
+    author: str
+    book_id: int | None  # the library's book it matched, or None
+    matches: list  # [ClippingMatch], highlights and notes, in the file's order
+
+    @property
+    def key(self):
+        return (self.title, self.author)
+
+    @property
+    def highlights(self):
+        return sum(1 for match in self.matches if match.clipping.kind == 'highlight')
+
+    @property
+    def notes(self):
+        return sum(1 for match in self.matches if match.clipping.note.strip())
+
+    def new(self, library, book_id=None):
+        """How many of its clippings `book_id` (else its matched book) does not have yet."""
+        book_id = self.book_id if book_id is None else book_id
+        if book_id is None:
+            return len(self.matches)
+        return len(_new_matches(library, book_id, self.matches))
+
+
+def clipping_groups(library, matches):
+    """[ClippingGroup] for the highlights and notes among `matches`, in the file's order."""
+    groups = {}
+    for match in matches:
+        if match.clipping.kind == 'bookmark':
+            continue
+        key = (match.clipping.title, match.clipping.author)
+        if key not in groups:
+            groups[key] = ClippingGroup(key[0], key[1], match.book_id, [])
+        groups[key].matches.append(match)
+    return list(groups.values())
+
+
+def _new_matches(library, book_id, matches):
+    seen = {_annotation_key(annotation)
+            for annotation in library.annotations(book_id, kind='highlight')}
+    new = []
+    for match in matches:
+        key = _clip_key(match.clipping)
+        if key[1] and key not in seen:
+            seen.add(key)
+            new.append(match)
+    return new
+
+
+def import_plan(library, groups, chosen=None):
+    """{book_id: [ClippingMatch]} of what importing `groups` would add (see the module)."""
+    chosen = chosen or {}
+    plan = {}
+    for group in groups:
+        book_id = chosen.get(group.key, group.book_id)
+        if book_id is None:
+            continue
+        already = plan.get(book_id, [])
+        fresh = _new_matches(library, book_id, group.matches)
+        keys = {_clip_key(match.clipping) for match in already}
+        plan[book_id] = already + [match for match in fresh
+                                   if _clip_key(match.clipping) not in keys]
+    return {book_id: found for book_id, found in plan.items() if found}
+
+
+def import_clippings(library, plan):
+    """Add the plan's clippings as highlights, one undo step; how many were added."""
+    count = 0
+    if not plan:
+        return 0
+    with library.undoable(_('Import Highlights')):
+        for book_id, matches in plan.items():
+            for match in matches:
+                clip = match.clipping
+                library.add_annotation(book_id, 'highlight', '', text=clip.text,
+                                       note=clip.note, color='yellow',
+                                       position=match.position,
+                                       created=clip.added or None)
+                count += 1
+    return count
+
+
+def annotated_books(library):
+    """The ids of the books with highlights or bookmarks, by title."""
+    rows = library.db.execute(
+        'SELECT DISTINCT b.id FROM annotations a JOIN books b ON b.id = a.book_id '
+        'ORDER BY b.sort_title, b.id')
+    return [row[0] for row in rows]

@@ -13,7 +13,7 @@ from unittest import mock
 
 from tests import ROOT  # noqa: F401  (registers src/ as bookcase)
 from tests.gtk import pump, requires_gtk, wait_for
-from tests.support import make_epub
+from tests.support import make_epub, make_paged_pdf
 
 from bookcase.formats import BookInfo
 from bookcase.library import Library
@@ -67,6 +67,10 @@ class ReaderWindowTest(unittest.TestCase):
         path = self.directory / name
         if write and path.suffix == '.epub':
             make_epub(path, chapters=4)
+        elif write and path.suffix == '.pdf':
+            make_paged_pdf(path, pages=4)
+        elif write and path.suffix == '.txt':
+            path.write_text('CHAPTER I\n\nThe lamps along the harbour wall.\n')
         elif write:
             path.write_bytes(b'%PDF-1.4\n%invented\n')
         info = BookInfo(title='A Quiet Harbour', authors=['Ada Lark'], format=path.suffix[1:])
@@ -93,11 +97,44 @@ class ReaderWindowTest(unittest.TestCase):
         self.assertEqual(button.get_label(), 'Locate File…')
         self.assertFalse(window.bookmark_button.get_sensitive())
 
-    def test_a_pdf_opens_elsewhere(self):
+    def test_a_pdf_opens_in_the_reader(self):
+        from bookcase import pdf_location
+        from bookcase.widgets import pdf_view
+
+        if not pdf_view.available():
+            self.skipTest('Poppler or pycairo is not available')
         window = self.open(self.add('A Quiet Harbour.pdf'))
-        self.assertEqual(window.content_stack.get_visible_child_name(), 'status')
-        self.assertEqual(window.status_buttons.get_first_child().get_label(),
-                         'Open in Document Viewer')
+        self.assertTrue(window.is_pdf)
+        self.assertIsInstance(window.view, pdf_view.PdfView)
+        self.assertEqual(window.content_stack.get_visible_child_name(), 'book')
+        self.assertFalse(window.font_group.get_visible())  # zoom and layout, not typefaces
+        self.assertTrue(wait_for(lambda: window._place is not None, 3))
+        self.assertEqual(window.window_title.get_subtitle(), 'Part 1')
+        window._change_font_size(1)  # Ctrl+plus: zoom in
+        self.assertIsNone(window.view.fit)
+        self.assertTrue(window.size_label.get_label().endswith('%'))
+        window.view.go_right()
+        self.assertTrue(wait_for(lambda: window._place['page'] == 2, 3))
+        window._toggle_bookmark()
+        self.assertEqual([a.location for a in self.library.annotations(window.book_id)],
+                         ['page:2'])
+        place = window._place
+        window.close()
+        book = self.library.book(window.book_id)
+        self.assertEqual(pdf_location.parse(book.location).page, 2)
+        self.assertAlmostEqual(book.progress, place['fraction'], places=3)
+
+    def test_a_text_is_converted_and_opened(self):
+        from bookcase.widgets import book_view
+
+        window = self.open(self.add('A Quiet Harbour.txt'))
+        if not book_view.available():
+            self.assertEqual(window.status_page.get_title(), 'Reading Needs WebKitGTK')
+            return
+        self.assertEqual(window.content_stack.get_visible_child_name(), 'loading')
+        self.assertTrue(wait_for(
+            lambda: window.content_stack.get_visible_child_name() == 'book', 3))
+        self.assertFalse(window.is_pdf)
 
     def test_without_webkit_a_status_page_says_so(self):
         from bookcase.widgets import book_view
@@ -198,6 +235,19 @@ class ReadingTest(unittest.TestCase):
         self.assertEqual(book.location, place['cfi'])
         self.assertAlmostEqual(book.progress, place['fraction'], places=3)
         self.assertEqual(book.status, 'reading')
+
+    def test_imported_highlights_find_their_place(self):
+        window = self.window
+        found = self.library.add_annotation(
+            self.book_id, 'highlight', '', text='the gulls said enough for everyone',
+            position=0.5)
+        lost = self.library.add_annotation(self.book_id, 'highlight', '',
+                                           text='never in this book')
+        window._find_imported_highlights()
+        self.assertTrue(wait_for(lambda: self.library.annotation(found).location, WAIT))
+        self.assertTrue(self.library.annotation(found).location.startswith('epubcfi('))
+        self.assertEqual(self.library.annotation(lost).location, '')
+        self.assertEqual(self.library.undo(), 'Add Highlight')  # finding it is no undo step
 
     def test_the_end_marks_the_book_finished(self):
         window = self.window

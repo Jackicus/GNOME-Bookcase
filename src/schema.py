@@ -12,13 +12,15 @@ removed row's id is never given again: undo puts rows back under their old ids.
 books: `sort_title` and `author_sort` are shown and editable (titles.py computes them);
 `series_index` is a float (Calibre's 1.5); `rating` 0-10 (half stars, 0 none); `status`
 unread, reading or finished; `progress` 0-1 and `location` (the reader's CFI) are where the
-reader left off, `last_read` when; `cover_version` grows whenever the cover changes (the
-thumbnail cache keys on it); `source` is the folder kind the book came from (library,
-watched, calibre), `source_key` its key there (a Calibre book id) and `source_modified` when
-the source last changed it, as the source writes it (Calibre's last_modified). Two derived columns
-are kept up to date by library.py: `title_key` (titles.title_key(), for finding a book added
-twice) and `search_text` (the folded title, authors, series, tags and publisher, one per line,
-for search.py's bare words).
+reader left off, `last_read` when; `finished` when the book was last marked finished (0
+never; kept while it is read again, cleared when it is marked unread); `pages` its page
+count when known (0 unknown: stats.py estimates it from the file); `cover_version` grows
+whenever the cover changes (the thumbnail cache keys on it); `source` is the folder kind the
+book came from (library, watched, calibre), `source_key` its key there (a Calibre book id)
+and `source_modified` when the source last changed it, as the source writes it (Calibre's
+last_modified). Two derived columns are kept up to date by library.py: `title_key`
+(titles.title_key(), for finding a book added twice) and `search_text` (the folded title,
+authors, series, tags and publisher, one per line, for search.py's bare words).
 
 Search uses that one folded column with LIKE, not FTS5: a library is thousands of books, not
 millions, and a LIKE over 10,000 short rows takes a few milliseconds, while FTS5 would need
@@ -41,7 +43,7 @@ for ordering, `color` one of library.COLORS. sessions: a stretch of reading, log
 reader window. folders: `kind` library, watched or calibre.
 """
 
-VERSION = 1
+VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS books (
@@ -63,6 +65,8 @@ CREATE TABLE IF NOT EXISTS books (
     progress REAL NOT NULL DEFAULT 0,
     location TEXT NOT NULL DEFAULT '',
     last_read REAL NOT NULL DEFAULT 0,
+    finished REAL NOT NULL DEFAULT 0,
+    pages INTEGER NOT NULL DEFAULT 0,
     has_cover INTEGER NOT NULL DEFAULT 0,
     cover_version INTEGER NOT NULL DEFAULT 0,
     source TEXT NOT NULL DEFAULT 'library',
@@ -181,7 +185,19 @@ CREATE TABLE IF NOT EXISTS folders (
 """
 
 # version -> the SQL taking a file of version - 1 to it. Version 1 is SCHEMA itself.
-MIGRATIONS = {}
+MIGRATIONS = {
+    # books.finished: when the book was last marked finished. A book finished before it
+    # was kept gets the end of its last reading session, else when it was last read.
+    # books.pages: its page count, when known.
+    2: """
+ALTER TABLE books ADD COLUMN finished REAL NOT NULL DEFAULT 0;
+ALTER TABLE books ADD COLUMN pages INTEGER NOT NULL DEFAULT 0;
+UPDATE books SET finished = COALESCE(
+    (SELECT MAX(started + seconds) FROM sessions WHERE sessions.book_id = books.id),
+    NULLIF(last_read, 0), modified)
+WHERE status = 'finished';
+""",
+}
 
 # Each table's key, for undo's inverse operations (library.py).
 KEYS = {

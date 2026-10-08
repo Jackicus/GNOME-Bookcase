@@ -140,6 +140,24 @@ template $BookcaseDevicePage: Adw.NavigationPage {
                 ]
               }
 
+              // A Kindle's highlights (documents/My Clippings.txt), to import.
+              Adw.PreferencesGroup clippings_group {
+                visible: false;
+
+                Adw.ActionRow clippings_row {
+                  title: _("Import _Highlights…");
+                  subtitle: _("From this Kindle’s My Clippings.txt");
+                  use-underline: true;
+                  activatable: true;
+
+                  [suffix]
+                  Image {
+                    icon-name: "go-next-symbolic";
+                    accessible-role: presentation;
+                  }
+                }
+              }
+
               Adw.PreferencesGroup outside_group {
                 title: _("Not in Your Library");
                 description: _("Add a copy to keep it in Bookcase");

@@ -18,6 +18,8 @@ over the vendored foliate-js) on the bookcase:// scheme.
     view.set_bookmarks(cfis)
     view.show_progress(visible)             # the percentage at the page's foot
     view.get_toc(callback)                  # callback(toc)
+    view.tts_start(callback) / tts_next(callback) / tts_stop()   # reading aloud, a sentence
+                                            # at a time (callback(text), None at the end)
     view.location / view.fraction           # the last relocated place
 
 Signals (each carries the page's message as a dict, .claude/rules/reader.md):
@@ -369,6 +371,11 @@ class BookView(Adw.Bin):
     def clear_search(self):
         self._call('clearSearch')
 
+    def find_texts(self, items, callback):
+        """Where highlights known only by their text are: items [{'id', 'text'}];
+        callback([{'id', 'cfi', 'fraction'}] for those found, or None)."""
+        self._call('findTexts', {'items': list(items)}, callback)
+
     def set_annotations(self, annotations):
         """The highlights drawn: [{'cfi', 'color'}], replacing those drawn before."""
         annotations = list(annotations)
@@ -401,6 +408,21 @@ class BookView(Adw.Bin):
 
     def get_toc(self, callback):
         self._call('getTOC', None, callback)
+
+    # Reading aloud (widgets/read_aloud.py): the page highlights each sentence it gives and
+    # turns to it.
+
+    def tts_start(self, callback):
+        """Read from the page shown; callback(True), or callback(False/None) when the book
+        cannot be read aloud (a fixed layout)."""
+        self._call('ttsStart', None, callback)
+
+    def tts_next(self, callback):
+        """callback(text) with the next sentence, or None at the end of the book."""
+        self._call('ttsNext', None, callback)
+
+    def tts_stop(self):
+        self._call('ttsStop')
 
     def evaluate(self, script, callback=None):
         """Run a script in the page (tests and the demo script); callback(result)."""

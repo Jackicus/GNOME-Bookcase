@@ -5,8 +5,8 @@ using Gtk 4.0;
 using Adw 1;
 
 // The home page: Continue Reading, Recently Added and a row per shelf, each a scrolling row
-// of covers (pages/home.py fills them); with no books, a welcome that offers the three ways
-// in.
+// of covers (pages/home.py fills them); with no books, a welcome that offers the books it
+// found on the computer (sources_list) and the three ways in. After the first books, a tip.
 template $BookcaseHomePage: Adw.NavigationPage {
   title: _("Home");
   tag: "home";
@@ -28,6 +28,13 @@ template $BookcaseHomePage: Adw.NavigationPage {
           tooltip-text: _("Search");
           action-name: "win.search";
         }
+      }
+
+      [top]
+      Adw.Banner tip_banner {
+        title: _("Tip: save a search as a smart shelf, or plug in an e-reader to send it books");
+        button-label: _("_Got It");
+        revealed: false;
       }
 
       content: Stack stack {
@@ -57,44 +64,94 @@ template $BookcaseHomePage: Adw.NavigationPage {
 
           child: Adw.StatusPage empty_page {
             icon-name: "library-symbolic";
-            title: _("Your Bookcase Is Empty");
-            description: _("Add e-books, or a folder Bookcase keeps an eye on. A Calibre library is read where it is: Bookcase never moves or changes your files.");
+            title: _("Welcome to Bookcase");
+            description: _("Bring in the books you have. Bookcase never moves or changes your files: a Calibre library and watched folders are read where they are.");
 
-            child: Box {
-              orientation: vertical;
-              halign: center;
-              spacing: 12;
+            child: Adw.Clamp {
+              maximum-size: 520;
 
-              Button {
-                label: _("_Add Books…");
-                use-underline: true;
-                action-name: "app.add-books";
+              child: Box {
+                orientation: vertical;
+                spacing: 24;
 
-                styles [
-                  "pill",
-                  "suggested-action",
-                ]
-              }
+                Box sources_box {
+                  orientation: vertical;
+                  spacing: 12;
+                  visible: false;
 
-              Button {
-                label: _("Add a _Folder…");
-                use-underline: true;
-                action-name: "app.add-folder";
+                  Label sources_title {
+                    label: _("Found on This Computer");
+                    xalign: 0;
 
-                styles [
-                  "pill",
-                ]
-              }
+                    styles [
+                      "heading",
+                    ]
+                  }
 
-              Button {
-                label: _("_Link a Calibre Library…");
-                use-underline: true;
-                action-name: "app.link-calibre";
+                  ListBox sources_list {
+                    selection-mode: none;
 
-                styles [
-                  "pill",
-                ]
-              }
+                    styles [
+                      "boxed-list",
+                    ]
+                  }
+                }
+
+                Box looking_box {
+                  halign: center;
+                  spacing: 8;
+                  visible: false;
+
+                  Adw.Spinner {
+                    accessible-role: presentation;
+                  }
+
+                  Label {
+                    label: _("Looking for books on this computer…");
+
+                    styles [
+                      "dimmed",
+                    ]
+                  }
+                }
+
+                Box {
+                  orientation: vertical;
+                  halign: center;
+                  spacing: 12;
+
+                  Button add_button {
+                    label: _("_Add Books…");
+                    use-underline: true;
+                    action-name: "app.add-books";
+
+                    styles [
+                      "pill",
+                      "suggested-action",
+                    ]
+                  }
+
+                  Button {
+                    label: _("Add a _Folder…");
+                    use-underline: true;
+                    action-name: "app.add-folder";
+
+                    styles [
+                      "pill",
+                    ]
+                  }
+
+                  Button {
+                    label: _("_Link a Calibre Library…");
+                    use-underline: true;
+                    action-name: "app.link-calibre";
+
+                    styles [
+                      "pill",
+                    ]
+                  }
+                }
+              };
             };
           };
         }

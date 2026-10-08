@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: 2026 Jack Tully
+
+using Gtk 4.0;
+using Adw 1;
+
+// Add Catalog… and a catalogue's Edit… (dialogs/add_catalog.py): its address and name, and the
+// user name and password of a server that asks for them.
+template $BookcaseCatalogDialog: Adw.Dialog {
+  content-width: 480;
+  width-request: 360;
+  height-request: 294;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Button cancel_button {
+        label: _("_Cancel");
+        use-underline: true;
+      }
+
+      [end]
+      Button save_button {
+        use-underline: true;
+        sensitive: false;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup {
+        description: _("An OPDS catalogue: a Calibre-Web server’s /opds, Kavita’s /api/opds/ address with your API key, Komga’s /opds/v1.2/catalog, or Calibre’s content server’s /opds.");
+
+        Adw.EntryRow url_row {
+          title: _("Address");
+          input-purpose: url;
+        }
+
+        Adw.EntryRow name_row {
+          title: _("Name (Optional)");
+        }
+      }
+
+      Adw.PreferencesGroup {
+        title: _("Sign In");
+        description: _("Only for a catalogue that asks for it. The password is kept in your keyring.");
+
+        Adw.EntryRow username_row {
+          title: _("User Name");
+        }
+
+        Adw.PasswordEntryRow password_row {
+          title: _("Password");
+        }
+      }
+
+      Adw.PreferencesGroup {
+        Box {
+          spacing: 12;
+          halign: center;
+
+          Adw.Spinner spinner {
+            visible: false;
+          }
+
+          Label message_label {
+            wrap: true;
+            justify: center;
+            visible: false;
+
+            styles [
+              "error",
+            ]
+          }
+        }
+      }
+    };
+  };
+}

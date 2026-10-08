@@ -27,6 +27,7 @@ library does not have.
 """
 
 import argparse
+import datetime
 import io
 import math
 import os
@@ -129,7 +130,7 @@ BOOKS = [
          blurb='Every night a moth the size of a cat follows the lamplighter on her round.'),
     dict(title="The Cartographer's Apprentice", authors=['Elena Marsh'],
          tags=['Historical Fiction'], publisher='Harrow & Finch', published='2016-03-17',
-         rating=8, state=('finished', 1.0, 300), style='compass', palette=0,
+         rating=8, state=('finished', 1.0, 255), style='compass', palette=0,
          setting='country', cast=('Anne', 'Master Hollis', 'Jem'),
          blurb='Lisbon, 1755. A girl who draws maps for a living is asked to draw one of a '
                'city that no longer exists.'),
@@ -263,7 +264,7 @@ BOOKS = [
          blurb='Una casa en la costa donde el viento cambia de color cada tarde.'),
     dict(title='Pride and Prejudice', authors=['Jane Austen'], tags=['Classics', 'Romance'],
          publisher='Penhallow Classics', published='1813', rating=10,
-         state=('finished', 1.0, 400), style='cloth', palette=0, setting='country',
+         state=('finished', 1.0, 275), style='cloth', palette=0, setting='country',
          cast=('Elizabeth', 'Mr Darcy', 'Jane'), classic='austen',
          blurb="The Bennet sisters, their mother's ambitions, and Mr Darcy."),
     dict(title='Moby-Dick', added_days=15, authors=['Herman Melville'],
@@ -1662,8 +1663,15 @@ def write_epub(path, book, cover, chapters):
 
 
 def write_pdf(path, book, cover_surface, chapters):
-    """An A5 PDF: the cover, then the chapters set with Pango."""
+    """An A5 PDF set like a small printed book: the cover; a contents page whose entries
+    link to the chapters; each chapter on a new page, its number and title, its paragraphs
+    justified and indented, broken across pages line by line, a running head and a folio;
+    a drawn figure with a caption in the first and third chapters; and an outline (the
+    reader's contents)."""
     width, height = 420, 595
+    margin, top, bottom = 52, 64, 58
+    text_width = width - 2 * margin
+    ink, grey, accent = '#1d1d1d', '#77767b', '#c64600'
     surface = cairo.PDFSurface(str(path), width, height)
     surface.set_metadata(cairo.PDFMetadata.TITLE, book['title'])
     surface.set_metadata(cairo.PDFMetadata.AUTHOR, ' & '.join(book['authors']))
@@ -1677,28 +1685,151 @@ def write_pdf(path, book, cover_surface, chapters):
     ctx.paint()
     ctx.restore()
     ctx.show_page()
-    margin = 48
-    text_width = width - 2 * margin
-    for title, paragraphs in chapters:
-        y = 110
-        heading = layout_text(ctx, title, 'Noto Serif Display SemiBold', 26, text_width)
-        set_color(ctx, '#1d1d1d')
-        ctx.move_to(margin, y)
-        PangoCairo.show_layout(ctx, heading)
-        y += heading.get_pixel_size()[1] + 30
-        for paragraph in paragraphs[:10]:
-            layout = layout_text(ctx, paragraph, 'Noto Serif', 10.5, text_width, align='left',
-                                 line_spacing=1.35)
-            layout.set_justify(True)
-            _w, h = layout.get_pixel_size()
-            if y + h > height - margin:
+
+    # Where each chapter starts: the cover, the contents, then four pages or so a chapter.
+    # Laid out once without drawing to know the pages, then drawn.
+    def set_chapters(draw):
+        page = 3
+        starts = []
+        state = {'page': page, 'y': top}
+
+        def new_page(running):
+            if draw:
+                folio(state['page'], running, opening=state['page'] == starts[-1])
                 ctx.show_page()
-                y = margin
-            set_color(ctx, '#1d1d1d')
-            ctx.move_to(margin, y)
-            PangoCairo.show_layout(ctx, layout)
-            y += h + 8
-        ctx.show_page()
+            state['page'] += 1
+            state['y'] = top
+
+        for number, (title, paragraphs) in enumerate(chapters, 1):
+            starts.append(state['page'])
+            if draw:
+                surface.add_outline(cairo.PDF_OUTLINE_ROOT, title, f'page={state["page"]}', 0)
+            y = 128
+            label = layout_text(ctx, f'CHAPTER {number}', 'Noto Sans', 8.5, text_width,
+                                spacing=2.2)
+            heading = layout_text(ctx, title, 'Noto Serif Display SemiBold', 26, text_width)
+            if draw:
+                set_color(ctx, accent)
+                ctx.move_to(margin, y)
+                PangoCairo.show_layout(ctx, label)
+                set_color(ctx, ink)
+                ctx.move_to(margin, y + 18)
+                PangoCairo.show_layout(ctx, heading)
+            state['y'] = y + 18 + heading.get_pixel_size()[1] + 34
+            for index, paragraph in enumerate(paragraphs):
+                if index == 3 and number in (1, 3):
+                    figure(state, number, title, new_page, draw)
+                layout = layout_text(ctx, paragraph, 'Noto Serif', 10.5, text_width,
+                                     align='left', line_spacing=1.38)
+                layout.set_justify(True)
+                if index:
+                    layout.set_indent(int(15 * Pango.SCALE))
+                lines = layout.get_iter()
+                while True:
+                    ink_rect, logical = lines.get_line_extents()
+                    line_height = logical.height / Pango.SCALE * 1.38
+                    if state['y'] + line_height > height - bottom:
+                        new_page(title)
+                    if draw:
+                        set_color(ctx, ink)
+                        ctx.move_to(margin + logical.x / Pango.SCALE,
+                                    state['y'] + lines.get_baseline() / Pango.SCALE
+                                    - logical.y / Pango.SCALE)
+                        PangoCairo.show_layout_line(ctx, lines.get_line_readonly())
+                    state['y'] += line_height
+                    if not lines.next_line():
+                        break
+                state['y'] += 2
+            new_page(title)
+        return starts
+
+    def folio(page, running, opening=False):
+        number = layout_text(ctx, str(page), 'Noto Serif', 9, text_width)
+        set_color(ctx, grey)
+        ctx.move_to(margin, height - 38)
+        PangoCairo.show_layout(ctx, number)
+        if opening:
+            return  # no running head over a chapter's title
+        head = layout_text(ctx, (book['title'] if page % 2 == 0 else running).upper(),
+                           'Noto Sans', 7, text_width, spacing=1.6)
+        set_color(ctx, grey)
+        ctx.move_to(margin, 30)
+        PangoCairo.show_layout(ctx, head)
+
+    def figure(state, number, title, new_page, draw):
+        box = 150
+        if state['y'] + box + 40 > height - bottom:
+            new_page(title)
+        y = state['y'] + 6
+        if draw:
+            if number == 1:  # a line of type in the composing stick
+                set_color(ctx, '#e8e2d6')
+                ctx.rectangle(margin, y, text_width, box)
+                ctx.fill()
+                set_color(ctx, '#5e5c64')
+                ctx.rectangle(margin + 18, y + 56, text_width - 36, 46)
+                ctx.set_line_width(3)
+                ctx.stroke()
+                for n, letter in enumerate('LETTERPRESS'):
+                    x = margin + 30 + n * ((text_width - 60) / 11)
+                    set_color(ctx, '#3d3846' if n % 2 else '#241f31')
+                    ctx.rectangle(x, y + 62, (text_width - 60) / 11 - 3, 34)
+                    ctx.fill()
+                    glyph = layout_text(ctx, letter, 'Noto Serif Display SemiBold', 18, 20)
+                    set_color(ctx, '#f6f5f4')
+                    ctx.move_to(x - 3, y + 66)
+                    PangoCairo.show_layout(ctx, glyph)
+                caption_text = 'Figure 1. A line of type set in the composing stick, read ' \
+                               'upside down and backwards by the compositor.'
+            else:  # the forme locked up in its chase
+                set_color(ctx, '#e8e2d6')
+                ctx.rectangle(margin, y, text_width, box)
+                ctx.fill()
+                set_color(ctx, '#5e5c64')
+                ctx.set_line_width(6)
+                ctx.rectangle(margin + 70, y + 14, text_width - 140, box - 28)
+                ctx.stroke()
+                for row in range(7):
+                    set_color(ctx, '#3d3846', 0.85 if row % 3 else 0.55)
+                    ctx.rectangle(margin + 88, y + 30 + row * 14, text_width - 176 - (
+                        30 if row == 6 else 0), 8)
+                    ctx.fill()
+                set_color(ctx, accent)
+                for x in (margin + 82, width - margin - 92):
+                    ctx.rectangle(x, y + box - 34, 10, 14)
+                    ctx.fill()
+                caption_text = 'Figure 2. The forme locked up in its chase, the quoins (in ' \
+                               'orange) tightened against the furniture.'
+            caption = layout_text(ctx, caption_text, 'Noto Sans Italic', 8.5, text_width,
+                                  align='left', line_spacing=1.2)
+            set_color(ctx, grey)
+            ctx.move_to(margin, y + box + 8)
+            PangoCairo.show_layout(ctx, caption)
+        state['y'] = y + box + 48
+
+    starts = set_chapters(draw=False)
+    # The contents, each entry a link to its chapter.
+    heading = layout_text(ctx, 'Contents', 'Noto Serif Display SemiBold', 22, text_width)
+    set_color(ctx, ink)
+    ctx.move_to(margin, 128)
+    PangoCairo.show_layout(ctx, heading)
+    surface.add_outline(cairo.PDF_OUTLINE_ROOT, 'Contents', 'page=2', 0)
+    y = 190
+    for number, ((title, _paragraphs), page) in enumerate(zip(chapters, starts, strict=True), 1):
+        entry = layout_text(ctx, f'{number}.  {title}', 'Noto Serif', 12, text_width - 40,
+                            align='left')
+        folio_layout = layout_text(ctx, str(page), 'Noto Serif', 12, 40, align='right')
+        ctx.tag_begin(cairo.TAG_LINK, f'page={page}')
+        set_color(ctx, ink)
+        ctx.move_to(margin, y)
+        PangoCairo.show_layout(ctx, entry)
+        set_color(ctx, grey)
+        ctx.move_to(width - margin - 40, y)
+        PangoCairo.show_layout(ctx, folio_layout)
+        ctx.tag_end(cairo.TAG_LINK)
+        y += 30
+    ctx.show_page()
+    set_chapters(draw=True)
     surface.finish()
 
 
@@ -1781,6 +1912,62 @@ def import_app_modules(data_dir):
     return covers, importing, library
 
 
+def pages_of(book):
+    """A believable page count for a book (the generated files are short)."""
+    if book.get('format') == 'cbz':
+        return 32
+    return random.Random(seed_of('pages:' + book['title'])).randrange(180, 520, 4)
+
+
+def reading_day(timestamp):
+    """The day a moment counts for, as stats.py's (the day starting at 4 am)."""
+    return (datetime.datetime.fromtimestamp(timestamp) - datetime.timedelta(hours=4)).date()
+
+
+def log_sessions(library, book_id, book, last, now):
+    """Reading up to where the book is now: a stretch of days before `last` (two to four
+    weeks for a finished book, less for one half read), read on most of them, in the
+    evening on a weekday, at lunch or on the train now and then, in the afternoon at the
+    weekend. The last five days are all read and the one before them not, so the streak is
+    five days; the last session ends at `last` (or, in the small hours of a day before today,
+    the evening before)."""
+    rng = random.Random(seed_of('sessions:' + book['title']))
+    status, progress, _days = book['state']
+    span = rng.randint(14, 26) if status == 'finished' else max(2, round(progress * 22))
+    today = reading_day(now)
+    gap = today - datetime.timedelta(days=5)
+    end = datetime.datetime.fromtimestamp(last)
+    times = []
+    for back in range(span, 0, -1):
+        day = (end - datetime.timedelta(days=back)).date()
+        recent = (today - day).days < 5
+        if day == gap or (not recent and rng.random() > 0.7):
+            continue
+        for _n in range(2 if rng.random() < 0.15 else 1):
+            if day.weekday() >= 5:
+                hour = rng.uniform(13, 17) if rng.random() < 0.6 else rng.uniform(20, 23)
+            else:
+                roll = rng.random()
+                hour = (rng.uniform(7, 8.5) if roll < 0.2 else rng.uniform(12, 13.5)
+                        if roll < 0.3 else rng.uniform(19.5, 23))
+            start = datetime.datetime.combine(day, datetime.time()) + datetime.timedelta(
+                hours=hour)
+            times.append((start.timestamp(), rng.uniform(12, 55) * 60))
+    times.sort()
+    seconds = rng.uniform(15, 50) * 60
+    final = last - seconds
+    if end.hour < 7 and reading_day(last) != today:  # not at 4 am: the evening before
+        final = datetime.datetime.combine(reading_day(last), datetime.time(21)).timestamp()
+    if reading_day(final) != gap:
+        times.append((final, seconds))
+    count = len(times)
+    for n, (started, seconds) in enumerate(times):
+        if started + seconds > now:
+            continue
+        library.log_session(book_id, started, seconds, progress * n / count,
+                            progress * (n + 1) / count)
+
+
 def build_library(data_dir, written, now):
     """Add the written files through the app's Importer, as a user adding them would, and
     give the library its history. Times the API does not take (when a book was added, when
@@ -1820,16 +2007,11 @@ def build_library(data_dir, written, now):
         chapter = max(1, min(count, math.ceil(progress * count)))
         library.set_progress(book_id, progress, point_cfi(chapter, 3))
         library.set_status([book_id], status)
-        library.db.execute('UPDATE books SET last_read = ? WHERE id = ?', (last, book_id))
-        # A few evenings of reading up to where the book is now.
-        rng = random.Random(seed_of('sessions:' + book['title']))
-        sessions = rng.randint(3, 9)
-        started = last
-        for n in reversed(range(sessions)):
-            seconds = rng.uniform(900, 3600)
-            library.log_session(book_id, started - seconds, seconds, progress * n / sessions,
-                                progress * (n + 1) / sessions)
-            started -= DAY * rng.uniform(0.7, 2.5)
+        library.db.execute('UPDATE books SET last_read = ?, finished = ?, pages = ? '
+                           'WHERE id = ?', (last, last if status == 'finished' else 0,
+                                            pages_of(book), book_id))
+        log_sessions(library, book_id, book, last, now)
+
 
     for title, chapter, paragraph, color, note in HIGHLIGHTS:
         if title not in ids:
