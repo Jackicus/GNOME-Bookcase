@@ -105,6 +105,21 @@
   </screenshots>
 
   <releases>
+    <release version="0.3.0" date="2026-10-08">
+      <description>
+        <p>Bookcase takes Calibre's place, at home and on the go.</p>
+        <ul>
+          <li>Keep Calibre in step: edits written back to a linked Calibre library, safely, when you choose</li>
+          <li>Convert books with Calibre's converter, and to Kobo EPUB without it</li>
+          <li>Share your library over Wi-Fi to KOReader, a phone or an e-reader's browser, with a QR code</li>
+          <li>PDFs remember their zoom, select across pages, stay sharp up close, read aloud and print</li>
+          <li>Choose a voice for Read Aloud; zoom comics; make your own page colours</li>
+          <li>Kindles over MTP, shelves as Kobo collections, and reading progress from a Kobo</li>
+          <li>Series stacks, Recently Opened, page counts, past years and a Year in Review</li>
+          <li>Faster start, a fuller screen reader experience, and ready for translation</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-10-08">
       <description>
         <p>Bookcase reads everything it keeps, and finds more.</p>

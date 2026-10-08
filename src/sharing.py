@@ -769,6 +769,8 @@ class Server:
 
             def __init__(server, *args, **kwargs):  # noqa: N805
                 server.slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
+                server.connections = set()  # the open ones, cut when the server stops
+                server.connections_lock = threading.Lock()
                 super().__init__(*args, **kwargs)
 
             def process_request(server, request, client_address):  # noqa: N805
@@ -782,10 +784,22 @@ class Server:
                     raise
 
             def process_request_thread(server, request, client_address):  # noqa: N805
+                with server.connections_lock:
+                    server.connections.add(request)
                 try:
                     super().process_request_thread(request, client_address)
                 finally:
+                    with server.connections_lock:
+                        server.connections.discard(request)
                     server.slots.release()
+
+            def cut_connections(server):  # noqa: N805
+                """End every open connection: a kept-alive one, a download under way."""
+                with server.connections_lock:
+                    connections = list(server.connections)
+                for connection in connections:
+                    with contextlib.suppress(OSError):
+                        connection.shutdown(socket.SHUT_RDWR)
 
             def handle_error(server, request, client_address):  # noqa: N805
                 log.debug('sharing: a request failed', exc_info=True)
@@ -807,6 +821,7 @@ class Server:
         if httpd is not None:
             httpd.shutdown()
             httpd.server_close()
+            httpd.cut_connections()
         while True:
             try:
                 library = self._pool.get_nowait()
@@ -941,6 +956,9 @@ def _handler_class():
 
         def _serve(self, head):
             server = self.bookcase
+            if server._stopped:  # a connection kept alive past the server's end
+                self.close_connection = True
+                return
             address = self.client_address[0]
             if server.lan_only and not client_allowed(address):
                 log.info('sharing: refused a request from outside the local network')
@@ -1001,7 +1019,11 @@ def _handler_class():
         def _route(self, head):
             parts = urllib.parse.urlsplit(self.path)
             segments = [urllib.parse.unquote(part) for part in parts.path.split('/') if part]
-            parameters = urllib.parse.parse_qs(parts.query, max_num_fields=8)
+            try:
+                parameters = urllib.parse.parse_qs(parts.query, max_num_fields=8)
+            except ValueError:  # too many fields
+                self._error(400, head)
+                return
             query = (parameters.get('q') or [''])[0][:500]
             page_text = (parameters.get('page') or ['1'])[0]
             page_number = int(page_text) if _ID.match(page_text) else 0
@@ -1094,7 +1116,8 @@ def _handler_class():
                 left = length
                 while left > 0:
                     chunk = file.read(min(CHUNK, left))
-                    if not chunk:
+                    if not chunk:  # the file shrank: the length sent was wrong
+                        self.close_connection = True
                         break
                     self.wfile.write(chunk)
                     left -= len(chunk)
@@ -1211,6 +1234,12 @@ class Sharing(GObject.Object):
         self._group = None
         self._stopping = None  # the thread stopping the last server
         self._generation = 0
+        # Starts run one at a time (each may wait on the keyring), so two servers never
+        # try the port at once; a server started but not yet taken up by _started() waits
+        # in _unadopted, where the next start (or shutdown) stops it when it is stale.
+        self._start_lock = threading.Lock()
+        self._handoff_lock = threading.Lock()
+        self._unadopted = None  # (server, Avahi group)
         self._handlers = [settings.connect('changed::' + key, self._on_setting)
                           for key in ('sharing-enabled', 'sharing-scope', 'sharing-port',
                                       'sharing-require-password', 'sharing-username')]
@@ -1256,11 +1285,23 @@ class Sharing(GObject.Object):
         library_path = self.library.path
         covers = self.covers
 
+        def stale():
+            return generation != self._generation
+
         def work():
+            with self._start_lock:
+                begin()
+
+        def begin():
             if previous is not None:
                 _stop_quietly(*previous)  # first: it may hold the port
             if stopping is not None:
                 stopping.join()
+            orphan = self._take_unadopted()
+            if orphan is not None:  # started for an earlier generation: it holds the port
+                _stop_quietly(*orphan)
+            if stale():
+                return
             password = None
             if require:
                 password = self.keyring.lookup()
@@ -1283,13 +1324,36 @@ class Sharing(GObject.Object):
             if self.advertise and not local:
                 group = avahi_publish(_('Bookcase on {host}').format(
                     host=GLib.get_host_name()), server.port)
+            if stale():  # stopped, restarted or shut down meanwhile
+                _stop_quietly(server, group)
+                return
+            with self._handoff_lock:
+                self._unadopted = (server, group)
             GLib.idle_add(self._started, generation, server, password, addresses, group)
 
         threading.Thread(target=work, name='bookcase-sharing-start', daemon=True).start()
 
+    def _take_unadopted(self, server=None):
+        """The server started but not yet taken up (only `server`, when given), taken."""
+        with self._handoff_lock:
+            unadopted = self._unadopted
+            if unadopted is None or (server is not None and unadopted[0] is not server):
+                return None
+            self._unadopted = None
+            return unadopted
+
     def _started(self, generation, server, password, addresses, group):
         if generation != self._generation:  # stopped or restarted meanwhile
-            threading.Thread(target=_stop_quietly, args=(server, group), daemon=True).start()
+            def stop_stale():
+                # Between starts: a later start may have stopped it already.
+                with self._start_lock:
+                    stale = self._take_unadopted(server)
+                    if stale is not None:
+                        _stop_quietly(*stale)
+
+            threading.Thread(target=stop_stale, daemon=True).start()
+            return GLib.SOURCE_REMOVE
+        if self._take_unadopted(server) is None:  # stopped by shutdown()
             return GLib.SOURCE_REMOVE
         self.server, self.password, self._group = server, password, group
         self._addresses = [f'http://{address}:{server.port}/' for address in addresses]
@@ -1364,6 +1428,9 @@ class Sharing(GObject.Object):
         previous = self._detach()
         if previous is not None:
             _stop_quietly(*previous)
+        orphan = self._take_unadopted()
+        if orphan is not None:
+            _stop_quietly(*orphan)
         self.state = 'off'
 
 

@@ -37,15 +37,19 @@ title or author there.
 Safety: nothing is written when the library's user_version is newer than SCHEMA_VERSION (28,
 Calibre 8-9), when a table or column we write is missing (an old library Calibre has not
 upgraded: opening it in Calibre once does), when application_id is set and not Calibre's,
-or when PRAGMA quick_check fails. Calibre is detected through its own single-instance lock:
+or when PRAGMA quick_check fails (checked again inside the write's transaction, with the
+lock held); a book is written only while its uuid and path are still the ones flush()
+checked. Calibre is detected through its own single-instance lock:
 on Linux an abstract unix socket `\\0calibre-singleinstance-<euid>-db` (calibre
 utils/lock.py, held by the GUI, calibre-server and calibredb). Bookcase binds it for the
 whole write, so Calibre cannot start meanwhile; when it is taken, CalibreBusy, and the edits
 wait. Before the first write of a day metadata.db is copied (SQLite's backup API) to
-`metadata.db.bookcase-backup-YYYYMMDD` beside it; BACKUPS_KEPT are kept. Everything goes in
+`metadata.db.bookcase-backup-YYYYMMDD` beside it; BACKUPS_KEPT are kept (the one just
+made always among them). Everything goes in
 one IMMEDIATE transaction, checked with PRAGMA integrity_check before COMMIT (rolled back
 when not 'ok') and again after; the cover files are written after the commit, each through
-a temporary file renamed into place.
+a temporary file (cover.jpg's mode, synced) renamed into place; a cover that cannot be
+written (not an image GdkPixbuf reads, no book folder inside the library) keeps waiting.
 
 Which edits are pending needs no queue: a linked book's `source_values` (importing.py) is
 what Calibre last said of it, so a field whose value in Bookcase differs from it was edited
@@ -84,7 +88,7 @@ from urllib.parse import quote
 from gi.repository import Gio, GLib, GObject
 
 from . import calibre, titles
-from .formats import image_type
+from .formats import image_type, normalize_language
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +143,26 @@ _NAME_SUFFIXES = {'jr', 'sr', 'inc', 'ph.d', 'phd', 'md', 'm.d', 'i', 'ii', 'iii
 _COPYWORDS = {'agency', 'corporation', 'company', 'co.', 'council', 'committee', 'inc.',
               'institute', 'national', 'society', 'club', 'team', 'software', 'games',
               'entertainment', 'media', 'studios'}
-_BRACKETED = re.compile(r'[\[(\{][^\])}]*[\])}]')
+_BRACKETS = {'(': ')', '[': ']', '{': '}'}
+
+
+def _remove_bracketed_text(text):
+    """Calibre's remove_bracketed_text: what is in (), [] or {} dropped, nested pairs
+    included, and everything after an unclosed opening bracket."""
+    closing = {close: open_ for open_, close in _BRACKETS.items()}
+    counts = dict.fromkeys(_BRACKETS, 0)
+    total, kept = 0, []
+    for char in text:
+        if char in _BRACKETS:
+            counts[char] += 1
+            total += 1
+        elif char in closing:
+            if counts[closing[char]] > 0:
+                counts[closing[char]] -= 1
+                total -= 1
+        elif total < 1:
+            kept.append(char)
+    return ''.join(kept)
 
 
 def _strip_quotes(title):
@@ -168,7 +191,7 @@ def author_to_author_sort(author):
     a name with a comma, of one word or naming a company is kept."""
     if not author:
         return ''
-    plain = _BRACKETED.sub('', author).strip()
+    plain = _remove_bracketed_text(author).strip()
     if ',' in plain:
         return author
     tokens = plain.split()
@@ -207,9 +230,10 @@ _iso_codes = None
 
 
 def language_code(language):
-    """'en' -> 'eng' (iso-codes' table when installed); a three-letter code stays."""
+    """'en', 'en-GB' -> 'eng' (iso-codes' table when installed); a three-letter code
+    stays; 'und', 'zxx', 'mul' (no language, as Calibre skips them) -> ''."""
     global _iso_codes
-    language = (language or '').strip().lower()
+    language = normalize_language(language)
     if len(language) != 2:
         return language
     if _iso_codes is None:
@@ -338,8 +362,9 @@ def backup(folder, today=None):
     if os.path.exists(target):
         return None
     temporary = target + '.part'
-    source = sqlite3.connect('file:' + quote(database) + '?mode=ro', uri=True, timeout=10)
+    source = None
     try:
+        source = sqlite3.connect('file:' + quote(database) + '?mode=ro', uri=True, timeout=10)
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temporary)
         copy = sqlite3.connect(temporary)
@@ -354,8 +379,11 @@ def backup(folder, today=None):
         raise CalibreWriteError(_('metadata.db could not be backed up: {error}').format(
             error=error)) from error
     finally:
-        source.close()
-    for old in backups(folder)[:-BACKUPS_KEPT]:
+        if source is not None:
+            source.close()
+    # By date in the name, oldest first; the copy just made is kept even when the clock
+    # once ran ahead and older copies carry later dates.
+    for old in [path for path in backups(folder) if path != target][:-(BACKUPS_KEPT - 1)]:
         with contextlib.suppress(OSError):
             os.unlink(old)
     return target
@@ -368,6 +396,14 @@ class Written:
     """What write_changes() did to one Calibre book."""
     last_modified: str  # the new one
     previous: str  # the one before
+    skipped: frozenset = frozenset()  # fields asked for and not written (a cover that
+    # cannot be made a JPEG, or a book folder that is not there)
+
+
+def _key(value):
+    """An item's name as Calibre matches it (icu_lower; not casefold, which would make
+    'Straße' and 'STRASSE' one item where Calibre keeps two)."""
+    return value.lower()
 
 
 class _Items:
@@ -379,17 +415,21 @@ class _Items:
         self.link_table, self.link_column = link_table, link_column
         self.note_field = note_field
         self.dirtied = dirtied
-        self.ids = {row[1].casefold(): (row[0], row[1])
+        self.ids = {_key(row[1]): (row[0], row[1])
                     for row in db.execute(f'SELECT id, {column} FROM {table}')}
 
     def id_for(self, value, insert_extra=None):
-        found = self.ids.get(value.casefold())
+        found = self.ids.get(_key(value))
         if found is not None:
             item_id, current = found
             if current != value:  # the same item in another case: renamed, as Calibre does
                 self.db.execute(f'UPDATE {self.table} SET {self.column} = ? WHERE id = ?',
                                 (value, item_id))
-                self.ids[value.casefold()] = (item_id, value)
+                if self.table == 'authors':  # Calibre's author_update_trg (a TEMP trigger
+                    # its own connection makes, so not in the file) sorts the new name
+                    self.db.execute('UPDATE authors SET sort = ? WHERE id = ?',
+                                    (author_to_author_sort(value.replace('|', ',')), item_id))
+                self.ids[_key(value)] = (item_id, value)
                 self.dirtied.update(row[0] for row in self.db.execute(
                     f'SELECT book FROM {self.link_table} WHERE {self.link_column} = ?',
                     (item_id,)))
@@ -401,7 +441,7 @@ class _Items:
         cursor = self.db.execute(
             f'INSERT INTO {self.table} ({", ".join(names)}) '
             f'VALUES ({", ".join("?" * len(names))})', values)
-        self.ids[value.casefold()] = (cursor.lastrowid, value)
+        self.ids[_key(value)] = (cursor.lastrowid, value)
         return cursor.lastrowid
 
     def linked(self, book_id):
@@ -570,13 +610,15 @@ def _write_book(db, book_id, fields, items, notes, dirtied):
     dirtied.add(book_id)
 
 
-def write_changes(folder, changes, address=None, today=None):
+def write_changes(folder, changes, address=None, today=None, expected=None):
     """Write {calibre book id: {field: value}} into the library at folder (fields from
     FIELDS; 'cover' is image bytes, or None to remove it). Holds Calibre's lock throughout,
     backs metadata.db up first (once a day), writes in one transaction and checks the
-    database before and after. Returns {calibre id: Written} for the books found (a book
-    gone from Calibre is left out). Raises CalibreBusy, CalibreRefused or
-    CalibreWriteError; nothing is written then."""
+    database (its schema too) before and after, inside that transaction. `expected`,
+    {calibre id: (uuid, path)}, names the book each id must still be: one that is not (or
+    is gone from Calibre) is left out of the result and not written. Returns {calibre id:
+    Written}. Raises CalibreBusy, CalibreRefused or CalibreWriteError; nothing is written
+    then."""
     folder = os.path.abspath(str(folder))
     changes = {int(key): value for key, value in changes.items() if value}
     if not changes:
@@ -594,7 +636,7 @@ def write_changes(folder, changes, address=None, today=None):
             except sqlite3.OperationalError as error:
                 raise CalibreBusy(_('The Calibre library is in use: {error}').format(error=error)) \
                     from error
-            result = _write_all(db, folder, changes, covers)
+            result = _write_all(db, folder, changes, covers, expected)
             check = db.execute('PRAGMA integrity_check').fetchone()[0]
             if check != 'ok':
                 raise CalibreWriteError(_('The Calibre library failed its check after the '
@@ -618,6 +660,8 @@ def write_changes(folder, changes, address=None, today=None):
                     os.replace(temporary, final)
             except OSError as error:
                 log.warning('Cannot write the cover in %s: %s', directory, error)
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary)
         check = db.execute('PRAGMA integrity_check').fetchone()[0]
         db.close()
         if check != 'ok':
@@ -628,8 +672,43 @@ def write_changes(folder, changes, address=None, today=None):
     return result
 
 
-def _write_all(db, folder, changes, covers):
+def _inside(folder, directory):
+    """Whether directory is in folder (a books.path of '..' would lead out of it)."""
+    folder = os.path.realpath(folder)
+    return os.path.commonpath([folder, os.path.realpath(directory)]) == folder
+
+
+def _write_cover(directory, data):
+    """data in a temporary file in directory, with cover.jpg's mode (or the umask's); its
+    path. The file is removed again when writing fails."""
+    fd, temporary = tempfile.mkstemp(dir=directory, prefix='.cover-', suffix='.jpg')
     try:
+        try:
+            mode = os.stat(os.path.join(directory, 'cover.jpg')).st_mode & 0o777
+        except OSError:
+            umask = os.umask(0)
+            os.umask(umask)
+            mode = 0o666 & ~umask
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, 'wb') as file:
+            fd = None
+            file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
+    except BaseException:
+        if fd is not None:
+            os.close(fd)
+        with contextlib.suppress(OSError):
+            os.unlink(temporary)
+        raise
+    return temporary
+
+
+def _write_all(db, folder, changes, covers, expected=None):
+    try:
+        # Again inside the transaction, with Calibre's lock held: check_library() looked
+        # before the lock was taken.
+        _check(db)
         quick = db.execute('PRAGMA quick_check').fetchone()[0]
     except sqlite3.DatabaseError as error:
         raise CalibreRefused(str(error)) from error
@@ -649,36 +728,42 @@ def _write_all(db, folder, changes, covers):
                             'lang_code', 'languages', dirtied),
     }
     notes = _notes_check(folder)
-    previous = {}
+    previous, skipped = {}, {}
     for book_id, fields in changes.items():
-        row = db.execute('SELECT path, last_modified FROM books WHERE id = ?',
+        row = db.execute('SELECT path, last_modified, uuid FROM books WHERE id = ?',
                          (book_id,)).fetchone()
         if row is None:
             log.info('Calibre book %s is gone; not written', book_id)
+            continue
+        if expected is not None and (book_id not in expected or (
+                (row[2] or '').lower(), row[0] or '') != (
+                (expected[book_id][0] or '').lower(), expected[book_id][1] or '')):
+            log.warning('Calibre book %s changed since it was checked; not written', book_id)
             continue
         previous[book_id] = str(row[1] or '')
         _write_book(db, book_id, fields, items, notes, dirtied)
         if 'cover' in fields:
             directory = os.path.join(folder, *(row[0] or '').split('/'))
             data = _jpeg(fields['cover'])
-            if fields['cover'] and data is None:
-                continue  # not an image we can turn into a JPEG: the old cover stays
-            if not os.path.isdir(directory):
+            if (fields['cover'] and data is None) or not os.path.isdir(directory) \
+                    or not _inside(folder, directory):
+                # Not an image we can turn into a JPEG, or no folder of the book's in the
+                # library: the old cover stays, and the edit waits.
+                skipped[book_id] = frozenset({'cover'})
                 continue
             if data is None:
                 _set_books_value(db, 'has_cover', 0, book_id)
                 covers.append(('', None, directory))
                 continue
-            fd, temporary = tempfile.mkstemp(dir=directory, prefix='.cover-', suffix='.jpg')
-            with os.fdopen(fd, 'wb') as file:
-                file.write(data)
+            temporary = _write_cover(directory, data)
             covers.append((temporary, os.path.join(directory, 'cover.jpg'), directory))
             _set_books_value(db, 'has_cover', 1, book_id)
     stamp = now_text()
     for book_id in dirtied:
         _set_books_value(db, 'last_modified', stamp, book_id)
         db.execute('INSERT OR IGNORE INTO metadata_dirtied (book) VALUES (?)', (book_id,))
-    return {book_id: Written(stamp, previous[book_id]) for book_id in previous}
+    return {book_id: Written(stamp, previous[book_id], skipped.get(book_id, frozenset()))
+            for book_id in previous}
 
 
 # -- Bookcase's side: what is pending, and writing it ------------------------------------------
@@ -812,7 +897,11 @@ def flush(library, covers, folder, address=None, today=None):
                 continue
             changes[edit.calibre_id] = edit.fields
             books[edit.calibre_id] = book
-        written = write_changes(folder, changes, address=address, today=today)
+        written = write_changes(folder, changes, address=address, today=today,
+                                expected={calibre_id: rows[calibre_id] for calibre_id in changes})
+        for book_id, edit in edits.items():
+            if edit.calibre_id in changes and edit.calibre_id not in written:
+                report.skipped.append(book_id)
         for calibre_id, result in written.items():
             book = books[calibre_id]
             edit = edits[book.id]
@@ -821,7 +910,11 @@ def flush(library, covers, folder, address=None, today=None):
                 said = json.loads(current.source_values) if current.source_values else {}
             except ValueError:
                 said = {}
-            said.update(edit.values)
+            values = dict(edit.values)
+            if 'cover' in result.skipped:  # not written: still waiting
+                values.pop('cover', None)
+                values.pop('cover_version', None)
+            said.update(values)
             fields = {'source_values': json.dumps(said, sort_keys=True)}
             # Calibre had not changed the book since our last look: what it holds now is
             # what Bookcase holds, and the next rescan has nothing to take.
@@ -965,7 +1058,7 @@ class CalibreSync(GObject.Object):
             self._again = True
             return GLib.SOURCE_REMOVE
         folders = [path for path in self._enabled if os.path.isdir(path)]
-        if not folders or self.library is None or self.library.closed():
+        if not folders or self.library is None or self.library.closed:
             return GLib.SOURCE_REMOVE
         for path in folders:
             current = self._statuses.get(path, Status(True, 'idle'))

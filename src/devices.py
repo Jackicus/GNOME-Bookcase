@@ -239,7 +239,8 @@ class Storage:
             if not name.startswith(base + '/'):
                 return None
             parts = [unquote(part) for part in name[len(base) + 1:].rstrip('/').split('/')]
-            if any(part in ('', '.', '..') for part in parts):
+            # An escaped '/' ('%2F') is no name a device file has: 'a%2F..%2F..' would climb.
+            if any(part in ('', '.', '..') or '/' in part for part in parts):
                 return None
             return '/'.join(parts)
         file = location_file(name) if '://' in name else self.new_for_path(name)
@@ -267,10 +268,12 @@ class Storage:
     def is_file(self, rel):
         return self.kind(rel) == 'file'
 
-    def children(self, rel=''):
-        """[Entry] in a folder. Raises GLib.Error."""
-        enumerator = self.file(rel).enumerate_children(
-            LIST_ATTRIBUTES, Gio.FileQueryInfoFlags.NONE, None)
+    def children(self, rel='', follow=True):
+        """[Entry] in a folder (with follow=False a symbolic link is an entry of its own,
+        never a folder). Raises GLib.Error."""
+        flags = (Gio.FileQueryInfoFlags.NONE if follow
+                 else Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS)
+        enumerator = self.file(rel).enumerate_children(LIST_ATTRIBUTES, flags, None)
         entries = []
         try:
             while (info := enumerator.next_file(None)) is not None:
@@ -377,8 +380,13 @@ class Storage:
 
     def delete_tree(self, rel):
         """Delete a folder and what is in it, deepest first (a folder is deleted only once
-        empty: deleting a full folder over MTP may or may not take its contents)."""
-        for entry in self.children(rel):
+        empty: deleting a full folder over MTP may or may not take its contents). A symbolic
+        link in it is deleted, never followed: what it points to may be off the device."""
+        found = self.file(rel).query_file_type(Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, None)
+        if found == Gio.FileType.SYMBOLIC_LINK:
+            self.delete(rel)
+            return
+        for entry in self.children(rel, follow=False):
             child = posixpath.join(rel, entry.name)
             if entry.is_dir:
                 self.delete_tree(child)
@@ -897,7 +905,9 @@ def _run_ebook_convert(src, dest):
     if program is None:
         raise DeviceError(_('Calibre’s ebook-convert is not installed'))
     try:
-        subprocess.run([program, src, dest], check=True, capture_output=True, timeout=900)
+        # Absolute paths: a name starting with '-' would be read as an option.
+        subprocess.run([program, os.path.abspath(src), os.path.abspath(dest)], check=True,
+                       capture_output=True, timeout=900)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         log.warning('ebook-convert failed: %s', getattr(error, 'stderr', error))
         raise DeviceError(_('Calibre could not convert the book')) from error

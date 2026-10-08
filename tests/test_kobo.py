@@ -50,8 +50,9 @@ def rows(path, query, *params):
         db.close()
 
 
-def book(status='unread', progress=0.0):
-    return Book(id=1, uuid='u', title='T', sort_title='t', status=status, progress=progress)
+def book(status='unread', progress=0.0, last_read=0.0):
+    return Book(id=1, uuid='u', title='T', sort_title='t', status=status, progress=progress,
+                last_read=last_read)
 
 
 class KoboTest(unittest.TestCase):
@@ -102,6 +103,23 @@ class KoboTest(unittest.TestCase):
         self.assertIsNone(kobo.ahead(book('finished', 1.0), kobo.State('finished', 100)))
         self.assertIsNone(kobo.ahead(book(), kobo.State('unread', 0)))
         self.assertIsNone(kobo.ahead(book(), None))
+
+    def test_an_older_kobo_place_is_not_ahead(self):
+        # Read to 60% on the Kobo in September, started again in Bookcase in October: the
+        # Kobo's place (or its Finished) is the older one and is not offered.
+        september, october = 1_788_000_000.0, 1_790_600_000.0
+        self.assertIsNone(kobo.ahead(book('reading', 0.1, october),
+                                     kobo.State('reading', 60, september)))
+        self.assertIsNone(kobo.ahead(book('reading', 0.1, october),
+                                     kobo.State('finished', 100, september)))
+        # Read on the Kobo since (or on the same day, a clock's slack): it is offered.
+        self.assertEqual(kobo.ahead(book('reading', 0.1, september),
+                                    kobo.State('reading', 60, october)), ('reading', 0.6))
+        self.assertEqual(kobo.ahead(book('reading', 0.1, september + 3600),
+                                    kobo.State('reading', 60, september)), ('reading', 0.6))
+        # A Kobo that never said when: as before.
+        self.assertEqual(kobo.ahead(book('reading', 0.1, october), kobo.State('reading', 60)),
+                         ('reading', 0.6))
 
     # -- collections -------------------------------------------------------------------------
 
@@ -213,6 +231,45 @@ class KoboTest(unittest.TestCase):
             self.write()
         os.remove(self.path + '-journal')
         self.assertEqual(self.members(), set())
+
+    def test_damaged_database_is_not_written(self):
+        real_connect = sqlite3.connect
+
+        class Damaged(sqlite3.Connection):
+            def execute(self, sql, *args):
+                if sql.startswith('PRAGMA quick_check'):
+                    return super().execute("SELECT 'page 3 is bad'")
+                return super().execute(sql, *args)
+
+        def connect(path, *args, **kwargs):
+            if path == self.path:
+                kwargs['factory'] = Damaged
+            return real_connect(path, *args, **kwargs)
+
+        before = pathlib.Path(self.path).read_bytes()
+        with mock.patch.object(kobo.sqlite3, 'connect', connect):
+            with self.assertRaises(kobo.KoboError):
+                self.write()
+        self.assertEqual(pathlib.Path(self.path).read_bytes(), before)
+        self.assertFalse(os.path.exists(kobo.backup_path(self.path)))
+
+    def test_failed_backup_writes_nothing_and_leaves_no_part(self):
+        # The Kobo's storage is full: the backup cannot be made, so nothing is written, and
+        # no half-made copy is left on the Kobo.
+        real_replace = os.replace
+
+        def replace(source, target):
+            if str(target).endswith('.bookcase-backup'):
+                raise OSError(28, 'No space left on device')
+            return real_replace(source, target)
+
+        with mock.patch.object(kobo.os, 'replace', replace):
+            with self.assertRaises(kobo.KoboError) as caught:
+                self.write()
+        self.assertIn('No space left', str(caught.exception))
+        self.assertEqual(self.members(), set())
+        self.assertEqual([name for name in os.listdir(self.directory)
+                          if name.endswith('.part')], [])
 
     def test_failed_integrity_check_puts_the_database_back(self):
         real_connect = sqlite3.connect

@@ -168,6 +168,28 @@ class BooksTest(TreeTest):
         kindle.remove(str(book))
         self.assertEqual(os.listdir(os.path.join(root, 'documents')), [])
 
+    def test_kindle_remove_never_follows_links_off_the_device(self):
+        # A link in the .sdr folder (or the .sdr itself a link) to a folder elsewhere: the
+        # link goes, what it points to stays.
+        root = self.tree('kindle')
+        kindle = devices.Device(root, 'kindle', 'Kindle', os.path.join(root, 'documents'))
+        elsewhere = self.directory / 'elsewhere'
+        elsewhere.mkdir()
+        (elsewhere / 'precious.txt').write_text('keep me')
+        documents = pathlib.Path(root) / 'documents'
+        for name, link_sdr in (('Harbour - Ada Lark', False), ('Lantern - Ben Ross', True)):
+            book = documents / f'{name}.azw3'
+            book.write_bytes(b'x')
+            sdr = documents / f'{name}.sdr'
+            if link_sdr:
+                sdr.symlink_to(elsewhere, target_is_directory=True)
+            else:
+                sdr.mkdir()
+                (sdr / 'linked').symlink_to(elsewhere, target_is_directory=True)
+            kindle.remove(str(book))
+        self.assertEqual(os.listdir(documents), [])
+        self.assertEqual((elsewhere / 'precious.txt').read_text(), 'keep me')
+
 
 class MonitorTest(TreeTest):
     def test_test_root_from_the_environment(self):
@@ -333,6 +355,14 @@ class MtpTest(TreeTest):
         self.assertIsNotNone(found)
         kind, name, books_dir = found
         return devices.Device(storage.name(), kind, name, books_dir, storage=storage)
+
+    def test_an_escaped_slash_is_no_name_on_the_device(self):
+        storage = self.storage()
+        base = storage.name().rstrip('/')
+        self.assertEqual(storage.relative(base + '/Internal%20Storage/a.epub'),
+                         'Internal Storage/a.epub')
+        self.assertIsNone(storage.relative(base + '/a%2F..%2F..%2Fx'))
+        self.assertIsNone(storage.relative(base + '/..'))
 
     def test_kindle_detected_in_its_storage(self):
         kindle = self.kindle()

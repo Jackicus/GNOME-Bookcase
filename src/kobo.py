@@ -37,6 +37,7 @@ reading progress, highlights and store account:
 - a copy of the database is made first, beside it, as `KoboReader.sqlite.bookcase-backup`
   (SQLite's backup API, so the copy is whole), replaced at each write: the state before
   Bookcase's last change;
+- a database that fails `PRAGMA quick_check` before the change is not written;
 - the changes are one transaction (BEGIN IMMEDIATE … COMMIT), and `PRAGMA integrity_check`
   runs after it; should it fail, the copy is put back and KoboError raised;
 - only collections named after a library shelf are touched, and in them only the books
@@ -74,6 +75,9 @@ REQUIRED = {
 READ_TABLES = ('content',)
 TIMESTAMP = '%Y-%m-%dT%H:%M:%SZ'
 AHEAD_BY = 0.01  # how much further the Kobo must be to count as ahead
+# A book read in Bookcase more than this after the Kobo last opened it is not behind: the
+# Kobo's place is older (a slack for a Kobo's clock, which may say local time as UTC).
+STALE_S = 24 * 60 * 60
 
 
 class KoboError(Exception):
@@ -212,15 +216,20 @@ RANK = {'unread': 0, 'reading': 1, 'finished': 2}
 
 def ahead(book, state):
     """('finished', 1.0) or ('reading', fraction) when the Kobo is further on with a book
-    than the library (`book` a library.Book), else None."""
+    than the library (`book` a library.Book), else None. Never when the library read the book
+    since the Kobo last did (by more than STALE_S): the Kobo's place is then an old one (a
+    book started again in Bookcase), and taking it would undo the newer reading."""
     if state is None or state.status == 'unread':
         return None
     if book.status == 'finished':
         return None
+    if state.last_read and (book.last_read or 0) > state.last_read + STALE_S:
+        return None
     if state.status == 'finished':
         return 'finished', 1.0
     if state.fraction > (book.progress or 0.0) + AHEAD_BY or (
-            RANK[state.status] > RANK.get(book.status, 0) and state.fraction > 0):
+            RANK[state.status] > RANK.get(book.status, 0)
+            and state.fraction > (book.progress or 0.0)):
         return 'reading', state.fraction
     return None
 
@@ -300,18 +309,29 @@ def _back_up(path):
     yet) lets read, so the copy is the database as it stands before the change."""
     target = backup_path(path)
     partial = target + '.part'
-    if os.path.exists(partial):
-        os.remove(partial)
-    source = _open_read_only(path)
-    copy = sqlite3.connect(partial)
     try:
-        source.backup(copy)
-    finally:
-        copy.close()
-        source.close()
-    with open(partial, 'rb') as file:
-        os.fsync(file.fileno())
-    os.replace(partial, target)
+        if os.path.exists(partial):
+            os.remove(partial)
+        source = _open_read_only(path)
+        try:
+            copy = sqlite3.connect(partial)
+            try:
+                source.backup(copy)
+            finally:
+                copy.close()
+        finally:
+            source.close()
+        with open(partial, 'rb') as file:
+            os.fsync(file.fileno())
+        os.replace(partial, target)
+    except (OSError, sqlite3.Error) as error:
+        # Not left half made on the Kobo's storage (a full one, say); nothing is written.
+        try:
+            os.remove(partial)
+        except OSError:
+            pass
+        raise KoboError(_('Could not back up the Kobo’s database, so it was left alone: '
+                          '{error}').format(error=error)) from error
     return target
 
 
@@ -342,6 +362,10 @@ def write_collections(path, names, wanted, known):
         except sqlite3.OperationalError as error:
             raise _busy() from error
         try:
+            # A database already damaged is not written: the check after the change could
+            # not tell Bookcase's change from the damage, and the backup would hold it too.
+            if db.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
+                raise KoboError(_('The Kobo’s database is damaged, so it was left alone'))
             changes = _plan(db, names, wanted, known)
             if not changes:
                 db.execute('ROLLBACK')

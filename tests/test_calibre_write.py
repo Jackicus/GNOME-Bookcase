@@ -405,5 +405,131 @@ class TestFlush(WriteTestCase):
         self.assertIn('Lark, Ada', output.stdout)
 
 
+    def test_a_cover_that_cannot_be_written_still_waits(self):
+        self.covers.save(self.book_id, make_png(7, 9, (10, 200, 10)))
+        original = calibre_write._jpeg
+        calibre_write._jpeg = lambda data: None
+        try:
+            self.flush()
+        finally:
+            calibre_write._jpeg = original
+        self.assertEqual(set(self.pending()[self.book_id].fields), {'cover'})
+        self.flush()
+        self.assertEqual(self.pending(), {})
+
+    def test_the_coordinator_writes(self):
+        # CalibreSync._start called Library.closed, a property, as a method: nothing was
+        # ever written by the app.
+        from gi.repository import GLib
+
+        sync = calibre_write.CalibreSync(self.library, self.covers, address=self.address)
+        try:
+            self.library.update_book(self.book_id, title='Lamp at Dusk')
+            sync._enabled.add(sync._key(self.calibre.folder))
+            sync._start()
+            self.assertIsNotNone(sync._thread)
+            sync._thread.join(timeout=30)
+            context = GLib.MainContext.default()
+            for _ in range(100):
+                if sync._thread is None:
+                    break
+                context.iteration(False)
+            self.assertIsNone(sync._thread)
+            self.assertEqual(self.book(self.first).info.title, 'Lamp at Dusk')
+            self.assertEqual(sync.status(self.calibre.folder).state, 'idle')
+        finally:
+            sync.shutdown()
+
+
+
+class TestAuditFixes(WriteTestCase):
+    """Regressions found by the safety review of Keep Calibre in Step."""
+
+    def test_author_sort_drops_nested_brackets_as_calibre_does(self):
+        # calibre's remove_bracketed_text: nested pairs, and all after an unclosed '('.
+        self.assertEqual(author_to_author_sort('Ada (the (elder)) Lark'),
+                         'Lark, Ada')
+        self.assertEqual(author_to_author_sort('Ada Lark (editor'), 'Lark, Ada')
+
+    def test_language_codes_are_calibres(self):
+        self.assertEqual(language_code('en-GB'), 'eng')
+        self.assertEqual(language_code('pt_BR'), 'por')
+        self.assertEqual(language_code('und'), '')
+        self.write({self.first: {'language': 'de-AT'}})
+        codes = [row[0] for row in self.rows(
+            'SELECT g.lang_code FROM books_languages_link l JOIN languages g '
+            'ON g.id = l.lang_code WHERE l.book = ? ORDER BY l.item_order', self.first)]
+        self.assertEqual(codes[0], 'deu')
+
+    def test_items_match_as_calibre_lowercases(self):
+        # casefold() makes 'STRASSE' and 'Straße' one tag; Calibre keeps them apart.
+        self.calibre._upsert('tags', 'name', 'STRASSE')
+        self.write({self.first: {'tags': ['Straße']}})
+        self.assertIsNotNone(self.row("SELECT 1 FROM tags WHERE name = 'STRASSE'"))
+        self.assertIsNotNone(self.row("SELECT 1 FROM tags WHERE name = 'Straße'"))
+
+    def test_an_authors_case_change_sorts_the_new_name(self):
+        self.write({self.first: {'authors': ['ada lark']}})
+        self.assertEqual(self.row("SELECT sort FROM authors WHERE name = 'ada lark'")[0],
+                         'lark, ada')
+
+    def test_a_book_that_changed_since_the_check_is_not_written(self):
+        uuid_, path = self.row('SELECT uuid, path FROM books WHERE id = ?', self.first)
+        before = self.database_digest()
+        result = self.write({self.first: {'title': 'X'}},
+                            expected={self.first: ('another-uuid', path)})
+        self.assertEqual(result, {})
+        self.assertEqual(self.database_digest(), before)
+        self.assertEqual(set(self.write({self.first: {'title': 'X'}},
+                                        expected={self.first: (uuid_.upper(), path)})),
+                         {self.first})
+
+    def test_the_schema_is_checked_again_under_the_lock(self):
+        # Calibre upgraded the library between check_library() and the lock.
+        self.calibre.db.execute('PRAGMA user_version = 99')
+        original = calibre_write.check_library
+        calibre_write.check_library = lambda folder: 28
+        try:
+            before = self.database_digest()
+            with self.assertRaises(CalibreRefused):
+                self.write({self.first: {'title': 'X'}})
+            self.assertEqual(self.database_digest(), before)
+        finally:
+            calibre_write.check_library = original
+
+    def test_the_cover_keeps_its_mode(self):
+        path = self.row('SELECT path FROM books WHERE id = ?', self.first)[0]
+        cover = self.calibre.folder / path / 'cover.jpg'
+        if cover.exists():
+            cover.unlink()
+        umask = os.umask(0o022)
+        try:
+            self.write({self.first: {'cover': make_png(3, 3)}})
+        finally:
+            os.umask(umask)
+        self.assertEqual(cover.stat().st_mode & 0o777, 0o644)  # not mkstemp's 0600
+        cover.chmod(0o640)
+        self.write({self.first: {'cover': make_png(4, 4)}})
+        self.assertEqual(cover.stat().st_mode & 0o777, 0o640)
+
+    def test_a_cover_outside_the_library_is_not_written(self):
+        self.calibre.db.execute("UPDATE books SET path = '../outside' WHERE id = ?",
+                                (self.first,))
+        outside = self.calibre.folder.parent / 'outside'
+        outside.mkdir()
+        result = self.write({self.first: {'cover': make_png(3, 3)}})
+        self.assertEqual(os.listdir(outside), [])
+        self.assertEqual(result[self.first].skipped, {'cover'})
+
+    def test_a_backup_is_kept_when_the_clock_ran_ahead(self):
+        folder = self.calibre.folder
+        for name in ('20991001', '20991002', '20991003'):
+            shutil.copyfile(folder / 'metadata.db',
+                            folder / ('metadata.db.bookcase-backup-' + name))
+        self.write({self.first: {'title': 'One'}}, today=datetime.date(2026, 10, 8))
+        self.assertTrue((folder / 'metadata.db.bookcase-backup-20261008').exists())
+        self.assertEqual(len(calibre_write.backups(folder)), calibre_write.BACKUPS_KEPT)
+
+
 if __name__ == '__main__':
     unittest.main()

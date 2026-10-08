@@ -61,6 +61,12 @@ The unit tests run in the sandbox on the SDK with `flatpak run --devel` over the
 release app (`io.github.jackicus.Bookcase`), not the .Devel one: the tests' application IDs
 are `io.github.jackicus.Bookcase.*Test`, and the Flatpak portal gives WebKit's web process a
 bus name only under the sandbox's own app ID.
+On 2026-10-08 (GNOME 51) the suite ran the same in the sandbox as natively except three
+BookView tests (07 scripts, 08 large book as a file, 10 footnotes) and Read Aloud's page test,
+whose books are in the test's `/tmp`: WebKit's web process runs in a sandbox of its own that
+does not see the app's private `/tmp`. The same steps with a book in the home folder (the
+large-book hand-over included) work in the installed app. `test_printing_draws_every_page`
+hung both in and out of the sandbox and was left out.
 
 ## Submitting
 

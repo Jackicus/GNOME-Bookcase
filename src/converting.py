@@ -40,13 +40,15 @@ always there; everything else runs Calibre's ebook-convert (in a session of its 
 Cancel stops it and its children: SIGTERM, then SIGKILL after STOP_WAIT_S), whose 'NN% what'
 lines are the progress. What is converted is a copy of the book's best file carrying the
 library's metadata (exporting.export_copy); the result goes into the library folder as
-'Author/Title.ext' (written as '.part' and renamed) and is added as the book's new format
+'Author/Title.ext' (a free name, claimed with O_EXCL so nothing there is ever written over;
+written as a temporary '.part' and renamed onto it) and is added as the book's new format
 (an undoable 'Add Format'). The book's own files are only read. Raises ConversionError, or
 ConversionCancelled.
 """
 
 import collections
 import contextlib
+import errno
 import hashlib
 import html
 import logging
@@ -305,7 +307,11 @@ def txt_to_epub(path, dest, title='', author='', language=''):
                  '<rootfile full-path="OEBPS/content.opf" '
                  'media-type="application/oebps-package+xml"/></rootfiles></container>\n')
 
-    part = dest + '.part'
+    # A temporary name of its own: two readers opening the same text at once never write
+    # into one file.
+    fd, part = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(dest)),
+                                prefix=os.path.basename(dest) + '.', suffix='.part')
+    os.close(fd)
     try:
         with zipfile.ZipFile(part, 'w') as archive:
             def add(name, content, compress=zipfile.ZIP_DEFLATED):
@@ -388,7 +394,9 @@ def run_ebook_convert(src, dest, program=None, progress=None, cancelled=None):
     if program is None:
         raise ConversionError(_('Calibre’s ebook-convert is not installed'))
     try:
-        process = subprocess.Popen([program, src, dest], stdin=subprocess.DEVNULL,
+        # Absolute paths: a name starting with '-' would be read as an option.
+        process = subprocess.Popen([program, os.path.abspath(src), os.path.abspath(dest)],
+                                   stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, errors='replace', start_new_session=True)
     except OSError as error:
@@ -425,6 +433,21 @@ def run_ebook_convert(src, dest, program=None, progress=None, cancelled=None):
         raise ConversionError(_('ebook-convert failed: {error}').format(
             error=last or process.returncode))
     return dest
+
+
+def _claim(importing, library_folder, book, suffix):
+    """A free 'Author/Title.ext' in the library folder, made as an empty file at once
+    (O_EXCL), so a file that turns up meanwhile (another conversion of the book, a file the
+    user saves there) is never written over: the next free name is taken instead."""
+    for _attempt in range(100):
+        dest = importing.library_path(library_folder, book, suffix)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        try:
+            with open(dest, 'xb'):
+                return dest
+        except FileExistsError:
+            continue
+    raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), dest)
 
 
 def _stop(process):
@@ -498,15 +521,19 @@ def convert_book(library, covers, book_id, target, library_folder, program=None,
         convert_file(copy, source, out, target, program, progress, cancelled)
         if cancelled is not None and cancelled():
             raise ConversionCancelled(_('Conversion cancelled'))
-        dest = importing.library_path(library_folder, book, SUFFIXES[target])
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        part = dest + '.part'
+        part = dest = None
         try:
+            dest = _claim(importing, library_folder, book, SUFFIXES[target])
+            fd, part = tempfile.mkstemp(dir=os.path.dirname(dest), prefix='.bookcase-',
+                                        suffix='.part')
+            os.close(fd)
             shutil.copyfile(out, part)
-            os.replace(part, dest)
+            os.replace(part, dest)  # over the empty file claimed for it
         except OSError as error:
-            with contextlib.suppress(OSError):
-                os.unlink(part)
+            for path in (part, dest):
+                if path is not None:
+                    with contextlib.suppress(OSError):
+                        os.unlink(path)
             raise ConversionError(_('The converted book could not be saved: {error}')
                                   .format(error=error.strerror or error)) from error
     if add:

@@ -6,11 +6,13 @@ read back with Bookcase's own OPDS client (opds.py), as a reading app would."""
 
 import base64
 import gc
+import http.client
 import os
 import pathlib
 import shutil
 import socket
 import tempfile
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -370,6 +372,26 @@ class AccessTest(ServerCase):
             self.assertNotIn(secret, text)
 
 
+class StopTest(ServerCase):
+
+    def test_a_kept_alive_connection_ends_with_the_server(self):
+        # A reader that keeps its connection open is not answered once sharing is off.
+        connection = http.client.HTTPConnection('127.0.0.1', self.server.port, timeout=5)
+        self.addCleanup(connection.close)
+        connection.request('GET', '/opds', headers=basic())
+        response = connection.getresponse()
+        response.read()
+        self.assertEqual(response.status, 200)
+        self.server.stop()
+        with self.assertRaises((http.client.HTTPException, OSError)):
+            connection.request('GET', '/opds', headers=basic())
+            connection.getresponse().read()
+
+    def test_too_many_query_fields_is_a_bad_request(self):
+        query = '&'.join(f'f{number}=x' for number in range(20))
+        self.assertEqual(self.get('/search?' + query).status, 400)
+
+
 class OpenServerTest(ServerCase):
     password = None
 
@@ -478,6 +500,32 @@ class SharingTest(unittest.TestCase):
         self.settings.set_boolean('sharing-enabled', True)  # the same password again
         self.assertTrue(wait_for(lambda: self.sharing.state == 'on'))
         self.assertEqual(self.sharing.password, password)
+
+    def test_quick_off_and_on_ends_with_one_server(self):
+        # Off and on again while the first start still runs: the first server must not
+        # keep the port from the second (which then failed as "in use by another program").
+        lookups = []
+        lookup = self.keyring.lookup
+
+        def slow_second_lookup(account):
+            lookups.append(account)
+            if len(lookups) == 2:
+                time.sleep(0.3)
+            return lookup(account)
+
+        self.keyring.lookup = slow_second_lookup
+        self.settings.set_boolean('sharing-enabled', True)
+        self.settings.set_boolean('sharing-enabled', False)
+        self.settings.set_boolean('sharing-enabled', True)
+        time.sleep(0.6)  # both starts have run, with nothing of theirs on the main loop yet
+        self.assertTrue(wait_for(lambda: self.sharing.state != 'starting'))
+        wait_for(lambda: False, timeout=0.5)  # anything late has arrived
+        self.assertEqual((self.sharing.state, self.sharing.error), ('on', ''))
+        port = self.settings.get_int('sharing-port')
+        request = urllib.request.Request(f'http://127.0.0.1:{port}/opds',
+                                         headers=basic('reader', self.sharing.password))
+        with urllib.request.urlopen(request, timeout=10) as response:
+            self.assertEqual(response.status, 200)
 
     def test_a_port_in_use_fails_with_a_sentence(self):
         with socket.socket() as taken:

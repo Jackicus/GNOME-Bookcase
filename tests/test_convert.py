@@ -113,6 +113,23 @@ class TestConverting(ConvertTestCase):
         self.assertLess(time.monotonic() - started, 1.9)  # not the whole 2 s
         self.assertFalse((self.directory / 'out.pdf').exists())
 
+    def test_a_name_like_an_option_is_never_one(self):
+        # ebook-convert is given absolute paths: '-x.epub' would be read as an option.
+        record = self.directory / 'argv'
+        self.program.write_text(FAKE.format(python=sys.executable).replace(
+            'src, dest = sys.argv[1:3]',
+            f'src, dest = sys.argv[1:3]\nopen({str(record)!r}, "w").write(repr(sys.argv[1:]))'))
+        shutil.copyfile(self.epub, self.directory / '-x.epub')
+        cwd = os.getcwd()
+        os.chdir(self.directory)
+        try:
+            converting.run_ebook_convert('-x.epub', '--out.azw3')
+        finally:
+            os.chdir(cwd)
+        argv = eval(record.read_text())  # noqa: S307 - our own repr()
+        self.assertEqual(argv, [str(self.directory / '-x.epub'),
+                                str(self.directory / '--out.azw3')])
+
     def test_no_program(self):
         with self.assertRaises(converting.ConversionError):
             converting.run_ebook_convert(str(self.epub), str(self.directory / 'x.pdf'),
@@ -167,6 +184,30 @@ class TestConvertBook(ConvertTestCase):
         self.source, self.fmt = self.epub, 'epub'
         with self.assertRaises(converting.ConversionError):
             self.convert('epub')
+
+    def test_a_file_that_turns_up_meanwhile_is_never_written_over(self):
+        # Another conversion (or the user) saves 'The Harbour at Night.azw3' after the free
+        # name was chosen: that file stays, and the new one takes the next name.
+        self.source, self.fmt = self.epub, 'epub'
+        from bookcase import importing
+
+        real = importing.library_path
+        theirs = self.books / 'Ada Lark' / 'The Harbour at Night.azw3'
+
+        def library_path(folder, book, suffix):
+            path = real(folder, book, suffix)
+            if not theirs.exists():
+                theirs.parent.mkdir(parents=True, exist_ok=True)
+                theirs.write_bytes(b'theirs')
+            return path
+
+        with mock.patch.object(importing, 'library_path', library_path):
+            path, _book, _files = self.convert('azw3')
+        self.assertEqual(theirs.read_bytes(), b'theirs')
+        self.assertEqual(path, str(self.books / 'Ada Lark' / 'The Harbour at Night (2).azw3'))
+        self.assertEqual(pathlib.Path(path).read_bytes(), b'FAKE azw3')
+        self.assertEqual(sorted(p.name for p in theirs.parent.iterdir()),
+                         ['The Harbour at Night (2).azw3', 'The Harbour at Night.azw3'])
 
     def test_cancelled_adds_nothing(self):
         self.source, self.fmt = self.epub, 'epub'
