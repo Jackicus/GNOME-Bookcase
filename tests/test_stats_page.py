@@ -58,6 +58,9 @@ def stand_ins():
         def set_dialog_open(self, _open):
             pass
 
+        def push(self, page):
+            self.navigation_view.push(page)
+
     app = App()
     app.register(None)
     _stand_ins.update(app=app, Window=Window)
@@ -201,6 +204,70 @@ class StatsPageTest(unittest.TestCase):
         self.assertEqual(self.app.settings.get_int('goal-minutes'), 20)
         dialog.force_close()
         pump()
+
+    def test_a_past_year_and_its_review(self):
+        import os
+        import tempfile
+
+        from bookcase import stats
+        from bookcase.pages.stats import StatsPage
+        from bookcase.pages.year_review import YearReviewPage
+
+        last = datetime.date.today().year - 1
+        book = add_book(self.library, 'Lantern Hill', ('Ben Ross',), tags=['Mystery'])
+        self.library.update_book(book, pages=240)
+        for day in (3, 4):
+            self.library.log_session(book, at(datetime.date(last, 6, day)), 3600, 0, 0.4)
+        self.library.set_status([book], 'finished')
+        self.library.db.execute('UPDATE books SET finished = ? WHERE id = ?',
+                                (at(datetime.date(last, 6, 5)), book))
+        page = self.show(StatsPage())
+        self.assertTrue(page.year_dropdown.get_visible())
+        self.assertEqual(page.years, [last + 1, last])
+        self.assertFalse(page.review_button.get_visible())
+        page.year_dropdown.set_selected(1)
+        self.assertEqual(page.year, last)
+        self.assertTrue(page.review_button.get_visible())
+        self.assertFalse(page.tile_today.get_visible())
+        self.assertEqual(page.tile_streak.value.get_text(), '2 days')
+        self.assertEqual(page.goal_title.get_text(), f'1 book finished in {last}')
+        review = page.show_review()
+        self.assertIsInstance(review, YearReviewPage)
+        self.assertTrue(wait_for(review.get_mapped))
+        pump()
+        self.assertEqual(review.tile_books.value.get_text(), '1')
+        self.assertEqual(review.tile_pages.value.get_text(), '240')
+        self.assertEqual(review.tile_hours.value.get_text(), '2 h')
+        values = [row.value.get_text() for row in _rows(review.facts)]
+        self.assertIn('Ben Ross', values)
+        self.assertIn('Mystery', values)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'review.png')
+            self.assertTrue(review.save_image(path, scale=1))
+            with open(path, 'rb') as file:
+                self.assertEqual(file.read(8), b'\x89PNG\r\n\x1a\n')
+        page.set_year(None)
+        self.assertIsNone(page.year)
+        self.assertEqual(page.year_dropdown.get_selected(), 0)
+        self.assertEqual(stats.years(self.library), [last + 1, last])
+
+    def test_the_day_turning_over(self):
+        from bookcase.pages.stats import StatsPage
+
+        page = self.show(StatsPage())
+        self.assertIsNotNone(page._day_timer)
+        from gi.repository import Adw
+
+        self.window.navigation_view.replace([Adw.NavigationPage(title='Blank')])
+        pump()
+        self.assertIsNone(page._day_timer)  # no timer while the page is not shown
+
+
+def _rows(listbox):
+    child = listbox.get_first_child()
+    while child is not None:
+        yield child
+        child = child.get_next_sibling()
 
 
 @requires_gtk

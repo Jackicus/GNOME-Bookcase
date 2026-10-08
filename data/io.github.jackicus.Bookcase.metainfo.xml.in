@@ -38,6 +38,7 @@
   <url type="bugtracker">https://github.com/Jackicus/GNOME-Bookcase/issues</url>
   <url type="help">https://github.com/Jackicus/GNOME-Bookcase/blob/main/docs/user-guide.md</url>
   <url type="vcs-browser">https://github.com/Jackicus/GNOME-Bookcase</url>
+  <url type="contribute">https://github.com/Jackicus/GNOME-Bookcase#contributing</url>
 
   <translation type="gettext">bookcase</translation>
 

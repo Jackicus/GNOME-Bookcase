@@ -73,7 +73,7 @@ template $BookcasePreferencesDialog: Adw.PreferencesDialog {
 
     Adw.PreferencesGroup calibre_group {
       title: _("Calibre Libraries");
-      description: _("A linked Calibre library is read in place: Calibre stays usable, and Bookcase never writes to its metadata.db. Edits made in Bookcase stay in Bookcase.");
+      description: _("A linked Calibre library is read in place: Calibre stays usable. Edits made in Bookcase stay in Bookcase, unless you choose to keep Calibre in step.");
 
       [header-suffix]
       Button add_calibre_button {
@@ -126,6 +126,7 @@ template $BookcasePreferencesDialog: Adw.PreferencesDialog {
             _("Sepia"),
             _("Dark"),
             _("Black"),
+            _("Custom"),
           ]
         };
       }

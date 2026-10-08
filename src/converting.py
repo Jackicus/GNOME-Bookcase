@@ -26,14 +26,39 @@ section of the EPUB and an entry of its contents.
 
 A CBR becomes a CBZ through formats.comic.cbr_to_cbz() (bsdtar); a '.cbr' that is really a
 zip opens as it is. Raises formats.FormatError when it cannot (no bsdtar: the message says so).
+
+Convert… (dialogs/convert.py) makes another format of a book and adds it to the book:
+
+    ebook_convert()                       # Calibre's ebook-convert on PATH, or None
+    targets(formats, program)             # [(format, None or why it cannot be made)]
+    convert_book(library, covers, book_id, target, library_folder, program=None,
+                 progress=None, cancelled=None, add=True) -> path   # blocking: a thread
+    run_ebook_convert(src, dest, program, progress, cancelled)
+
+TARGETS are EPUB, kepub, AZW3, MOBI, PDF and FB2. EPUB to kepub is kepub.py's, pure Python,
+always there; everything else runs Calibre's ebook-convert (in a session of its own, so
+Cancel stops it and its children: SIGTERM, then SIGKILL after STOP_WAIT_S), whose 'NN% what'
+lines are the progress. What is converted is a copy of the book's best file carrying the
+library's metadata (exporting.export_copy); the result goes into the library folder as
+'Author/Title.ext' (written as '.part' and renamed) and is added as the book's new format
+(an undoable 'Add Format'). The book's own files are only read. Raises ConversionError, or
+ConversionCancelled.
 """
 
+import collections
+import contextlib
 import hashlib
 import html
 import logging
 import os
 import re
+import shutil
+import signal
+import subprocess
+import tempfile
+import threading
 import zipfile
+from gettext import gettext as _
 
 from gi.repository import GLib
 
@@ -299,4 +324,192 @@ def txt_to_epub(path, dest, title='', author='', language=''):
     finally:
         if os.path.exists(part):
             os.remove(part)
+    return dest
+
+
+# -- Convert…: another format of a book, into the library -----------------------------------------
+
+TARGETS = ('epub', 'kepub', 'azw3', 'mobi', 'pdf', 'fb2')
+SUFFIXES = {'epub': '.epub', 'kepub': '.kepub.epub', 'azw3': '.azw3', 'mobi': '.mobi',
+            'pdf': '.pdf', 'fb2': '.fb2'}
+# The best input for ebook-convert first: reflowable, with the most structure.
+SOURCE_ORDER = ('epub', 'kepub', 'azw3', 'mobi', 'fb2', 'fbz', 'txt', 'cbz', 'cbr', 'pdf')
+_PROGRESS = re.compile(r'^\s*(\d{1,3})%\s*(.*)$')
+STOP_WAIT_S = 5
+
+
+class ConversionError(Exception):
+    """A conversion that failed; str() is a sentence for the user."""
+
+
+class ConversionCancelled(ConversionError):
+    pass
+
+
+def ebook_convert():
+    """Calibre's ebook-convert, when it is on PATH, else None."""
+    return shutil.which('ebook-convert')
+
+
+def source_format(formats, target):
+    """The format of a book's files to convert from to `target`, or None."""
+    formats = [fmt for fmt in formats if fmt != target]
+    if target == 'kepub' and 'epub' in formats:
+        return 'epub'
+    return next((fmt for fmt in SOURCE_ORDER if fmt in formats), None)
+
+
+def targets(formats, program=None):
+    """What Convert… offers a book with these formats: [(format, None when it can be made,
+    else why not)]. EPUB to kepub is Bookcase's own (kepub.py); the rest is ebook-convert's."""
+    offers = []
+    for target in TARGETS:
+        source = source_format(formats, target)
+        if target in formats:
+            reason = _('Already in the library')
+        elif source is None:
+            reason = _('No file to convert from')
+        elif target == 'kepub' and source == 'epub':
+            reason = None
+        elif program is None:
+            reason = _('Needs Calibre’s ebook-convert')
+        else:
+            reason = None
+        offers.append((target, reason))
+    return offers
+
+
+def run_ebook_convert(src, dest, program=None, progress=None, cancelled=None):
+    """Run `ebook-convert src dest` (the formats from the names), reporting its 'NN% what'
+    lines as progress(fraction, text); cancelled() is asked every fifth of a second, and
+    stops the program (ConversionCancelled). ConversionError with its last lines when it
+    fails."""
+    program = program or ebook_convert()
+    if program is None:
+        raise ConversionError(_('Calibre’s ebook-convert is not installed'))
+    try:
+        process = subprocess.Popen([program, src, dest], stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, errors='replace', start_new_session=True)
+    except OSError as error:
+        raise ConversionError(_('ebook-convert could not start: {error}').format(error=error)) \
+            from error
+    tail = collections.deque(maxlen=8)
+
+    def read():
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            tail.append(line)
+            match = _PROGRESS.match(line)
+            if match and progress is not None:
+                progress(min(100, int(match.group(1))) / 100, match.group(2))
+
+    reader = threading.Thread(target=read, name='bookcase-ebook-convert', daemon=True)
+    reader.start()
+    try:
+        while True:
+            try:
+                process.wait(timeout=0.2)
+                break
+            except subprocess.TimeoutExpired:
+                if cancelled is not None and cancelled():
+                    _stop(process)
+                    raise ConversionCancelled(_('Conversion cancelled')) from None
+    finally:
+        reader.join(timeout=STOP_WAIT_S)
+        process.stdout.close()
+    if process.returncode != 0 or not os.path.isfile(dest) or not os.path.getsize(dest):
+        last = '\n'.join(list(tail)[-3:])
+        raise ConversionError(_('ebook-convert failed: {error}').format(
+            error=last or process.returncode))
+    return dest
+
+
+def _stop(process):
+    for sig, wait in ((signal.SIGTERM, STOP_WAIT_S), (signal.SIGKILL, None)):
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, sig)
+        try:
+            process.wait(timeout=wait)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def convert_file(src, src_fmt, dest, target, program=None, progress=None, cancelled=None):
+    """Convert the file at src (format src_fmt) to dest in `target`."""
+    from . import kepub
+
+    if target != 'kepub':
+        return run_ebook_convert(src, dest, program, progress, cancelled)
+    if src_fmt not in ('epub', 'kepub'):
+        epub_copy = dest + '.source.epub'
+        try:
+            run_ebook_convert(src, epub_copy, program,
+                              (lambda fraction, text: progress(fraction * 0.9, text))
+                              if progress is not None else None, cancelled)
+            src = epub_copy
+            return _kepub(kepub, src, dest, progress)
+        finally:
+            with contextlib.suppress(OSError):
+                os.unlink(epub_copy)
+    return _kepub(kepub, src, dest, progress)
+
+
+def _kepub(kepub, src, dest, progress):
+    if progress is not None:
+        progress(0.95, _('Making a Kobo EPUB'))
+    try:
+        kepub.convert(src, dest)
+    except (OSError, ValueError, zipfile.BadZipFile) as error:
+        raise ConversionError(_('The Kobo EPUB could not be made: {error}').format(error=error)) \
+            from error
+    return dest
+
+
+def convert_book(library, covers, book_id, target, library_folder, program=None,
+                 progress=None, cancelled=None, add=True):
+    """Convert a book to `target` and add the result to it as a new format, in the library
+    folder ('Author/Title.ext', as an added book's file). The book's own files are only
+    read: a copy carrying the library's metadata (exporting.export_copy) is converted.
+    Returns the new file's path. With add=False the file is made but not added (a thread on
+    a worker library leaves that to the main library, where it is an undo step). Raises
+    ConversionError (ConversionCancelled)."""
+    from . import exporting, importing
+
+    book = library.book(book_id)
+    if book is None:
+        raise ConversionError(_('The book is no longer in the library'))
+    if target in book.formats:
+        raise ConversionError(_('The book already has this format'))
+    available = [file.format for file in library.files(book_id) if not file.missing]
+    source = source_format(available, target)
+    if source is None:
+        raise ConversionError(_('The book’s file cannot be found'))
+    with tempfile.TemporaryDirectory(prefix='bookcase-convert-') as directory:
+        try:
+            copy = exporting.export_copy(library, covers, book_id, directory, format=source,
+                                         name='source')
+        except exporting.ExportError as error:
+            raise ConversionError(str(error)) from error
+        out = os.path.join(directory, 'converted' + SUFFIXES[target])
+        convert_file(copy, source, out, target, program, progress, cancelled)
+        if cancelled is not None and cancelled():
+            raise ConversionCancelled(_('Conversion cancelled'))
+        dest = importing.library_path(library_folder, book, SUFFIXES[target])
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        part = dest + '.part'
+        try:
+            shutil.copyfile(out, part)
+            os.replace(part, dest)
+        except OSError as error:
+            with contextlib.suppress(OSError):
+                os.unlink(part)
+            raise ConversionError(_('The converted book could not be saved: {error}')
+                                  .format(error=error.strerror or error)) from error
+    if add:
+        library.add_file(book_id, dest, hash=importing.partial_md5(dest),
+                         size=os.path.getsize(dest), format=target)
     return dest

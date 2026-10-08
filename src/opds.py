@@ -9,6 +9,8 @@ searching them, and downloading their books.
     feed = client.feed(url, refresh=False)          # fetched, parsed, kept in memory a while
     url = client.search_url(feed, 'dickens')        # None when the feed cannot be searched
     path = client.download(acquisition, folder, progress=None, cancelled=None, title='')
+    entry = client.full_entry(entry)                # its full record (`entry.detail`), or
+                                                    # the entry as it is
     acquisition = opds.best_acquisition(entry)      # the format to download, None if none
     book_id = opds.find_in_library(library, entry)  # the library's copy of it, or None
     task = opds.run_async(func, callback, *args)    # callback(result, error) on the main loop
@@ -26,12 +28,14 @@ see search_url), `facets` ([FacetGroup(title, [Facet(title, href, active, count)
 icon. An Entry has title, authors, summary (HTML, untrusted: widgets/markup.py shows it),
 categories, language, issued, publisher, series and series_index (Calibre's or schema.org's
 metadata, OPDS 2's belongsTo), identifiers ({'isbn': …, 'uuid': …}), `cover` and `thumbnail`
-URLs and `acquisitions` ([Acquisition(href, type, format, title, size, price, currency,
-kind, drm)]). URLs are absolute (resolved against the feed's). An Acquisition is
-`available` when Bookcase can take it: free (open-access, a plain acquisition or a sample),
-not DRM-protected, in a format Bookcase reads; others carry what they are (a price, a loan)
-for the detail sheet to show. Entries of one feed with the same title and authors are
-merged (Project Gutenberg lists a book's editions apart): their acquisitions are pooled.
+URLs, `detail` (the URL of its full record, an alternate link of type=entry: a feed's entry
+often carries a short summary) and `acquisitions` ([Acquisition(href, type, format, title,
+size, price, currency, kind, drm)]). URLs are absolute (resolved against the feed's). An
+Acquisition is `available` when Bookcase can take it: free (open-access, a plain acquisition
+or a sample), not DRM-protected, in a format Bookcase reads; others carry what they are (a
+price, a loan) for the detail sheet to show. Entries of one feed with the same title and
+authors are merged (Project Gutenberg lists a book's editions apart): their acquisitions are
+pooled.
 
 Search: an OpenSearch description (fetched, its Atom or OPDS URL template taken), a search
 link whose href is a template with {searchTerms}, or OPDS 2's templated search link
@@ -47,13 +51,15 @@ removed, when cancelled() says so) and renames it to the file name the server ga
 (Content-Disposition), else one made of the title, with the format's suffix.
 
 Downloads(importer) is the app's queue of downloads (one thread each, GObject signals on the
-main loop): start(key, client, acquisition, entry, folder) downloads into `folder` (the
+main loop): start(key, client, acquisition, entry) downloads into `folder` (the
 cache's downloads folder: the importer adds a file under the library folder in place, so the
 part file stays outside it), then hands the file to importer.add_async(copy=True), which
 copies it into the library folder as Author/Title.ext, and removes the download. Its
 'progress' (key, fraction) and 'finished' (key, book id or 0, error message or '') signals
 say how it goes; state(key) is ('downloading', fraction), ('done', book id),
-('failed', message) or None; cancel(key) stops one.
+('failed', message) or None; cancel(key) stops one. keys() lists this session's downloads,
+newest first ('started' (key) tells of a new one), entry(key) is the Entry downloaded, and
+clear() forgets the ones no longer under way.
 
 Catalogues are Catalog(id, title, url, username, description) records, kept as JSON in the
 `catalogs` setting; an empty setting means the built-in ones (builtin_catalogs(): free
@@ -218,6 +224,7 @@ class Entry:
     href: str = ''  # a navigation entry's feed
     acquisitions: list = dataclasses.field(default_factory=list)
     count: int | None = None  # a navigation entry's number of items, when the feed says
+    detail: str = ''  # its full record (an Atom entry document), when linked
 
     @property
     def key(self):
@@ -554,6 +561,9 @@ def _atom_link(link, base, entry):
             drm=any(t.split(';')[0] in DRM_TYPES for t in [media_type] + indirect)))
     elif rel in IMAGE_RELS:
         entry.cover = entry.cover or href
+    elif 'type=entry' in media_type.replace(' ', '').lower() and rel in ('alternate',
+                                                                          'self'):
+        entry.detail = entry.detail or href
     elif rel in THUMBNAIL_RELS:
         entry.thumbnail = entry.thumbnail or href
     elif (_is_feed_type(media_type) and not entry.href
@@ -561,6 +571,32 @@ def _atom_link(link, base, entry):
         entry.href = href
         count = link.get(THR + 'count')
         entry.count = int(count) if count and count.isdigit() else None
+
+
+def fill_entry(entry, full):
+    """A copy of `entry` with `full`'s (the same book's full record) longer summary and the
+    details the entry lacks."""
+    merged = dataclasses.replace(entry, authors=list(entry.authors),
+                                 categories=list(entry.categories),
+                                 identifiers=dict(entry.identifiers),
+                                 acquisitions=list(entry.acquisitions))
+    if len(full.summary or '') > len(entry.summary or ''):
+        merged.summary = full.summary
+    for name in ('language', 'issued', 'publisher', 'series', 'cover', 'thumbnail'):
+        if not getattr(merged, name) and getattr(full, name):
+            setattr(merged, name, getattr(full, name))
+    if not merged.series_index:
+        merged.series_index = full.series_index
+    if not merged.authors:
+        merged.authors = list(full.authors)
+    for category in full.categories:
+        if category not in merged.categories:
+            merged.categories.append(category)
+    for kind, value in full.identifiers.items():
+        merged.identifiers.setdefault(kind, value)
+    if not merged.acquisitions:
+        merged.acquisitions = list(full.acquisitions)
+    return merged
 
 
 def merge_variants(books):
@@ -773,6 +809,8 @@ def _publication(item, base):
             entry.cover = entry.cover or href
         elif any(r in THUMBNAIL_RELS for r in rels):
             entry.thumbnail = entry.thumbnail or href
+        elif 'self' in rels and 'opds-publication' in (link.get('type') or ''):
+            entry.detail = entry.detail or href
     images = [image for image in item.get('images') or []
               if isinstance(image, dict) and image.get('href')]
     if images:
@@ -1164,6 +1202,20 @@ class Client:
         with self._lock:
             self._cache.clear()
 
+    def full_entry(self, entry):
+        """The entry with what its full record (`entry.detail`) adds: a longer summary,
+        categories, the identifiers, publisher, language and dates it lacks. The entry as it
+        is when there is no record; OpdsError when it cannot be fetched."""
+        if not entry.detail:
+            return entry
+        response = self.get(entry.detail, accept='application/atom+xml;type=entry;'
+                                                 'profile=opds-catalog, application/atom+xml, '
+                                                 'application/opds-publication+json, '
+                                                 '*/*;q=0.5')
+        feed = parse(response.data, response.url, response.content_type)
+        full = next(iter(feed.books + feed.navigation), None)
+        return entry if full is None else fill_entry(entry, full)
+
     def search_url(self, feed, terms):
         """The URL of the search for `terms` in a feed's catalogue, or None."""
         search = feed.search
@@ -1422,6 +1474,7 @@ class Downloads(GObject.Object):
     __gsignals__ = {
         'progress': (GObject.SignalFlags.RUN_FIRST, None, (str, float)),
         'finished': (GObject.SignalFlags.RUN_FIRST, None, (str, int, str)),
+        'started': (GObject.SignalFlags.RUN_FIRST, None, (str,)),
     }
 
     def __init__(self, importer, folder=None):
@@ -1430,10 +1483,24 @@ class Downloads(GObject.Object):
         self.folder = folder
         self._states = {}
         self._tasks = {}
+        self._entries = {}  # key -> the Entry, newest last
         self.reports = {}  # key -> the importer's report
 
     def state(self, key):
         return self._states.get(key)
+
+    def keys(self):
+        """This session's downloads, newest first (a cancelled one is forgotten)."""
+        return [key for key in reversed(self._entries) if key in self._states]
+
+    def entry(self, key):
+        return self._entries.get(key)
+
+    def clear(self):
+        """Forget the downloads done or failed."""
+        for key in [key for key, state in self._states.items() if state[0] != 'downloading']:
+            del self._states[key]
+            self._entries.pop(key, None)
 
     def cancel(self, key):
         task = self._tasks.get(key)
@@ -1446,6 +1513,9 @@ class Downloads(GObject.Object):
         task = Task()
         self._tasks[key] = task
         self._states[key] = ('downloading', 0.0)
+        self._entries.pop(key, None)
+        self._entries[key] = entry
+        self.emit('started', key)
         folder = self.folder or downloads_dir()
         last = [0.0]
 

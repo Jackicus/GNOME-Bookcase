@@ -291,5 +291,56 @@ class PagesTest(unittest.TestCase):
             self.assertIsNone(stats.estimated_pages(None))
 
 
+class YearsTest(unittest.TestCase):
+
+    def test_years_and_a_year_in_review(self):
+        with temporary_library() as library:
+            harbour = add_book(library, 'A Quiet Harbour', tags=['Sea', 'Mystery'])
+            hill = add_book(library, 'Lantern Hill', ('Ben Ross',), tags=['Sea'])
+            roads = add_book(library, 'Salt Roads', ('Ben Ross',))
+            library.update_book(harbour, pages=300)
+            library.log_session(harbour, at(datetime.date(2024, 6, 1)), 900, 0, 0.1)
+            for day in (3, 4, 5):  # three days in a row in March
+                library.log_session(hill, at(datetime.date(2025, 3, day)), 1800, 0, 0.1)
+            library.log_session(roads, at(datetime.date(2025, 7, 9)), 1200, 0, 0.1)
+            # 1 am on New Year's Day counts for the evening before.
+            library.log_session(roads, at(datetime.date(2026, 1, 1), 1), 600, 0.1, 0.2)
+            library.set_status([harbour, hill], 'finished')
+            library.db.execute('UPDATE books SET finished = ? WHERE id = ?',
+                               (at(datetime.date(2025, 5, 2)), harbour))
+            library.db.execute('UPDATE books SET finished = ? WHERE id = ?',
+                               (at(datetime.date(2025, 3, 6)), hill))
+            today = datetime.date(2026, 10, 8)
+            self.assertEqual(stats.years(library, today), [2026, 2025, 2024])
+            review = stats.year_review(library, 2025)
+            self.assertEqual([book_id for book_id, _when in review.finished], [hill, harbour])
+            self.assertEqual(review.seconds, 3 * 1800 + 1200 + 600)
+            self.assertEqual(review.days, 5)
+            self.assertEqual(review.longest_streak, 3)
+            # Ben Ross: a book finished and the most time; Sea: both books finished.
+            self.assertEqual(review.author, 'Ben Ross')
+            self.assertEqual(review.genre, 'Sea')
+            self.assertEqual(review.best_month, datetime.date(2025, 3, 1))
+            self.assertEqual(review.finished_by_month[2:5], [1, 0, 1])
+            self.assertGreaterEqual(review.pages, 300)  # the harbour's own count, at least
+            self.assertFalse(review.empty)
+            self.assertTrue(stats.year_review(library, 2023).empty)
+
+    def test_a_past_year_summary_stops_at_its_end(self):
+        with temporary_library() as library:
+            book_id = add_book(library, 'T')
+            library.log_session(book_id, at(datetime.date(2025, 12, 30)), 600, 0, 0.1)
+            library.log_session(book_id, at(datetime.date(2026, 2, 2)), 6000, 0.1, 0.2)
+            summary = stats.summary(library, datetime.date(2025, 12, 31))
+            self.assertEqual(summary.year_seconds, 600)
+            self.assertEqual(sum(summary.weekdays), 600)
+
+    def test_next_day_start(self):
+        night = at(datetime.date(2026, 10, 8), 2)
+        self.assertEqual(stats.next_day_start(night), at(datetime.date(2026, 10, 8), 4))
+        morning = at(datetime.date(2026, 10, 8), 9)
+        self.assertEqual(stats.next_day_start(morning), at(datetime.date(2026, 10, 9), 4))
+
+
 if __name__ == '__main__':
     unittest.main()

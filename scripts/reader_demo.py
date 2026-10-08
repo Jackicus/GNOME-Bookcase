@@ -10,7 +10,7 @@ without the library window, for checking the reader's look.
         [--theme auto|light|sepia|dark|black] [--one-page] [--scrolled] [--font serif|sans]
         [--sidebar contents|annotations|search] [--search QUERY] [--select] [--lookup]
         [--read-aloud] [--popover] [--fullscreen] [--hide-chrome] [--at FRACTION] [--missing]
-        [--pdf] [--sync]
+        [--pdf [--pdf-zoom PERCENT] [--pdf-rtl] [--pdf-across]] [--sync]
 
 It runs the source tree (src/ as the `bookcase` package, as the tests do) with the build's
 gresource, settings in memory and a library in a temporary directory: an EPUB of invented
@@ -19,7 +19,9 @@ shows the selection popover, --lookup selects a word and shows its (invented) de
 in the popover or the narrow window's sheet, --popover opens the Text and Layout popover,
 --read-aloud starts Read Aloud (with a silent stand-in engine), --missing shows the
 missing-file page, --pdf reads demo_library.py's PDF (Notes on Letterpress) in the PdfView
-instead, with a highlight (--at goes to a fraction of it).
+instead, with a highlight (--at goes to a fraction of it); --pdf-zoom zooms it in (tiles),
+--pdf-rtl shows it in right-to-left spreads, --pdf-across selects from one page into the
+next.
 --sync signs in to a fake KOReader sync server (tests/fake_kosync.py, on 127.0.0.1)
 holding an invented Kobo's newer place: the Go There banner.
 """
@@ -56,6 +58,9 @@ parser.add_argument('--at', type=float, default=None)
 parser.add_argument('--missing', action='store_true')
 parser.add_argument('--pdf', action='store_true')
 parser.add_argument('--sync', action='store_true')
+parser.add_argument('--pdf-zoom', type=int, default=None, metavar='PERCENT')
+parser.add_argument('--pdf-rtl', action='store_true')
+parser.add_argument('--pdf-across', action='store_true')
 args = parser.parse_args()
 faulthandler.dump_traceback_later(60, exit=True)  # a hang is reported, not waited out
 width, height = (int(n) for n in args.size.split('x'))
@@ -331,13 +336,39 @@ def pdf_highlight(window):
     view = window.view
     pdf_select(window, (52, 190), (360, 222))
     selection = view._selection
-    if selection and selection['rects']:
-        page = selection['index'] + 1
-        library.add_annotation(book_id, 'highlight',
-                               pdf_location.location(page, rects=selection['rects']),
-                               text=selection['text'], color='yellow',
+    if selection and selection['parts']:
+        parts = [(index + 1, rects) for index, rects, _text in selection['parts']]
+        library.add_annotation(book_id, 'highlight', pdf_location.span_location(parts),
+                               text=view.selected_text(), color='yellow',
                                position=view.fraction, note='The tide again.')
     view.clear_selection()
+
+
+def pdf_extras(window):
+    """--pdf-rtl, --pdf-zoom and --pdf-across."""
+    from gi.repository import Poppler
+
+    view = window.view
+    if args.pdf_rtl:
+        window.layout_group.set_active_name('paginated')
+        window.two_pages_row.set_active(True)
+        window._pdf.rtl_row.set_active(True)
+        view.go_to('page:4')
+        wait_for(lambda: False, 1.5)
+    if args.pdf_zoom:
+        view.go_to('page:4@0.3')
+        wait_for(lambda: False, 0.5)
+        view.set_zoom(args.pdf_zoom / 100 * 96 / 72)
+        wait_for(lambda: False, 2.5)
+    if args.pdf_across:
+        view.go_to('page:4@0.6')
+        wait_for(lambda: False, 0.6)
+        (first, _box), (second, _box2) = view._visible()[:2]
+        height = view._sizes[first][1]
+        view._select_range((first, 52, height - 150), (second, 250, 150),
+                           Poppler.SelectionStyle.GLYPH)
+        view._selection_done()
+        wait_for(lambda: False, 0.6)
 
 
 def steps(window):
@@ -384,6 +415,8 @@ def steps(window):
                      and 'so far' not in window.search_status.get_label(), 5)
             window._search_step(1)
             wait_for(lambda: False, 0.6)
+        if window.is_pdf:
+            pdf_extras(window)
         if args.select and window.is_pdf:
             pdf_select(window, (52, 330), (300, 360), finish=True)
             wait_for(lambda: window._selection is not None, 3)

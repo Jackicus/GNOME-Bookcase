@@ -15,7 +15,8 @@ import time
 import unittest
 
 from bookcase import devices
-from bookcase.library import Book, BookFile
+from bookcase.library import Book, BookFile, Shelf
+from tests.test_kobo import make_database
 from tests.gtk import SCHEMA_ID, pump, requires_gtk, wait_for
 from tests.support import make_epub
 
@@ -23,10 +24,25 @@ _stand_ins = {}
 
 
 class StandInLibrary:
-    def __init__(self, books, files):
+    def __init__(self, books, files, shelves=()):
         self._books = {book.id: book for book in books}
         self._files = files  # book id -> [BookFile]
+        self._shelves = list(shelves)  # [(Shelf, [book ids])]
         self._handlers = {}
+        self.progress = {}  # book id -> (fraction, location), as set_progress was told
+        self.statuses = []  # (book ids, status), as set_status was told
+
+    def shelves(self):
+        return [shelf for shelf, _ids in self._shelves]
+
+    def book_ids(self, shelf=None, **_filters):
+        return next((list(ids) for found, ids in self._shelves if found.id == shelf), [])
+
+    def set_progress(self, book_id, fraction, location):
+        self.progress[book_id] = (fraction, location)
+
+    def set_status(self, book_ids, status):
+        self.statuses.append((list(book_ids), status))
 
     def book(self, book_id):
         return self._books.get(book_id)
@@ -145,7 +161,10 @@ class DeviceWidgetsTest(unittest.TestCase):
                       authors=('Ben Ross',), formats=('azw3',))]
         files = {1: [BookFile(1, 1, '/invented/a.epub', 'epub', 10, 'h1')],
                  2: [BookFile(2, 2, '/invented/b.azw3', 'azw3', 10, 'h2')]}
-        self.app.library = StandInLibrary(books, files)
+        self.shelf = Shelf(id=7, name='Sea Stories', query=None, position=0, count=2)
+        self.app.library = StandInLibrary(books, files, [(self.shelf, [1, 2])])
+        self.app.settings.set_strv('kobo-collections', [])
+        self.addCleanup(self.app.settings.set_strv, 'kobo-collections', [])
         self.device = self.app.devices.add_test_root(str(self.root))
         self.addCleanup(self.app.devices.remove_test_root, str(self.root))
 
@@ -230,7 +249,7 @@ class DeviceWidgetsTest(unittest.TestCase):
         sent = []
 
         def fake_send(library, covers, book_id, kepub=True, progress=None,
-                      cancellable=None):
+                      cancellable=None, remember=None):
             progress(0.5)
             sent.append((book_id, kepub))
             return '/device/path'
@@ -251,6 +270,103 @@ class DeviceWidgetsTest(unittest.TestCase):
         self.assertFalse(dialog.send_button.get_sensitive())
         self.app.devices.add_test_root(str(self.root))
         self.assertEqual(dialog.stack.get_visible_child_name(), 'form')
+
+    def kobo_database(self):
+        harbour = 'file:///mnt/onboard/Bookcase/Ada Lark/A Quiet Harbour.kepub.epub'
+        return make_database(str(self.root / '.kobo' / 'KoboReader.sqlite'),
+                             books=((harbour, 1, 45, '2026-09-30T20:15:03Z'),)), harbour
+
+    def test_kobo_progress_shown_and_brought(self):
+        from bookcase.pages.device import DevicePage
+
+        self.kobo_database()
+        page = DevicePage(self.device.id)
+        self.show(page)
+        self.assertIn('Read 45% on Kobo', rows(page.inside_list)[0].get_subtitle())
+        self.assertTrue(page.kobo_group.get_visible())
+        self.assertTrue(page.progress_row.get_visible())
+        self.assertIn('1 book is further along', page.progress_row.get_subtitle())
+        page.progress_button.emit('clicked')
+        self.assertEqual(self.app.library.progress, {1: (0.45, '')})
+        self.assertEqual(self.app.toasts, ['Brought reading progress for 1 book from '
+                                           'Kobo Clara 2E'])
+
+    def test_kobo_group_hidden_without_a_database(self):
+        from bookcase.pages.device import DevicePage
+
+        page = DevicePage(self.device.id)
+        self.show(page)
+        self.assertFalse(page.kobo_group.get_visible())
+
+    def test_shelves_as_kobo_collections(self):
+        import sqlite3
+
+        from bookcase import kobo
+        from bookcase.pages.device import DevicePage
+
+        path, harbour = self.kobo_database()
+        page = DevicePage(self.device.id)
+        self.show(page)
+        self.assertFalse(page.collections_row.get_active())  # opt-in
+        self.assertFalse(os.path.exists(kobo.backup_path(path)))
+        page.collections_row.set_active(True)
+        self.assertEqual(self.app.settings.get_strv('kobo-collections'),
+                         ['kobo:N000000000000'])
+
+        def members():
+            db = sqlite3.connect(path)
+            try:
+                return db.execute('SELECT ShelfName, ContentId FROM ShelfContent').fetchall()
+            finally:
+                db.close()
+
+        self.assertTrue(wait_for(lambda: members() and not page._syncing))
+        self.assertEqual(members(), [('Sea Stories', harbour)])
+        self.assertTrue(os.path.exists(kobo.backup_path(path)))
+        self.assertIn('Updated the collections on Kobo Clara 2E', self.app.toasts)
+        self.assertEqual(page.collections_row.get_subtitle(),
+                         'Each shelf is a collection on this Kobo')
+
+    def test_send_a_shelfs_unsent_books(self):
+        from bookcase.pages.device import DevicePage
+
+        page = DevicePage(self.device.id)
+        self.show(page)
+        self.assertTrue(page.send_group.get_visible())
+        self.assertTrue(page.shelf_button.get_sensitive())
+        menu = page.shelf_button.get_menu_model()
+        self.assertEqual(menu.get_n_items(), 1)
+        self.assertEqual(menu.get_item_attribute_value(0, 'label').get_string(),
+                         'Sea Stories (1)')
+        dialog = page.send_shelf(self.shelf.id)
+        self.addCleanup(dialog.force_close)
+        self.assertEqual(dialog.book_ids, [2])  # book 1 is on the Kobo already
+        self.assertIs(dialog.device, self.device)
+
+    def test_eject_state(self):
+        from bookcase.pages.device import DevicePage
+
+        page = DevicePage(self.device.id)
+        self.show(page)
+        page.eject()
+        self.assertEqual(page.summary_label.get_text(), 'Ejecting…')
+        self.assertFalse(page.eject_button.get_sensitive())
+        self.assertFalse(page.select_button.get_sensitive())
+        self.assertTrue(wait_for(lambda: page.stack.get_visible_child_name() == 'gone'))
+        self.assertIn('Kobo Clara 2E can be unplugged', self.app.toasts)
+
+    def test_send_dialog_warns_of_space(self):
+        from unittest import mock
+
+        from bookcase.dialogs import send
+
+        with mock.patch.object(self.device, 'space', return_value=(5, 1000)):
+            dialog = send.present(self.app, self.window, [1])
+            self.addCleanup(dialog.force_close)
+            self.assertTrue(dialog.space_row.get_visible())
+            self.assertIn('has 5 bytes free', dialog.space_row.get_subtitle())
+        dialog.choose(self.device)
+        self.assertFalse(dialog.space_row.get_visible())
 
     def test_result_text(self):
         from bookcase.dialogs.send import result_text

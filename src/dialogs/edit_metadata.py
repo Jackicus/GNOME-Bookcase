@@ -14,11 +14,12 @@ One book (book_ids of one): the cover (its menu chooses an image file, pastes on
 online or removes it), title and authors with their sort forms (which follow the title and
 authors while they are the automatic ones), series and number, tags as chips (suggestions
 from the library's tags as you type), publisher, published (a year, a month or a date, with
-a calendar), language, rating, ISBN and the other identifiers, and the description as plain
-paragraphs (an unedited description keeps its HTML). Find Metadata… opens fetch_metadata,
-whose Apply fills the fields. When `siblings` (the ids of the list the book was opened
-from) holds more than one, arrows in the header save and step to the previous or next one.
-Closing with unsaved edits asks whether to save them.
+a calendar), language, page count (0 when not known), rating, ISBN and the other
+identifiers, and the description as plain paragraphs (an unedited description keeps its
+HTML). Find Metadata… opens fetch_metadata, whose Apply fills the fields. When `siblings`
+(the ids of the list the book was opened from) holds more than one, arrows in the header
+save and step to the previous or next one. Closing with unsaved edits asks whether to save
+them.
 
 Many books: authors, series (optionally numbered in the given order), publisher, language,
 rating, status, tags to add and tags to remove; an empty row or "Leave Unchanged" keeps
@@ -178,6 +179,7 @@ class EditMetadataDialog(Adw.Dialog):
     suggestion_box = Gtk.Template.Child()
     publisher_row = Gtk.Template.Child()
     published_row = Gtk.Template.Child()
+    pages_row = Gtk.Template.Child()
     calendar_popover = Gtk.Template.Child()
     calendar = Gtk.Template.Child()
     language_row = Gtk.Template.Child()
@@ -260,6 +262,7 @@ class EditMetadataDialog(Adw.Dialog):
                     self.publisher_row):
             connect_weak(row, 'changed', self._on_changed)
         connect_weak(self.series_index_row, 'notify::value', self._on_changed)
+        connect_weak(self.pages_row, 'notify::value', self._on_changed)
         connect_weak(self.published_row, 'changed', self._on_published_changed)
         connect_weak(self.isbn_row, 'changed', self._on_isbn_changed)
         connect_weak(self.language_row, 'notify::selected', self._on_changed)
@@ -301,6 +304,7 @@ class EditMetadataDialog(Adw.Dialog):
             self.tags_row.set_text('')
             self.publisher_row.set_text(book.publisher)
             self.published_row.set_text(book.published)
+            self.pages_row.set_value(book.pages or 0)
             self._fill_languages(self.language_row, book.language)
             self.stars.value = max(0, min(10, int(book.rating or 0)))
             self._identifiers = dict(book.identifiers or {})
@@ -322,7 +326,7 @@ class EditMetadataDialog(Adw.Dialog):
 
     def values(self):
         """The fields as shown: title, authors (list), series, series_index, publisher,
-        published, language, description (HTML), isbn, tags (list), cover (a Gdk.Texture
+        published, pages, language, description (HTML), isbn, tags (list), cover (a Gdk.Texture
         or None)."""
         return {
             'title': self.title_row.get_text().strip(),
@@ -331,6 +335,7 @@ class EditMetadataDialog(Adw.Dialog):
             'series_index': round(self.series_index_row.get_value(), 2),
             'publisher': self.publisher_row.get_text().strip(),
             'published': valid_date(self.published_row.get_text()) or '',
+            'pages': int(self.pages_row.get_value()),
             'language': self._selected_language(self.language_row),
             'description': self._description_html(),
             'isbn': valid_isbn(self.isbn_row.get_text()) or '',
@@ -366,6 +371,8 @@ class EditMetadataDialog(Adw.Dialog):
                          ('isbn', self.isbn_row)):
             if key in values:
                 row.set_text(values[key])
+        if values.get('pages'):
+            self.pages_row.set_value(values['pages'])
         if 'language' in values:
             self._fill_languages(self.language_row, values['language'])
         if 'description' in values:
@@ -410,6 +417,7 @@ class EditMetadataDialog(Adw.Dialog):
             'tags': tuple(values['tags']),
             'publisher': values['publisher'],
             'published': values['published'],
+            'pages': values['pages'],
             'language': values['language'],
             'description': values['description'],
             'rating': self.stars.value,
@@ -420,7 +428,8 @@ class EditMetadataDialog(Adw.Dialog):
             'author_sort': book.author_sort, 'series': book.series,
             'series_index': float(book.series_index or 0) if book.series else 0.0,
             'tags': tuple(book.tags), 'publisher': book.publisher,
-            'published': book.published, 'language': book.language,
+            'published': book.published, 'pages': int(book.pages or 0),
+            'language': book.language,
             'description': book.description, 'rating': int(book.rating or 0),
             'identifiers': dict(book.identifiers or {}),
         }
@@ -562,7 +571,7 @@ class EditMetadataDialog(Adw.Dialog):
                              margin_start=10))
         remove = Gtk.Button(icon_name='window-close-symbolic', valign=Gtk.Align.CENTER)
         # Translators: a button removing a tag from the book; {} is the tag.
-        remove.set_tooltip_text(_('Remove “{}”').format(tag))
+        remove.set_tooltip_text(_('Remove “{tag}”').format(tag=tag))
         remove.add_css_class('flat')
         remove.add_css_class('circular')
         connect_weak_call(remove, 'clicked', self.remove_tag, tag)
@@ -676,7 +685,7 @@ class EditMetadataDialog(Adw.Dialog):
         self._actions['remove-cover'].set_enabled(texture is not None)
         title = self.title_row.get_text() or (self.book.title if self.book else '')
         self.cover_picture.update_property([Gtk.AccessibleProperty.LABEL],
-                                           [_('Cover of {}').format(title)])
+                                           [_('Cover of {title}').format(title=title)])
 
     def set_cover(self, data):
         """A new cover (image bytes), or None to remove it; saved by Save."""
@@ -747,11 +756,11 @@ class EditMetadataDialog(Adw.Dialog):
 
     def _load_bulk(self):
         count = len(self.book_ids)
-        self.set_title(ngettext('Edit {} Book', 'Edit {} Books', count).format(count))
+        self.set_title(ngettext('Edit {n} Book', 'Edit {n} Books', count).format(n=count))
         self._fill_languages(self.bulk_language_row, None, leave_unchanged=True)
         self.bulk_rating_row.set_model(Gtk.StringList.new(
             [_('Leave Unchanged'), _('No Rating')]
-            + [ngettext('{} Star', '{} Stars', n).format(n) for n in range(1, 6)]))
+            + [ngettext('{n} Star', '{n} Stars', n).format(n=n) for n in range(1, 6)]))
         self.bulk_status_row.set_model(Gtk.StringList.new(
             [_('Leave Unchanged'), _('Unread'), _('Reading'), _('Finished')]))
         self._validate()
@@ -831,7 +840,7 @@ class EditMetadataDialog(Adw.Dialog):
         self._cover = None
         self.book = self.library.book(book_id) or self.book
         self._description_shown = online.html_to_plain(self.book.description)
-        self.app.toast(_('Saved “{}”').format(self.book.title), undo=True)
+        self.app.toast(_('Saved “{title}”').format(title=self.book.title), undo=True)
         return True
 
     def _save_bulk(self):
@@ -849,7 +858,7 @@ class EditMetadataDialog(Adw.Dialog):
                     self.library.update_book(book_id, series_index=float(numbering + offset))
             if status is not None:
                 self.library.set_status(self.book_ids, status)
-        self.app.toast(ngettext('Saved {} book', 'Saved {} books', count).format(count),
+        self.app.toast(ngettext('Saved {n} book', 'Saved {n} books', count).format(n=count),
                        undo=True)
         return True
 

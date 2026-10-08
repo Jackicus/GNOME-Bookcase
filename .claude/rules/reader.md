@@ -37,15 +37,22 @@ paths:
   goTo, goToFraction, select, clearSelection, search, clearSearch, setAnnotations,
   addAnnotation, removeAnnotation, setBookmarks, showProgress, getTOC, getSectionFractions,
   ttsStart, ttsNext (the next sentence's text, highlighted and turned to; null at the end),
-  ttsStop, findTexts ([{id, text}] → [{id, cfi, fraction}]: imported Kindle highlights
+  ttsPrev (the sentence before, the whole block re-read when reading began mid-block, on
+  into the section before), ttsWord ({offset}: underline the word at that offset of the
+  sentence's text as given), ttsStop, zoom ({action}: 'in', 'out', 'fit-page', 'fit-width'
+  → {fit, percent}, a fixed layout's; null for a reflowing book), findTexts ([{id, text}] → [{id, cfi, fraction}]: imported Kindle highlights
   found by their words, on load; the window stores the CFI, no undo step) (and `_contents`, `_cfi` for tests and the demo, through `BookView.evaluate`).
 - JS → Python: one handler, `bookcase`, JSON `{type, …}`: ready, loaded (title, dir,
-  fixedLayout, sectionFractions, toc), relocated (fraction, cfi, start, reason, chapter,
+  fixedLayout, sectionFractions, toc, pageList, pageItems [{label, href}]: the printed
+  pages, zoom), relocated (fraction, cfi, start, reason, chapter,
   page, section, location, time, atStart, atEnd, bookmark, jumpedFrom, canGoBack,
-  canGoForward), selection (cfi, text, rect, fraction; cfi null when cleared), annotation
+  canGoForward, ttsMoved: the reader moved off the sentence read aloud), selection (cfi, text, rect, fraction; cfi null when cleared), annotation
   (cfi, rect), search-result (label, items [{cfi, pre, match, post}]), search-progress,
   search-done (query, count), history, toggle-chrome, external-link (href), error (message).
   BookView turns them into signals of the same names ('annotation-activated', 'toc-ready').
+- foliate-js's view leaves the renderer's `reason` out of its relocate event: reader.js reads
+  it from the renderer's own event in the capture phase (page, scroll, snap, navigation,
+  selection, anchor).
 - The first `relocated` can carry `fraction: null` (before layout): ignore it. A jump (goTo,
   goToFraction, start/end, select, an internal link) sends `jumpedFrom` once, with the next
   relocation: the window's "Back to …" button.
@@ -78,17 +85,40 @@ paths:
   page). Tests: `terminate_web_process()`.
 - Paper themes live in `reading.THEMES` and in style.css's `.reader-page.theme-*` (a test checks
   they agree); highlight colours in reader.js's `HIGHLIGHTS` and style.css's `.color-*`.
+  "auto" under the system's High Contrast is `contrast-light` or `contrast-dark` (black on
+  white, white on black; not offered as choices). A chapter change is announced to a screen
+  reader (`Gtk.Accessible.announce`, `_update_title`), never a page turn.
 - PDFs: `widgets/pdf_view.py`'s `PdfView` (Poppler: a render thread with its own document,
   an LRU of textures, a GSK colour matrix for the paper themes) has BookView's methods and
   signals; the window swaps it into `content_stack` for the BookView and drives `self.view`
   (`window.is_pdf`; `self.book_view` stays the template's BookView). Locations are
   `pdf_location` strings (`page:N@offset`, highlights `page:N#x0,y0,x1,y1;…` in PDF points
-  from the page's top-left). PDFs have their own reader-pdf-scrolled; the bigger/smaller
-  keys and Ctrl+scroll zoom; the Text and Layout popover hides the typography for them.
-  relocated adds `pages` (progress_text says "Page 3 of 120").
+  from the page's top-left; over pages `page:3#…|4#…`, which an older reader reads as page
+  3's). The bigger/smaller keys and Ctrl+scroll zoom; the Text and Layout popover hides the
+  typography for them. relocated adds `pages` (progress_text says "Page 3 of 120").
+  `reader_pdf.ReaderPdf(window)` (made in `_use_pdf_view`, `window._pdf`) keeps the zoom,
+  Pages/Scrolled, right to left and cover per book (`library.book_state(id)['pdf']`,
+  `pdf_location.layout_state`; reader-pdf-scrolled is only the default for a PDF never
+  set, and an open PDF ignores other windows' changes of it), adds the Right to Left and
+  Cover Page Alone rows, Print… (win.print, READER 'print', Ctrl+P) and points the Read
+  Aloud bar's source at the PdfView (tts_* from Poppler's text, ttsMoved like reader.js).
+  Big pages at high zoom draw in tiles (TILE_ABOVE); the render thread's textures go
+  through `bytes()` (a memoryview is copied a byte at a time, under the GIL: 250 ms a
+  page). `scripts/reader_demo.py --pdf [--pdf-zoom N] [--pdf-rtl] [--pdf-across]
+  [--read-aloud]` shows each.
 - TXT and CBR open as EPUB/CBZ copies from `converting.prepare()` (a thread; the 'loading'
   spinner), cached in `$XDG_CACHE_HOME/bookcase/converted`; progress stays the book's.
-- Not done: fixed-layout zoom controls for EPUB/CBZ, custom themes.
+- Fixed layouts (CBZ, fixed-layout EPUB): foliate-js's `foliate-fxl` takes a `zoom`
+  attribute ('fit-page', 'fit-width' or a scale) and scrolls itself (`overflow: auto`, its
+  flexbox given `safe center` from outside so a zoomed page scrolls from its edge); reader.js
+  pans it (wheel, drag, Up/Down) while zoomed and reports the zoom as a percentage of
+  fit-page. Spreads: the book's own, or `rendition.spread = 'none'` when reader-two-pages is
+  off (the renderer re-opened, then sent to another spread and back: it keeps its spread by
+  number). The window reuses the PDF's zoom controls (`_add_zoom_controls`).
+- Custom paper: reader-theme 'custom', its colours reader-custom-theme (JSON; reading.
+  custom_theme(), `dark` by the background's luminance); widgets/reader_theme.py's dialog
+  and its CSS provider (the user's colours are not in style.css). PDFs recolour it like any
+  theme dict (pdf_view.theme_matrix).
 - Screenshots: `scripts/headless.sh scripts/screenshot.py OUT --read TITLE`, or
   `scripts/reader_demo.py OUT [--light] [--size WxH] [--theme T] [--select] [--lookup]
   [--read-aloud] [--popover] [--search Q] [--sidebar PAGE] [--missing] [--pdf] …` (no
@@ -101,7 +131,12 @@ paths:
 - Read Aloud (widgets/read_aloud.py, speech.py): offered only when speech.engine() finds
   speech-dispatcher (python-speechd, else `spd-say`); the page's TTS (foliate-js tts.js at
   sentence granularity) highlights each sentence with an overlayer key that starts with
-  foliate-js's search prefix, so a click on it is no annotation's.
+  foliate-js's search prefix, so a click on it is no annotation's. A view reads aloud
+  through tts_start/tts_next/tts_stop (PdfView too); tts_prev and tts_word are optional
+  (skip back; the word underlined, from speechd's SSML index marks). `relocated.ttsMoved`
+  makes the window call `bar.moved()`: reading goes on from the new page (Apple Books'
+  way). Voices: reader-speech-voices {language: name}. Look Up's preferences
+  (dialogs/lookup_prefs.py): lookup-automatic, lookup-online, the dictionaries' order.
 - Sync (reader_sync.py over kosync.py, app.sync): `ReaderSync(window)` adds an Adw.Banner
   top bar (another device's newer place, Go There) and a section in the main menu (status,
   Sync Now); the window calls its `relocated(place)` and `close()`. The first relocation is

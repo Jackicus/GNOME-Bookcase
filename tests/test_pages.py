@@ -217,6 +217,76 @@ class PagesTest(unittest.TestCase):
         self.library.undo()
         self.assertEqual(self.library.count(), 3)
 
+    def test_group_series_stacks(self):
+        from bookcase.widgets.series_stack import SeriesItem, SeriesStackTile, collapse
+
+        self.addCleanup(self.app.settings.reset, 'group-series')
+        page = self.books_page(key='all')
+        self.assertEqual(page._store.get_n_items(), 3)
+        self.app.settings.set_boolean('group-series', True)
+        page.refresh()
+        items = [page._store.get_item(n) for n in range(page._store.get_n_items())]
+        self.assertEqual(len(items), 2)
+        stack = next(item for item in items if isinstance(item, SeriesItem))
+        self.assertEqual(stack.name, 'Saltmarsh')
+        self.assertEqual(stack.ids, [self.hill, self.harbour])  # in series order
+        self.assertEqual(page.window_title.get_subtitle(), '3 books')
+        # The stack's tile, bound by the grid.
+        pump()
+        tiles = [tile for tile in _descendants(page.grid_view)
+                 if isinstance(tile, SeriesStackTile) and tile.get_visible()]
+        self.assertEqual(len(tiles), 1)
+        self.assertEqual(tiles[0].subtitle.get_text(), '2 books')
+        # A stack selected stands for its books; the selection survives a refresh.
+        position = items.index(stack)
+        page.selection.select_item(position, True)
+        self.assertEqual(sorted(page.selected_ids()), sorted([self.hill, self.harbour]))
+        self.library.set_progress(self.hill, 0.5, 'epubcfi(/6/2)')
+        page.refresh()
+        self.assertIs(page._store.get_item(position), stack)
+        self.assertAlmostEqual(stack.fraction, 0.25)
+        self.assertEqual(sorted(page.selected_ids()), sorted([self.hill, self.harbour]))
+        page.on_activate(page.grid_view, position)
+        group = next(group for group in self.library.series() if group.name == 'Saltmarsh')
+        self.assertEqual(self.window.lists[-1], ('Saltmarsh', {'series': group.id}))
+        # A search shows every book; so does the list.
+        page.search('lantern')
+        self.assertFalse(any(isinstance(page._store.get_item(n), SeriesItem)
+                             for n in range(page._store.get_n_items())))
+        page.on_stop_search(page.search_entry)
+        self.assertEqual(page._store.get_n_items(), 2)
+        self.app.settings.set_string('view-mode', 'list')
+        self.assertEqual(page._store.get_n_items(), 3)
+        # Other pages never group.
+        self.app.settings.reset('view-mode')
+        shelf_page = self.books_page(key='status:unread', status='unread')
+        self.assertEqual(shelf_page._store.get_n_items(), 2)
+        self.assertEqual(collapse([]), [])
+
+    def test_recently_opened_on_home(self):
+        from bookcase.formats import BookInfo
+        from bookcase.pages.home import HomePage
+
+        opened = self.library.add_opened(BookInfo(title='A Borrowed Map', authors=['Ned Quill']),
+                                         '/invented/map.epub', hash='map', size=1)
+        page = self.show(HomePage())
+        self.assertEqual([key for key, _row in page.rows], ['opened', 'recent'])
+        row = page.rows[0][1]
+        self.assertEqual([item.book_id for item in row.opened_rows], [opened])
+        kept = []
+        self.app.keep_book = kept.append
+        self.addCleanup(delattr, self.app, 'keep_book')
+        row.opened_rows[0].add_button.emit('clicked')
+        self.assertEqual(kept, [opened])
+        row.opened_rows[0].forget_button.emit('clicked')
+        self.assertIsNone(self.library.book(opened))
+        self.assertEqual(self.app.toasts[-1], ('Forgot “A Borrowed Map”', True))
+        page.refresh()
+        self.assertEqual([key for key, _row in page.rows], ['recent'])
+        self.library.undo()
+        page.refresh()
+        self.assertEqual([key for key, _row in page.rows], ['opened', 'recent'])
+
     def test_activating_a_book_opens_the_reader(self):
         page = self.books_page(key='all')
         page.on_activate(page.grid_view, 2)
@@ -540,6 +610,15 @@ class WindowTest(unittest.TestCase):
         self.assertEqual(self.app.toasts[-1][1], True)
         pump()
         self.assertEqual(window.current_key, 'home')
+
+
+
+def _descendants(widget):
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _descendants(child)
+        child = child.get_next_sibling()
 
 
 if __name__ == '__main__':

@@ -13,14 +13,24 @@ the milliseconds from the start of the process to the window's first frame (and 
 startup, and the window's own share), with the page
 asked for shown first (the last-page setting), and the slowest steps of the startup
 (cProfile, with --profile). Nothing touches the real library: build/perf is its own.
+
+The desktop portal is started before the clock does: GTK asks it for the colour scheme as it
+starts, and in headless.sh's fresh D-Bus session that activates it, a second spent nowhere on
+a desktop, where it is running already.
 """
 
 import argparse
 import os
 import random
+import subprocess
 import sys
 import time
 
+subprocess.run(['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop',
+                '--object-path', '/org/freedesktop/portal/desktop', '--method',
+                'org.freedesktop.portal.Settings.ReadOne', 'org.freedesktop.appearance',
+                'color-scheme'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+               check=False)
 START = time.monotonic()
 
 import harness  # noqa: E402

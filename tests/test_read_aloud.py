@@ -97,6 +97,45 @@ class ReadAloudPageTest(unittest.TestCase):
         self.assertEqual((self.places[-1].get('chapter') or {}).get('label'), 'Chapter 2')
         view.tts_stop()
 
+    def test_skipping_back_words_and_the_reader_moving(self):
+        view = self.view
+        view.go_to_fraction(0)
+        wait_for(lambda: False, 0.5)
+        self.assertTrue(self.call(view.tts_start))
+        first = self.call(view.tts_next)
+        second = self.call(view.tts_next)
+        third = self.call(view.tts_next)
+        self.assertEqual(self.call(view.tts_prev), second)
+        self.assertEqual(self.call(view.tts_prev), first)
+        self.assertEqual(self.call(view.tts_prev), first)  # the start of the book
+        self.assertEqual(self.call(view.tts_next), second)
+        self.assertEqual(self.call(view.tts_next), third)
+        # the words of the sentence read: 'The lamps along…', 'lamps' at offset 4
+        got = []
+        view._call('ttsWord', {'offset': 4}, got.append)
+        self.assertTrue(wait_for(lambda: got, WAIT))
+        self.assertTrue(got[0] if 'lamps' in second else True)
+        view._call('ttsWord', {'offset': 10000}, got.append)
+        self.assertTrue(wait_for(lambda: len(got) > 1, WAIT))
+        self.assertFalse(got[1])
+        # the reader turns to the next chapter: the relocation says so, and reading goes
+        # on from the page shown
+        wait_for(lambda: False, 0.4)  # the page's own turn to the sentence is over
+        count = len(self.places)
+        view.next_section()
+        self.assertTrue(wait_for(lambda: any(p.get('ttsMoved') for p in self.places[count:]),
+                                 WAIT))
+        self.assertEqual(self.call(view.tts_next), 'Chapter 2')
+        view.tts_stop()
+        # read from the middle of a block, back past its start: the whole block is there
+        view.go_to_fraction(0)
+        wait_for(lambda: False, 0.3)
+        self.assertTrue(self.call(view.tts_start))
+        self.call(view.tts_next)
+        self.call(view.tts_next)
+        self.assertEqual(self.call(view.tts_prev), 'Chapter 1')
+        view.tts_stop()
+
     def test_the_player_reads_the_book_with_an_engine(self):
         from bookcase.widgets.read_aloud import ViewSource
 

@@ -42,12 +42,15 @@ identifiers: (book, type) -> value, types lower-case ('isbn', 'google', 'amazon'
 shelves: a manual shelf has `query` NULL and its books in shelf_books; a smart shelf has a
 search query. annotations: `kind` highlight or bookmark, `location` a CFI, `position` 0-1
 for ordering, `color` one of library.COLORS. sessions: a stretch of reading, logged by the
-reader window. folders: `kind` library, watched or calibre.
+reader window. folders: `kind` library, watched or calibre. book_state: how the reader
+shows a book, a JSON object (library.book_state(); the PDF reader's layout under 'pdf',
+pdf_location.layout_state()); not undoable, as progress is not, but removed and put back
+with the book.
 """
 
 import sqlite3
 
-VERSION = 3
+VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS books (
@@ -187,6 +190,11 @@ CREATE TABLE IF NOT EXISTS folders (
     path TEXT NOT NULL UNIQUE,
     kind TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS book_state (
+    book_id INTEGER PRIMARY KEY,
+    state TEXT NOT NULL DEFAULT '{}'
+);
 """
 
 # version -> the SQL taking a file of version - 1 to it. Version 1 is SCHEMA itself.
@@ -207,6 +215,13 @@ WHERE status = 'finished';
     3: """
 ALTER TABLE books ADD COLUMN source_values TEXT NOT NULL DEFAULT '';
 """,
+    # book_state: how the reader shows a book, kept per book (a PDF's zoom and layout).
+    4: """
+CREATE TABLE IF NOT EXISTS book_state (
+    book_id INTEGER PRIMARY KEY,
+    state TEXT NOT NULL DEFAULT '{}'
+);
+""",
 }
 
 # Each table's key, for undo's inverse operations (library.py).
@@ -224,6 +239,7 @@ KEYS = {
     'annotations': ('id',),
     'sessions': ('id',),
     'folders': ('id',),
+    'book_state': ('book_id',),
 }
 
 

@@ -10,6 +10,13 @@ dictionaries installed, else Wiktionary) and an encyclopedia summary (Wikipedia)
     task = service.summarize(text, language, callback)  # callback(Summary, error)
     task.cancel()                       # the callback is not called
     service.remember(kind, text, language, value)       # seeds the cache (the demo)
+    service.configure(online=True, order=(), disabled=())  # the Look Up preferences:
+                                        # online off asks the StarDict dictionaries only;
+                                        # order and disabled are .ifo paths
+    service.dictionaries()              # the installed ones, in the order used
+    service.all_dictionaries()          # every one installed, disabled included
+
+    lookup.lemmas(word, language)       # the dictionary forms of an inflected word
 
     lookup.is_word(text)                # one word (what the dictionary is asked for)
     lookup.clean_word(text)             # the word without the punctuation around it
@@ -24,6 +31,13 @@ is asked of the book's language's edition; a phrase that is no article's title i
 for, and the first title found summarized. Requests send Bookcase's User-Agent, time out
 after a few seconds, and are cached in memory (the last CACHE_SIZE answers). Every text that
 comes back is plain (the HTML stripped), never markup.
+
+Offline, a word no dictionary has is tried again as its dictionary forms (English only:
+plurals, -ed, -ing, -er and -est taken off, lemmas()), and the article shows the form found.
+With online off a word no dictionary has is not found, and summarize() fails at once
+(not_found, `offline_only` set on the error): no word leaves the computer.
+
+Dictionaries to get: FREE_DICTIONARIES (FreeDict's downloads, which offer StarDict).
 
 StarDict dictionaries (an .ifo, an .idx or .idx.gz, a .dict or dictzip'd .dict.dz, and an
 optional .syn) are read in pure Python: the index into memory on first use, the definition
@@ -60,6 +74,7 @@ MAX_SENSES = 6
 MAX_WORD = 60
 WIKTIONARY_EDITIONS = {'en'}  # the editions with the REST definition endpoint
 STARDICT_DIRS = (os.path.expanduser('~/.local/share/stardict/dic'), '/usr/share/stardict/dic')
+FREE_DICTIONARIES = 'https://freedict.org/downloads/'
 PUNCTUATION = '.,;:!?«»“”‘’"\'()[]{}<>—–-…*_/\\|'
 
 
@@ -105,6 +120,61 @@ def is_word(text):
     word = clean_word(text)
     return bool(word) and len(word) <= MAX_WORD and not any(c.isspace() for c in word) \
         and any(c.isalpha() for c in word)
+
+
+VOWELS = 'aeiou'
+
+
+def lemmas(word, language='en'):
+    """The dictionary forms an English word may be inflected from, likeliest first (none
+    for other languages, nor for the word itself): plural -s, -es and -ies; -ed and -ing
+    (a doubled consonant undone, an e put back); -er and -est (-ier, -iest)."""
+    if _language(language) != 'en':
+        return []
+    word = clean_word(word).lower()
+    found = []
+
+    def add(form):
+        if len(form) >= 2 and form != word and form not in found:
+            found.append(form)
+
+    def stems(stem):
+        """A stem after -ed, -ing, -er or -est: as it is, undoubled, with its e back."""
+        if len(stem) >= 2 and stem[-1] == stem[-2] and stem[-1] not in VOWELS + 'lsz':
+            add(stem[:-1])  # stopped -> stop, bigger -> big
+        # hoped -> hope, later -> late: after one consonant after one vowel, the e first
+        cvc = len(stem) >= 3 and stem[-1] not in VOWELS + 'wxy' and stem[-2] in VOWELS \
+            and stem[-3] not in VOWELS
+        if cvc:
+            add(stem + 'e')
+        add(stem)
+        add(stem + 'e')
+        if len(stem) >= 2 and stem[-1] == stem[-2]:
+            add(stem[:-1])  # spelled -> spell (after the form as it is)
+
+    if len(word) < 3:
+        return found
+    if word.endswith('ies') and len(word) > 4:
+        add(word[:-3] + 'y')
+    if word.endswith(('ses', 'xes', 'zes', 'ches', 'shes', 'oes')):
+        add(word[:-2])
+    if word.endswith('s') and not word.endswith(('ss', 'us', 'is')):
+        add(word[:-1])
+    if word.endswith('ied') and len(word) > 4:
+        add(word[:-3] + 'y')
+    elif word.endswith('ed') and len(word) > 4:
+        stems(word[:-2])
+    if word.endswith('ing') and len(word) > 5:
+        stems(word[:-3])
+    if word.endswith('iest') and len(word) > 5:
+        add(word[:-4] + 'y')
+    elif word.endswith('est') and len(word) > 5:
+        stems(word[:-3])
+    if word.endswith('ier') and len(word) > 4:
+        add(word[:-3] + 'y')
+    elif word.endswith('er') and len(word) > 4:
+        stems(word[:-2])
+    return found
 
 
 def _language(language):
@@ -476,6 +546,18 @@ class Lookup:
         self._dictionaries = dictionaries
         self._cache = collections.OrderedDict()
         self._lock = threading.Lock()
+        self.online = True
+        self._order = ()
+        self._disabled = frozenset()
+
+    def configure(self, online=True, order=(), disabled=()):
+        """The Look Up preferences: online (Wiktionary and Wikipedia asked), the
+        dictionaries' order and those turned off (.ifo paths). A change empties the cache."""
+        options = (bool(online), tuple(order), frozenset(disabled))
+        if options != (self.online, self._order, self._disabled):
+            self.online, self._order, self._disabled = options
+            with self._lock:
+                self._cache.clear()
 
     def remember(self, kind, text, language, value):
         """Cache an answer ('define' or 'summarize'), as a lookup does."""
@@ -490,20 +572,39 @@ class Lookup:
         with self._lock:
             return self._cache.get((kind, _fold(clean_word(text)), _language(language)))
 
-    def dictionaries(self):
+    def all_dictionaries(self):
+        """Every dictionary installed, in the order set (then by name), disabled included."""
         if self._dictionaries is None:
             self._dictionaries = find_dictionaries()
-        return self._dictionaries
+        order = {path: number for number, path in enumerate(self._order)}
+        return sorted(self._dictionaries,
+                      key=lambda d: (order.get(d.ifo_path, len(order)), d.name.casefold()))
+
+    def dictionaries(self):
+        """The dictionaries asked, in order."""
+        return [d for d in self.all_dictionaries() if d.ifo_path not in self._disabled]
 
     def define_now(self, word, language='en'):
-        """The Article for `word` (blocking): from the offline dictionaries when one has it,
-        else Wiktionary. OnlineError when neither has it or Wiktionary cannot be reached."""
+        """The Article for `word` (blocking): from the offline dictionaries when one has it
+        (or has its dictionary form), else Wiktionary (when online). OnlineError when
+        neither has it or Wiktionary cannot be reached."""
         word = clean_word(word)
         cached = self.cached('define', word, language)
         if cached is not None:
             return cached
         article = self._offline(word)
         if article is None:
+            for form in lemmas(word, language):
+                article = self._offline(form)
+                if article is not None:
+                    break
+        if article is None:
+            if not self.online:
+                failure = OnlineError(_('“{word}” is in none of your dictionaries').format(
+                    word=word))
+                failure.not_found = True
+                failure.offline_only = True
+                raise failure
             article = self._wiktionary(word, language)
         self.remember('define', word, language, article)
         return article
@@ -550,6 +651,11 @@ class Lookup:
         cached = self.cached('summarize', text, language)
         if cached is not None:
             return cached
+        if not self.online:
+            failure = OnlineError(_('Online look-ups are turned off in Preferences'))
+            failure.not_found = True
+            failure.offline_only = True
+            raise failure
         summary = None
         try:
             summary = parse_summary(self._fetch(summary_url(text, language)))

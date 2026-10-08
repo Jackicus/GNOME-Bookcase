@@ -17,6 +17,7 @@ DEFAULTS = {
     'reader-max-width': 720, 'reader-justify': True, 'reader-hyphenate': True,
     'reader-publisher-styles': True, 'reader-scrolled': False, 'reader-two-pages': True,
     'reader-animate': True,
+    'reader-custom-theme': '{"bg": "#e8f0e3", "fg": "#26331f", "link": "#2c6a2e"}',
 }
 
 
@@ -49,6 +50,16 @@ class StyleTest(unittest.TestCase):
         self.assertFalse(sepia['dark'])
         self.assertEqual(reading.theme_colors('nonsense', False)['name'], 'light')
 
+    def test_auto_theme_under_high_contrast_is_black_on_white_or_white_on_black(self):
+        light = reading.build_style(settings(), False, high_contrast=True)['theme']
+        self.assertEqual((light['bg'], light['fg']), ('#ffffff', '#000000'))
+        dark = reading.theme_colors('auto', True, high_contrast=True)
+        self.assertEqual((dark['name'], dark['bg'], dark['fg']),
+                         ('contrast-dark', '#000000', '#ffffff'))
+        # A paper the user chose stays theirs.
+        self.assertEqual(reading.theme_colors('sepia', True, high_contrast=True)['name'],
+                         'sepia')
+
     def test_layout_and_fonts(self):
         style = reading.build_style(settings(reader_scrolled=True, reader_two_pages=False,
                                              reader_font='serif'), False)
@@ -65,6 +76,33 @@ class StyleTest(unittest.TestCase):
         for key in reading.STYLE_KEYS:
             self.assertIn(f'name="{key}"', schema)
             self.assertIn(key, DEFAULTS)
+
+    def test_a_custom_theme(self):
+        theme = reading.build_style(settings(
+            reader_theme='custom',
+            reader_custom_theme='{"bg": "#102030", "fg": "#E0E0D0", "link": "#80c0ff"}'),
+            False)['theme']
+        self.assertEqual(theme, {'name': 'custom', 'bg': '#102030', 'fg': '#e0e0d0',
+                                 'link': '#80c0ff', 'dark': True})
+        light = reading.theme_colors('custom', True, reading.custom_theme_json(
+            '#fdf6e3', '#433422', '#0b6e99'))
+        self.assertFalse(light['dark'])  # by its paper, not the system's style
+        # what is broken falls back to the default colours
+        self.assertEqual(reading.custom_theme('{"bg": "red", "fg": 3}')['bg'],
+                         reading.CUSTOM_THEME['bg'])
+        self.assertEqual(reading.custom_theme('not json')['fg'], reading.CUSTOM_THEME['fg'])
+        self.assertEqual(reading.custom_theme('[1]')['link'], reading.CUSTOM_THEME['link'])
+        self.assertTrue(reading.is_dark('#000000'))
+        self.assertFalse(reading.is_dark('#ffffff'))
+        self.assertFalse(reading.is_dark('nonsense'))
+
+    def test_the_custom_theme_default_is_the_schema_default(self):
+        schema = (ROOT / 'data' / 'io.github.jackicus.Bookcase.gschema.xml').read_text()
+        match = re.search(r'name="reader-custom-theme".*?<default>\'(.*?)\'</default>', schema,
+                          re.S)
+        self.assertEqual(reading.custom_theme(match.group(1)),
+                         {**reading.CUSTOM_THEME, 'dark': False})
+        self.assertIn('nick="custom"', schema)
 
     def test_the_paper_themes_agree_with_the_style_sheet(self):
         css = (ROOT / 'src' / 'style.css').read_text()

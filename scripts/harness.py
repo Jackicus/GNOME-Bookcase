@@ -4,7 +4,8 @@
 """The developer scripts' shared start: the installed app, on its own, off the desktop's
 settings, on the demo library.
 
-screenshot.py runs the installed build (meson install -C build, or scripts/run.sh, first)
+screenshot.py runs the installed build (meson install -C build, or scripts/run.sh, first;
+BOOKCASE_PREFIX names another prefix, /app inside the Flatpak)
 in-process. make_app() does what the scripts need:
 
 - the installed modules on sys.path (build/install/share/bookcase) and the translations bound;
@@ -31,7 +32,8 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PREFIX = os.path.join(ROOT, 'build', 'install')
+# BOOKCASE_PREFIX=/app runs the Flatpak's installed build inside its sandbox (FLATHUB.md).
+PREFIX = os.environ.get('BOOKCASE_PREFIX') or os.path.join(ROOT, 'build', 'install')
 PKGDATADIR = os.path.join(PREFIX, 'share', 'bookcase')
 GRESOURCE = os.path.join(PKGDATADIR, 'bookcase.gresource')
 SCHEMA_DIR = os.path.join(PREFIX, 'share', 'glib-2.0', 'schemas')
@@ -111,7 +113,10 @@ def make_app(suffix, light=False, animations=False, stock_look=True, size=None, 
 
     name = name or suffix.lower()
     GLib.set_prgname(name)
-    app = main.Application(project_version(), f'{BASE_ID}.{suffix}', BASE_ID, 'default')
+    # In a Flatpak the app ID goes under the sandbox's own: the portal refuses WebKit's web
+    # process a bus name outside it.
+    app_id = f"{os.environ.get('FLATPAK_ID') or BASE_ID}.{suffix}"
+    app = main.Application(project_version(), app_id, BASE_ID, 'default')
     app.demo = True
     app.set_flags(app.get_flags() | Gio.ApplicationFlags.NON_UNIQUE)
     app.harness_argv = [name, '--demo']

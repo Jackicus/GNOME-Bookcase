@@ -74,6 +74,7 @@ class TestSingle(unittest.TestCase):
             dialog.published_row.set_text('2011')
             dialog.isbn_row.set_text(ISBN)
             dialog.stars.set_value(8)
+            dialog.pages_row.set_value(312)
             fields = dialog.changed_fields()
             self.assertNotIn('description', fields)  # untouched: its HTML is kept
             self.assertEqual(fields['sort_title'], 'Quiet Harbour, The')  # follows the title
@@ -86,6 +87,7 @@ class TestSingle(unittest.TestCase):
             self.assertEqual(book.published, '2011')
             self.assertEqual(book.identifiers.get('isbn'), ISBN)
             self.assertEqual(book.rating, 8)
+            self.assertEqual(book.pages, 312)
             self.assertEqual(book.description, '<p>Kept.</p>')
             self.assertEqual(app.toasts, [('Saved “The Quiet Harbour”', True)])
             library.undo()
@@ -139,8 +141,11 @@ class TestSingle(unittest.TestCase):
             dialog = EditMetadataDialog(app, [book_id])
             dialog.apply_values({'title': 'A Quiet Harbour', 'publisher': 'Tidewater Press',
                                  'language': 'xx', 'description': '<p>Found.</p>',
-                                 'identifiers': {'openlibrary': 'OL1M'}, 'tags': ['Sea']})
+                                 'identifiers': {'openlibrary': 'OL1M'}, 'tags': ['Sea'],
+                                 'pages': 288})
             values = dialog.values()
+            self.assertEqual(values['pages'], 288)
+            self.assertEqual(dialog.changed_fields()['pages'], 288)
             self.assertEqual(values['title'], 'A Quiet Harbour')
             self.assertEqual(values['language'], 'xx')  # an unlisted code is added
             self.assertEqual(values['tags'], ['Sea'])

@@ -9,6 +9,8 @@
     dialog.review()                     # push the review page
     dialog.selection()                  # {book_id: {group, …}} that Apply would write
     dialog.set_group(book_id, group, active)
+    dialog.choose(book_id, index)       # another of the book's candidates (fetched in a
+                                        # thread the first time; the review is redrawn)
     dialog.apply()                      # one undo step, a toast with Undo, closes
 
 The first page lists the books with their state (Waiting, Searching…, Found, Check This
@@ -16,7 +18,10 @@ Match, Not Found, the error), a progress bar and Stop. Open Library is asked abo
 second (online's throttle), so the page says it takes a while. Review (once done or stopped)
 pushes a page with "Replace Existing Details" (off: only empty fields are filled) and, per
 book found, an expander with a check for the book and one per group of changes (Details,
-Description, Cover, Tags) showing old → new; a match that is only likely is unchecked.
+Description, Cover, Tags) showing old → new; a match that is only likely is unchecked. When
+the search found more than one plausible book (bulk_metadata.plausible: up to three), the
+expander's first row is "Match", a drop-down of them; choosing another fetches what it
+needs (a spinner meanwhile), redraws the review and checks the book.
 Books not found are listed at the end. Closing the dialog stops the queue; nothing is
 written until Apply.
 """
@@ -56,6 +61,15 @@ def _shorten(text, limit=120):
     return text if len(text) <= limit else text[:limit - 1].rstrip() + '…'
 
 
+def choice_text(candidate):
+    """A candidate in the Match drop-down: 'A Quiet Harbour — Ada Lark, 2011'."""
+    facts = ', '.join(part for part in (', '.join(candidate.authors[:2]),
+                                        candidate.published[:4]) if part)
+    title = _shorten(candidate.title, 60)
+    # Translators: a book found online, in a drop-down: "Title — Author, 2011".
+    return _('{title} — {facts}').format(title=title, facts=facts) if facts else title
+
+
 def change_text(change):
     """'Publisher: Tidewater Press', or 'Publisher: Old → New' when there was a value."""
     if change.field == 'cover':
@@ -71,6 +85,7 @@ def change_text(change):
         return _('{label}: {old} → {new}').format(label=change.label,
                                                   old=_shorten(change.old, 50),
                                                   new=_shorten(change.new, 50))
+    # Translators: a field of a book and the value found for it ("Publisher: Tidewater Press").
     return _('{label}: {new}').format(label=change.label, new=_shorten(change.new, 80))
 
 
@@ -90,6 +105,7 @@ class BulkMetadataDialog(Adw.Dialog):
         self.book_checks = {}  # book id -> bool
         self.group_checks = {}  # book id -> {group: bool}
         self._review_rows = []
+        self._choosing = {}  # book id -> the task fetching a choice
         self._build()
         self.connect('closed', self._on_closed)
         self._update_progress()
@@ -115,6 +131,7 @@ class BulkMetadataDialog(Adw.Dialog):
         self.progress_label = Gtk.Label(xalign=0, wrap=True)
         self.progress_label.add_css_class('heading')
         self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.update_property([Gtk.AccessibleProperty.LABEL], [_('Progress')])
         self.note_label = Gtk.Label(xalign=0, wrap=True, label=_(
             'Open Library is asked about one book every few seconds, as it asks of apps. '
             'Nothing changes until you review and apply.'))
@@ -261,6 +278,8 @@ class BulkMetadataDialog(Adw.Dialog):
         done = sum(count for status, count in counts.items()
                    if status not in ('waiting', 'searching'))
         self.progress_bar.set_fraction(done / total if total else 1)
+        self.progress_bar.update_property([Gtk.AccessibleProperty.VALUE_TEXT], [
+            _('{done} of {total}').format(done=done, total=total)])
         if self.finished:
             parts = [ngettext('{n} found', '{n} found', counts.get('found', 0)).format(
                 n=counts.get('found', 0))]
@@ -306,6 +325,7 @@ class BulkMetadataDialog(Adw.Dialog):
         return bulk_metadata.changes(book, lookup, replace=self.replace_row.get_active())
 
     def _fill_review(self):
+        expanded = {row.book_id for row in self._review_rows if row.get_expanded()}
         self.update_list.remove_all()
         self.missing_list.remove_all()
         self._review_rows = []
@@ -313,8 +333,9 @@ class BulkMetadataDialog(Adw.Dialog):
         for lookup in self.lookups:
             if lookup.status in ('found', 'ambiguous') and lookup.candidate is not None:
                 changes = self._changes(lookup)
-                if changes:
+                if changes or len(lookup.choices) > 1:
                     row = self._review_row(lookup, changes)
+                    row.set_expanded(lookup.book_id in expanded)
                     self.update_list.append(row)
                     self._review_rows.append(row)
                     updating += 1
@@ -339,9 +360,11 @@ class BulkMetadataDialog(Adw.Dialog):
             row.set_subtitle(GLib.markup_escape_text(_(
                 'Check this match: “{title}” by {authors}').format(
                     title=found.title, authors=', '.join(found.authors[:2]) or '?')))
-        else:
+        elif changes:
             row.set_subtitle(GLib.markup_escape_text(', '.join(
                 names[group] for group in bulk_metadata.GROUPS if group in changes)))
+        else:
+            row.set_subtitle(_('Nothing new in this match'))
         check = Gtk.CheckButton(valign=Gtk.Align.CENTER,
                                 active=self.book_checks.get(lookup.book_id, False))
         check.update_property([Gtk.AccessibleProperty.LABEL], [book.title])
@@ -349,6 +372,8 @@ class BulkMetadataDialog(Adw.Dialog):
         row.add_prefix(check)
         row.book_id = lookup.book_id
         row.group_rows = {}
+        if len(lookup.choices) > 1:
+            row.add_row(self._choice_row(lookup))
         for group in bulk_metadata.GROUPS:
             if group not in changes:
                 continue
@@ -368,6 +393,55 @@ class BulkMetadataDialog(Adw.Dialog):
             row.add_row(child)
             row.group_rows[group] = child
         return row
+
+    def _choice_row(self, lookup):
+        """'Match': a drop-down of the book's plausible candidates."""
+        labels = [choice_text(candidate) for candidate in lookup.choices]
+        pending = self._choosing.get(lookup.book_id)
+        row = Adw.ComboRow(title=_('Match'), model=Gtk.StringList.new(labels),
+                           selected=pending[1] if pending else lookup.chosen,
+                           use_subtitle=False)
+        row.set_subtitle(_('Open Library found more than one likely book'))
+        spinner = Adw.Spinner(visible=lookup.book_id in self._choosing,
+                              valign=Gtk.Align.CENTER)
+        row.add_suffix(spinner)
+        row.set_sensitive(lookup.book_id not in self._choosing)
+        connect_weak(row, 'notify::selected', self._on_choice_selected, lookup.book_id)
+        return row
+
+    def _on_choice_selected(self, row, _pspec, book_id):
+        self.choose(book_id, row.get_selected())
+
+    def choose(self, book_id, index):
+        """Take another of a book's candidates for its changes."""
+        lookup = next((each for each in self.lookups if each.book_id == book_id), None)
+        if lookup is None or index == lookup.chosen or book_id in self._choosing:
+            return
+        if not 0 <= index < len(lookup.choices):
+            return
+        ref = self.weak_ref()
+
+        def done(result, error):
+            dialog = ref()
+            if dialog is None:
+                return
+            dialog._choosing.pop(book_id, None)
+            if error is not None:
+                log.info('choosing a match for %s: %s', lookup.book.title, error)
+            else:
+                if result is not None:
+                    lookup.completed[index] = result
+                bulk_metadata.choose(lookup, index)
+                dialog.book_checks[book_id] = True
+            dialog._fill_review()
+
+        if index in lookup.completed:
+            done(None, None)
+            return
+        task = online.run_async(bulk_metadata.complete_choice, done, lookup, index,
+                                fetch=self.fetch)
+        self._choosing[book_id] = (task, index)
+        self._fill_review()
 
     def _cover_picture(self, data):
         from .edit_metadata import texture_from_bytes
@@ -440,4 +514,6 @@ class BulkMetadataDialog(Adw.Dialog):
     def _on_closed(self, *_args):
         if self.queue is not None:
             self.queue.cancel()
+        for task, _index in self._choosing.values():
+            task.cancel()
 

@@ -11,6 +11,7 @@ downloads).
     load_catalogs(); save_catalogs(catalogs)            # the `catalogs` setting
     client_for(catalog); forget_client(catalog)         # one opds.Client per catalogue
     downloads()                                         # the app's opds.Downloads
+    DownloadsButton()                                   # the header's list of them
     open_entry(page, catalog, client, entry, row=None)  # a section, or a book's sheet
 
 The feed is fetched in a thread (opds.run_async; a spinner meanwhile). Sections are rows of
@@ -25,7 +26,10 @@ Books already in the library carry a mark, kept up to date while the page is sho
 
 Errors replace the content with a status page: no connection (Try Again), sign-in
 required (Sign In…, the catalogue's dialog), not a catalogue (Edit Catalogue…), anything
-else. A download ends in a toast, wherever the user is: "Added “Title”" with Read.
+else. A download ends in a toast, wherever the user is: "Added “Title”" with Read. The
+header's Downloads button (shown once there is one this session) opens a popover listing
+them, newest first: a progress bar and Cancel while one runs, Read once it is in the
+library, the error when it failed; Clear Finished forgets the ones done.
 """
 
 import logging
@@ -34,7 +38,7 @@ import shutil
 import threading
 from gettext import gettext as _
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from .. import opds
 from ..widgets.book_tile import CoverSize
@@ -141,6 +145,128 @@ def _on_download_finished(manager, key, book_id, message):
             title=title, error=message))
 
 
+class DownloadsButton(Gtk.MenuButton):
+    """The catalogue pages' Downloads: a popover listing this session's downloads."""
+
+    __gtype_name__ = 'BookcaseDownloadsButton'
+
+    def __init__(self):
+        super().__init__(icon_name='folder-download-symbolic', tooltip_text=_('Downloads'))
+        self.manager = downloads()
+        self.rows = {}  # key -> its row
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=6,
+                      margin_bottom=6, margin_start=6, margin_end=6, width_request=300)
+        heading = Gtk.Label(label=_('Downloads'), xalign=0, margin_start=6,
+                            accessible_role=Gtk.AccessibleRole.HEADING)
+        heading.add_css_class('heading')
+        box.append(heading)
+        self.list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.list.add_css_class('boxed-list')
+        self.list.update_property([Gtk.AccessibleProperty.LABEL], [_('Downloads')])
+        scroller = Gtk.ScrolledWindow(child=self.list, propagate_natural_height=True,
+                                      max_content_height=360,
+                                      hscrollbar_policy=Gtk.PolicyType.NEVER)
+        box.append(scroller)
+        self.clear_button = Gtk.Button(label=_('_Clear Finished'), use_underline=True,
+                                       halign=Gtk.Align.END)
+        self.clear_button.add_css_class('flat')
+        connect_weak(self.clear_button, 'clicked', self._on_clear)
+        box.append(self.clear_button)
+        self.set_popover(Gtk.Popover(child=box))
+        for signal in ('started', 'finished'):
+            connect_weak(self.manager, signal, self._on_changed)
+        connect_weak(self.manager, 'progress', self._on_progress)
+        self.fill()
+
+    def fill(self):
+        while (row := self.list.get_row_at_index(0)) is not None:
+            self.list.remove(row)
+        self.rows = {}
+        keys = self.manager.keys()
+        for key in keys:
+            row = self._row(key)
+            self.rows[key] = row
+            self.list.append(row)
+        self.set_visible(bool(keys))
+        self.clear_button.set_sensitive(any(
+            self.manager.state(key)[0] != 'downloading' for key in keys))
+        running = any(self.manager.state(key)[0] == 'downloading' for key in keys)
+        if running:
+            self.add_css_class('accent')
+        else:
+            self.remove_css_class('accent')
+
+    def _row(self, key):
+        state = self.manager.state(key)
+        entry = self.manager.entry(key)
+        title = entry.title if entry is not None else self.manager.titles.get(key, key)
+        row = Gtk.ListBoxRow(activatable=False)
+        box = Gtk.Box(spacing=6, margin_top=8, margin_bottom=8, margin_start=10,
+                      margin_end=6)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True,
+                       valign=Gtk.Align.CENTER)
+        label = Gtk.Label(label=title, xalign=0, ellipsize=Pango.EllipsizeMode.END,
+                          max_width_chars=28)
+        text.append(label)
+        row.progress = Gtk.ProgressBar(visible=state[0] == 'downloading')
+        row.progress.update_property([Gtk.AccessibleProperty.LABEL], [title])
+        if state[0] == 'downloading':
+            if state[1] < 0:
+                row.progress.pulse()
+            else:
+                row.progress.set_fraction(state[1])
+        text.append(row.progress)
+        if state[0] != 'downloading':
+            note = Gtk.Label(xalign=0, wrap=True, max_width_chars=28)
+            note.add_css_class('caption')
+            if state[0] == 'done':
+                note.set_text(_('In your library'))
+                note.add_css_class('success')
+            else:
+                note.set_text(state[1] or _('Could not download'))
+                note.add_css_class('error')
+            text.append(note)
+        box.append(text)
+        if state[0] == 'downloading':
+            button = Gtk.Button(icon_name='process-stop-symbolic', valign=Gtk.Align.CENTER,
+                                tooltip_text=_('Cancel Download'))
+            connect_weak(button, 'clicked', self._on_cancel, key)
+            box.append(button)
+            row.cancel_button = button
+        elif state[0] == 'done':
+            button = Gtk.Button(label=_('_Read'), use_underline=True, valign=Gtk.Align.CENTER)
+            connect_weak(button, 'clicked', self._on_read, state[1])
+            box.append(button)
+            row.read_button = button
+        if isinstance(box.get_last_child(), Gtk.Button):
+            box.get_last_child().add_css_class('flat')
+        row.set_child(box)
+        return row
+
+    def _on_changed(self, *_args):
+        self.fill()
+
+    def _on_progress(self, _manager, key, fraction):
+        row = self.rows.get(key)
+        if row is None:
+            self.fill()
+        elif fraction < 0:
+            row.progress.pulse()
+        else:
+            row.progress.set_fraction(fraction)
+
+    def _on_cancel(self, _button, key):
+        self.manager.cancel(key)
+
+    def _on_read(self, _button, book_id):
+        self.popdown()
+        app().open_book(book_id)
+
+    def _on_clear(self, _button):
+        self.manager.clear()
+        self.fill()
+
+
 def open_entry(page, catalog, client, entry, row=None):
     """Open an entry of a catalogue page: a book's sheet, or a section (fetched first: a
     section that is a single book's feed opens its sheet instead of a page)."""
@@ -210,6 +336,7 @@ class CatalogPage(Adw.NavigationPage):
     __gtype_name__ = 'BookcaseCatalogPage'
 
     compact_breakpoint = Gtk.Template.Child()
+    header_bar = Gtk.Template.Child()
     window_title = Gtk.Template.Child()
     more_button = Gtk.Template.Child()
     search_button = Gtk.Template.Child()
@@ -251,6 +378,8 @@ class CatalogPage(Adw.NavigationPage):
             self.window_title.set_subtitle(_('“{terms}” in {catalog}').format(
                 terms=search[1], catalog=catalog.title))
         self._add_actions()
+        self.downloads_button = DownloadsButton()
+        self.header_bar.pack_end(self.downloads_button)
         connect_weak(self.search_entry, 'activate', self._on_search_activate)
         connect_weak(self.search_entry, 'stop-search', self._on_stop_search)
         connect_weak(self.nav_list, 'row-activated', self._on_row_activated)
@@ -410,6 +539,7 @@ class CatalogPage(Adw.NavigationPage):
             for facet in group.facets:
                 label = facet.title
                 if facet.count is not None:
+                    # Translators: a catalogue filter and how many books it has ("Poetry (120)").
                     label = _('{facet} ({count})').format(facet=facet.title,
                                                          count=f'{facet.count:n}')
                 item = Gio.MenuItem.new(label, None)
@@ -418,6 +548,7 @@ class CatalogPage(Adw.NavigationPage):
                 menu.append_item(item)
             active = group.active
             button = Gtk.MenuButton(menu_model=menu, always_show_arrow=True)
+            # Translators: a catalogue filter's group and the filter ("Language: French").
             button.set_label(_('{group}: {facet}').format(group=group.title, facet=active.title)
                              if active is not None else group.title)
             button.add_css_class('pill' if active is not None else 'flat')

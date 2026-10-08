@@ -19,7 +19,8 @@
   box-shadow: 0 2px 4px var(--shade-color), 0 8px 28px var(--shade-color);
 }
 
-/* The covers behind a series' first one (pages/groups.py) are a little faded. */
+/* The covers behind a series' first one (pages/groups.py, widgets/series_stack.py) are a
+   little faded. */
 .book-cover.behind {
   opacity: 0.85;
 }
@@ -75,6 +76,24 @@ progressbar.cover-progress > trough > progress {
 .cover-mark.missing {
   color: var(--warning-fg-color);
   background-color: var(--warning-bg-color);
+}
+
+/* Under High Contrast the cover's progress, badge and mark stand off any cover: opaque, and
+   outlined in the opposite colour. */
+@media (prefers-contrast: more) {
+  progressbar.cover-progress > trough {
+    background-color: black;
+    box-shadow: 0 0 0 1px white;
+  }
+
+  .cover-badge {
+    background-color: black;
+    box-shadow: 0 0 0 1px white;
+  }
+
+  .cover-mark {
+    box-shadow: 0 0 0 1px black;
+  }
 }
 
 /* The grid of covers (pages/books.blp): room around each book, a rounded highlight when
@@ -239,6 +258,8 @@ progressbar.book-progress > trough > progress {
 .reader-page.theme-sepia { --reader-bg: #f4ecd8; --reader-fg: #5b4636; }
 .reader-page.theme-dark { --reader-bg: #222226; --reader-fg: #deddda; }
 .reader-page.theme-black { --reader-bg: #000000; --reader-fg: #c0bfbc; }
+.reader-page.theme-contrast-light { --reader-bg: #ffffff; --reader-fg: #000000; }
+.reader-page.theme-contrast-dark { --reader-bg: #000000; --reader-fg: #ffffff; }
 
 .reader-page {
   background-color: var(--reader-bg);
@@ -418,4 +439,23 @@ flowbox.catalog-grid > flowboxchild:hover {
 menubutton.small-pill > button {
   padding: 2px 12px;
   min-height: 28px;
+}
+
+/* Statistics' Year in Review card for a past year (pages/stats.blp). */
+button.stats-review-button {
+  padding: 15px 18px;
+}
+
+/* Year in Review (pages/year_review.py): the poster saved as a picture has the window's
+   background of its own, so the image is the page as seen. */
+.year-review {
+  padding: 24px;
+  border-radius: 18px;
+  background-color: var(--window-bg-color);
+}
+
+.year-review-year {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--accent-color);
 }

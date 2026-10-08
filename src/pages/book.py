@@ -244,6 +244,8 @@ class BookPage(Adw.NavigationPage):
         reading = book.status == 'reading' or (book.status != 'finished' and book.progress > 0)
         self.progress_bar.set_visible(reading)
         self.progress_bar.set_fraction(book.progress)
+        self.progress_bar.update_property([Gtk.AccessibleProperty.VALUE_TEXT],
+                                          [self.status_label.get_text()])
         self.read_button.set_label({'reading': _('_Continue Reading'),
                                     'finished': _('_Read Again')}.get(book.status, _('_Read')))
         self.read_button.set_sensitive(not book.missing)

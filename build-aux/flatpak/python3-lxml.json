@@ -1,0 +1,19 @@
+{
+  "name": "python3-lxml",
+  "x-comment": "EPUB metadata (formats/epub.py). The GNOME SDK has lxml but the Platform does not, so it is installed here with --ignore-installed (else pip sees the SDK's and installs nothing). Built from the PyPI sdist (its C is generated already, so no Cython) against the runtime's libxml2 and libxslt; made with flatpak-pip-generator.",
+  "buildsystem": "simple",
+  "build-commands": [
+    "pip3 install --verbose --exists-action=i --ignore-installed --no-deps --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} \"lxml==6.1.3\" --no-build-isolation"
+  ],
+  "sources": [
+    {
+      "type": "file",
+      "url": "https://files.pythonhosted.org/packages/23/ad/28ecd7cb894d172f3c9c80a075eeeb2017ac62e3632cee05a5f9493547eb/lxml-6.1.3.tar.gz",
+      "sha256": "45222d94ddd511536f3b2f7d9deae3b2339b4ce0f075f1ca25703b07cad9dd21",
+      "x-checker-data": {
+        "type": "pypi",
+        "name": "lxml"
+      }
+    }
+  ]
+}

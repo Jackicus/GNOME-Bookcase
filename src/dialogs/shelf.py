@@ -67,7 +67,7 @@ class ShelfDialog(Adw.Dialog):
             chip = Gtk.Button(label=example)
             chip.add_css_class('pill')
             chip.add_css_class('shelf-example')
-            chip.set_tooltip_text(_('Add “{}” to the search').format(example))
+            chip.set_tooltip_text(_('Add “{example}” to the search').format(example=example))
             connect_weak(chip, 'clicked', self._on_example, example)
             self.example_chips.append(chip)
         connect_weak_call(self.cancel_button, 'clicked', self.close)
@@ -96,7 +96,7 @@ class ShelfDialog(Adw.Dialog):
         if not name:
             return None
         if self._name_taken(name):
-            return _('A shelf called “{}” already exists').format(name)
+            return _('A shelf called “{name}” already exists').format(name=name)
         if self.smart and not self.query_row.get_text().strip():
             return None
         return ''
@@ -141,7 +141,7 @@ class ShelfDialog(Adw.Dialog):
             log.exception('counting %r', query)
             self.count_label.set_text('')
             return None
-        self.count_label.set_text(ngettext('{} book', '{} books', count).format(count))
+        self.count_label.set_text(ngettext('{n} book', '{n} books', count).format(n=count))
         return count
 
     def _on_closed(self, _dialog):
@@ -163,7 +163,7 @@ class ShelfDialog(Adw.Dialog):
             else:
                 self.library.update_shelf(self.shelf.id, name=name,
                                           query=query if self.smart else None)
-                self.app.toast(_('Shelf “{}” saved').format(name), undo=True)
+                self.app.toast(_('Shelf “{name}” saved').format(name=name), undo=True)
         except LibraryError as error:
             self.error_label.set_text(str(error))
             self.error_label.set_visible(True)
@@ -183,7 +183,7 @@ class ShelfDialog(Adw.Dialog):
                                     'Added {count} books to “{name}”', count).format(
                 count=count, name=name), undo=True)
             return
-        self.app.toast(_('Shelf “{}” created').format(name), undo=True)
+        self.app.toast(_('Shelf “{name}” created').format(name=name), undo=True)
         window = getattr(self.app, 'window', None)
         window = window() if callable(window) else None
         if window is not None and hasattr(window, 'show_root'):

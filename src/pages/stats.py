@@ -7,6 +7,8 @@
     page.refresh()                     # query the library and redraw (also on map, on the
                                        # library's `changed` and on a goal setting's change)
     page.summary                       # the stats.Summary of the last refresh
+    page.set_year(2025)                # a past year (None: this year), as the drop-down does
+    page.show_review()                 # push the shown past year's Year in Review
 
 From the top: this year's goal as a ring (books finished of `goal-books`; with no goal, the
 books finished so far) with where the year's pace stands, and the covers of the books
@@ -17,12 +19,21 @@ the day reading happens in; the most read authors and tags this year (a click sh
 books). The goals are edited in dialogs/goals.py (the pencil in the header bar). With no
 reading at all, a status page.
 
+The year drop-down (shown when there are years before this one with reading or books
+finished, stats.years) shows a past year as it ended: its books, hours and pages, its
+reading days, months, days of the week and favourites, without today's tile or the goal;
+a card at the top opens its Year in Review (pages/year_review.py). While the page is shown,
+a timeout set for the next reading day's start (stats.next_day_start: 4 in the morning)
+refreshes it, so "today" and the streak move on with the clock.
+
 Nothing here scolds: being behind the year's pace reads as what is left and the time to do
 it in, never as a shortfall.
 """
 
 import datetime
 import logging
+import math
+import time
 from gettext import gettext as _
 from gettext import ngettext
 
@@ -99,7 +110,8 @@ class Tile(Gtk.Box):
                                  wrap_mode=Pango.WrapMode.WORD_CHAR)
         self.caption.add_css_class('caption')
         self.caption.add_css_class('dimmed')
-        self.bar = Gtk.ProgressBar(visible=False, margin_top=6)
+        self.bar = Gtk.ProgressBar(visible=False, margin_top=6,
+                                   accessible_role=Gtk.AccessibleRole.PRESENTATION)
         self.bar.add_css_class('stats-tile-bar')
         self.append(self.value)
         self.append(self.caption)
@@ -121,6 +133,9 @@ class StatsPage(Adw.NavigationPage):
     __gtype_name__ = 'BookcaseStatsPage'
 
     narrow = Gtk.Template.Child()
+    year_dropdown = Gtk.Template.Child()
+    review_button = Gtk.Template.Child()
+    review_title = Gtk.Template.Child()
     stack = Gtk.Template.Child()
     scroller = Gtk.Template.Child()
     ring = Gtk.Template.Child()
@@ -150,6 +165,9 @@ class StatsPage(Adw.NavigationPage):
         self.library = library if library is not None else app().library
         self.settings = settings if settings is not None else app().settings
         self.summary = None
+        self.year = None  # a past year shown, or None for this one
+        self.years = []
+        self._day_timer = None
         self._narrow = False
         self._covers = []
         self.tile_today = Tile(_('Today'))
@@ -164,7 +182,88 @@ class StatsPage(Adw.NavigationPage):
         connect_weak(self.narrow, 'unapply', self._on_narrow_unapply)
         connect_weak(self.heatmap_scroller.get_hadjustment(), 'changed',
                      self._on_heatmap_adjustment)
+        connect_weak(self.year_dropdown, 'notify::selected', self._on_year_selected)
+        connect_weak(self, 'map', self._on_map)
+        connect_weak(self, 'unmap', self._on_unmap)
         self.listener = PageListener(self, CHANGE_KINDS, StatsPage.refresh)
+
+    # -- the day turning over ----------------------------------------------------------------
+
+    def _on_map(self, *_args):
+        self._schedule_day()
+
+    def _on_unmap(self, *_args):
+        if self._day_timer is not None:
+            GLib.source_remove(self._day_timer)
+            self._day_timer = None
+
+    def _schedule_day(self):
+        self._on_unmap()
+        seconds = max(1, math.ceil(stats.next_day_start() - time.time()) + 1)
+        ref = self.weak_ref()
+
+        def turned():
+            page = ref()
+            if page is not None:
+                page._day_timer = None
+                if page.get_mapped():
+                    page.refresh()
+                    page._schedule_day()
+            return GLib.SOURCE_REMOVE
+
+        self._day_timer = GLib.timeout_add_seconds(seconds, turned)
+
+    # -- the year shown ----------------------------------------------------------------------
+
+    def set_year(self, year):
+        """Show a past year (None, or this year: the current one)."""
+        today = stats.current_day()
+        year = None if year is None or year >= today.year else year
+        if year == self.year:
+            return
+        self.year = year
+        if self.years and (year or today.year) in self.years:
+            index = self.years.index(year or today.year)
+            if self.year_dropdown.get_selected() != index:
+                self.year_dropdown.set_selected(index)
+        self.refresh()
+
+    def _on_year_selected(self, dropdown, _pspec):
+        index = dropdown.get_selected()
+        if self._filling_years or not 0 <= index < len(self.years):
+            return
+        self.set_year(self.years[index])
+
+    _filling_years = False
+
+    def _fill_years(self, today):
+        years = stats.years(self.library, today)
+        if self.year is not None and self.year not in years:
+            self.year = None
+        if years != self.years:
+            self.years = years
+            self._filling_years = True
+            try:
+                self.year_dropdown.set_model(Gtk.StringList.new([str(year) for year in years]))
+                self.year_dropdown.set_selected(years.index(self.year or today.year))
+            finally:
+                self._filling_years = False
+        self.year_dropdown.set_visible(len(years) > 1)
+
+    def show_review(self):
+        """Push the Year in Review of the past year shown."""
+        from .year_review import YearReviewPage
+
+        window = self.get_root()
+        if self.year is None or window is None or not hasattr(window, 'push'):
+            return None
+        page = YearReviewPage(self.year, library=self.library)
+        window.push(page)
+        return page
+
+    @Gtk.Template.Callback()
+    def _on_review_clicked(self, _button):
+        self.show_review()
 
     def _on_goal_changed(self, *_args):
         if self.get_mapped():
@@ -189,20 +288,27 @@ class StatsPage(Adw.NavigationPage):
 
     def refresh(self):
         today = stats.current_day()
-        summary = stats.summary(self.library, today)
+        self._fill_years(today)
+        past = self.year is not None
+        # A past year is shown as it stood on its last day.
+        day = datetime.date(self.year, 12, 31) if past else today
+        summary = stats.summary(self.library, day)
         self.summary = summary
-        target = self.settings.get_int('goal-books')
-        if summary.empty and not target:
+        target = 0 if past else self.settings.get_int('goal-books')
+        if summary.empty and not target and not past:
             self.stack.set_visible_child_name('empty')
             return
         self.stack.set_visible_child_name('stats')
-        self._show_goal(summary, target, today)
-        self._show_finished(summary, today)
-        self._show_tiles(summary, today)
-        self._show_heatmap(summary, today)
-        self._show_months(summary, today)
+        self.review_button.set_visible(past)
+        if past:
+            self.review_title.set_text(_('Your {year} in Review').format(year=self.year))
+        self._show_goal(summary, target, day)
+        self._show_finished(summary, day)
+        self._show_tiles(summary, day)
+        self._show_heatmap(summary, day)
+        self._show_months(summary, day)
         self._show_when(summary)
-        self._show_most(summary, today)
+        self._show_most(summary, day)
 
     def _show_goal(self, summary, target, today):
         done = len(summary.finished)
@@ -214,9 +320,11 @@ class StatsPage(Adw.NavigationPage):
             self.goal_title.set_text(
                 ngettext('{n} book finished in {year}', '{n} books finished in {year}',
                          done).format(n=done, year=year))
-            self.goal_status.set_text(_('Set a goal to see how the year is going.'))
+            past = self.year is not None
+            self.goal_status.set_text(_('Your reading in {year}').format(year=year) if past
+                                      else _('Set a goal to see how the year is going.'))
             self.goal_caption.set_visible(False)
-            self.goal_button.set_visible(True)
+            self.goal_button.set_visible(not past)
             self.ring.set_description(self.goal_title.get_text())
             return
         self.ring.set_data(goal.fraction, str(done),
@@ -257,6 +365,10 @@ class StatsPage(Adw.NavigationPage):
         self.finished_label.set_text(_('Finished in {year}').format(year=today.year))
 
     def _show_tiles(self, summary, today):
+        past = self.year is not None
+        self.tile_today.set_visible(not past)
+        if past:
+            self.tile_streak.set(streak_text(summary.longest_streak), _('Longest streak'))
         minutes_goal = self.settings.get_int('goal-minutes')
         today_minutes = round(summary.today_seconds / 60)
         if minutes_goal:
@@ -276,7 +388,8 @@ class StatsPage(Adw.NavigationPage):
             caption = _('Day streak · best {days}').format(days=streak_text(longest))
         else:
             caption = _('Day streak')
-        self.tile_streak.set(streak_text(summary.current_streak), caption)
+        if not past:
+            self.tile_streak.set(streak_text(summary.current_streak), caption)
         self.tile_year.set(hours_text(summary.year_seconds),
                            _('Read in {year}').format(year=today.year))
         if summary.pages_per_hour is not None:
@@ -293,8 +406,12 @@ class StatsPage(Adw.NavigationPage):
         first = today - datetime.timedelta(days=charts.Heatmap.DAYS - 1)
         read = [day for day, seconds in summary.days.items()
                 if first <= day <= today and seconds >= stats.MIN_DAY_SECONDS]
-        caption = ngettext('Read on {n} day in the last year', 'Read on {n} days in the last year',
-                           len(read)).format(n=len(read))
+        if self.year is not None:
+            caption = ngettext('Read on {n} day in {year}', 'Read on {n} days in {year}',
+                               len(read)).format(n=len(read), year=self.year)
+        else:
+            caption = ngettext('Read on {n} day in the last year',
+                               'Read on {n} days in the last year', len(read)).format(n=len(read))
         if summary.longest_streak > 1:
             caption += ' · ' + _('longest streak {days}').format(
                 days=streak_text(summary.longest_streak))
@@ -310,7 +427,7 @@ class StatsPage(Adw.NavigationPage):
         tooltips = [f'{name}: {hours_text(seconds)}'
                     for name, (_month, seconds) in zip(names, summary.months, strict=True)]
         self.months_chart.set_data(values, labels=labels, tooltips=tooltips,
-                                   highlight=len(values) - 1)
+                                   highlight=None if self.year is not None else len(values) - 1)
         best = max(summary.months, key=lambda item: item[1])
         if best[1] > 0:
             caption = _('Most in {month}: {time}').format(

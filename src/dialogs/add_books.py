@@ -117,6 +117,8 @@ class AddBooksDialog(Adw.Dialog):
         # Translators: progress of adding books: "3 of 12".
         self.progress_label.set_text(_('{done} of {total}').format(done=done, total=total))
         self.progress_bar.set_fraction(done / total)
+        self.progress_bar.update_property([Gtk.AccessibleProperty.VALUE_TEXT],
+                                          [self.progress_label.get_text()])
         self.file_label.set_text(os.path.basename(path or ''))
 
     def on_done(self, report):
@@ -139,7 +141,8 @@ class AddBooksDialog(Adw.Dialog):
     def _toast_added(self, book):
         title = book.title if book else ''
         window = self._window()
-        toast = Adw.Toast(title=_('Added “{}”').format(title) if title else _('Book added'))
+        toast = Adw.Toast(title=_('Added “{title}”').format(title=title) if title
+                          else _('Book added'))
         if book is not None and window is not None and hasattr(window, 'show_book'):
             toast.set_button_label(_('Show'))
             toast.set_use_markup(False)
@@ -170,8 +173,8 @@ class AddBooksDialog(Adw.Dialog):
             self.summary_title.set_text(_('No Books Added'))
             self.summary_icon.set_from_icon_name('dialog-information-symbolic')
         elif self.kind == 'add':
-            self.summary_title.set_text(ngettext('{} Book Added', '{} Books Added',
-                                                 added).format(added))
+            self.summary_title.set_text(ngettext('{n} Book Added', '{n} Books Added',
+                                                 added).format(n=added))
         elif self.kind == 'scan':
             self.summary_title.set_text(_('Folder Read'))
         else:
@@ -192,30 +195,30 @@ class AddBooksDialog(Adw.Dialog):
         rows = []
         if report.added:
             rows.append(self._count_row(
-                ngettext('{} book added', '{} books added', added).format(added),
+                ngettext('{n} book added', '{n} books added', added).format(n=added),
                 _('_Show'), self._show_added))
         if report.merged:
             count = len(report.merged)
             rows.append(self._count_row(ngettext(
-                '{} format added to a book already there',
-                '{} formats added to books already there', count).format(count)))
+                '{n} format added to a book already there',
+                '{n} formats added to books already there', count).format(n=count)))
         if report.updated:
             count = len(report.updated)
-            rows.append(self._count_row(ngettext('{} book updated', '{} books updated',
-                                                 count).format(count)))
+            rows.append(self._count_row(ngettext('{n} book updated', '{n} books updated',
+                                                 count).format(n=count)))
         if report.moved:
             count = len(report.moved)
-            rows.append(self._count_row(ngettext('{} moved file found again',
-                                                 '{} moved files found again',
-                                                 count).format(count)))
+            rows.append(self._count_row(ngettext('{n} moved file found again',
+                                                 '{n} moved files found again',
+                                                 count).format(n=count)))
         if report.missing:
             count = len(report.missing)
-            rows.append(self._count_row(ngettext('{} file is missing', '{} files are missing',
-                                                 count).format(count)))
+            rows.append(self._count_row(ngettext('{n} file is missing', '{n} files are missing',
+                                                 count).format(n=count)))
         if report.duplicates:
             count = len(report.duplicates)
             expander = Adw.ExpanderRow(title=ngettext(
-                '{} already in the library', '{} already in the library', count).format(count))
+                '{n} already in the library', '{n} already in the library', count).format(n=count))
             for path, book_id in report.duplicates[:LISTED]:
                 row = Adw.ActionRow(title=GLib.markup_escape_text(os.path.basename(path)))
                 row.set_subtitle(GLib.markup_escape_text(self._book_title(book_id)))
@@ -224,9 +227,9 @@ class AddBooksDialog(Adw.Dialog):
             rows.append(expander)
         if report.failed:
             count = len(report.failed)
-            expander = Adw.ExpanderRow(title=ngettext('{} file could not be added',
-                                                      '{} files could not be added',
-                                                      count).format(count))
+            expander = Adw.ExpanderRow(title=ngettext('{n} file could not be added',
+                                                      '{n} files could not be added',
+                                                      count).format(n=count))
             expander.add_css_class('add-books-failed')
             for path, message in report.failed[:LISTED]:
                 row = Adw.ActionRow(title=GLib.markup_escape_text(os.path.basename(path)),

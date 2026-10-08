@@ -49,7 +49,8 @@ OL_SEARCH = {
 }
 
 OL_EDITION = {'key': '/books/OL1000001M', 'series': ['The Harbour Books ; 2'],
-              'languages': [{'key': '/languages/eng'}], 'works': [{'key': '/works/OL1W'}]}
+              'languages': [{'key': '/languages/eng'}], 'works': [{'key': '/works/OL1W'}],
+              'number_of_pages': 288}
 OL_WORK = {'key': '/works/OL1W',
            'description': {'type': '/type/text',
                            'value': 'The tide comes in.\r\n\r\nSee [the map](https://x.example)'
@@ -237,6 +238,7 @@ class TestSearch(unittest.TestCase):
         self.assertEqual(done.series_index, 2.0)
         self.assertEqual(done.description, '<p>The tide comes in.</p><p>See the map.</p>')
         self.assertEqual(done.tags, ('Sea',))
+        self.assertEqual(done.pages, 288)  # the edition's own count
         self.assertEqual(found.description, '')  # a copy
 
     def test_complete_survives_failures(self):

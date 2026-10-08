@@ -184,5 +184,6 @@ class CatalogTile(Gtk.Box):
         self.mark.set_visible(in_library)
         tooltip = entry.title
         if entry.authors:
+            # Translators: a book's title, then its author on the next line.
             tooltip = _('{title}\n{author}').format(title=entry.title, author=entry.author)
         self.set_tooltip_text(tooltip)

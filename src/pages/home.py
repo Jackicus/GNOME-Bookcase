@@ -10,7 +10,10 @@
 Over them, the reading goal card (widgets/goal_card.py: a click opens Statistics), then
 rows of covers, each scrolling sideways: Continue Reading (the books being read, most
 recently read first, large, each with its progress and the time left from stats.py), Recently
-Added, then each shelf with books (smart shelves first). A row's Show All opens its page (the
+Opened (books opened from Files without adding them, library.opened_books: a list, each row
+opening the reader, with Add to Library, app.keep_book, and Forget, library.forget_books
+with Undo, which closes the book's reader first), Recently Added, then each shelf with books
+(smart shelves first). A row's Show All opens its page (the
 reading state, All Books, the shelf). A cover in Continue Reading opens the reader; elsewhere
 it opens the book's details; a right click (or a long press) opens the book menu
 (pages/actions.py).
@@ -35,6 +38,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .. import existing_books, stats
 from ..widgets.book_tile import BookTile, progress_text
+from ..widgets.cover import Cover
 from ..widgets.goal_card import GoalCard
 from ..widgets.util import connect_weak
 from . import PageListener, app
@@ -44,6 +48,8 @@ log = logging.getLogger(__name__)
 
 CHANGE_KINDS = ('books', 'files', 'shelves', 'progress')
 ROW_LIMIT = 12
+OPENED_LIMIT = 5
+OPENED_COVER = 32
 SHELF_ROWS = 6
 LARGE, SMALL = 168, 120
 LARGE_COMPACT, SMALL_COMPACT = 128, 96
@@ -177,7 +183,9 @@ class HomePage(Adw.NavigationPage):
         self._clear()
         for key, title, show_all_key, more, books in plan:
             row = self._add_row(key, title, show_all_key, more)
-            if key == 'reading':
+            if key == 'opened':
+                self._fill_opened(row, [book for book, _subtitle in books])
+            elif key == 'reading':
                 row.add_css_class('continue-reading')
                 for book, subtitle in books:
                     button = row.add_tile(book, large, subtitle)
@@ -196,6 +204,10 @@ class HomePage(Adw.NavigationPage):
                          library.count(status='reading') > len(reading),
                          [(book, progress_text(book, minutes_left(library, book)))
                           for book in reading]))
+        opened = library.opened_books(limit=OPENED_LIMIT)
+        if opened:
+            plan.append(('opened', _('Recently Opened'), None, False,
+                         [(book, progress_text(book)) for book in opened]))
         recent = library.recently_added(limit=ROW_LIMIT)
         if recent:
             plan.append(('recent', _('Recently Added'), 'all', library.count() > len(recent),
@@ -378,6 +390,60 @@ class HomePage(Adw.NavigationPage):
             connect_weak(button, 'clicked', self._on_details_clicked)
             self._add_menu(button)
 
+    def _fill_opened(self, row, books):
+        """Recently Opened: a list (they are not the library's books), each with Add and
+        Forget."""
+        row.scroller.set_visible(False)
+        note = Gtk.Label(label=_('Books you read without adding them to the library'),
+                         xalign=0, wrap=True, margin_start=24, margin_end=24)
+        note.add_css_class('dimmed')
+        row.append(note)
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE, margin_start=24,
+                              margin_end=24, margin_top=6)
+        listbox.add_css_class('boxed-list')
+        listbox.update_property([Gtk.AccessibleProperty.LABEL], [_('Recently Opened')])
+        connect_weak(listbox, 'row-activated', self._on_opened_activated)
+        clamp = Adw.Clamp(maximum_size=720, tightening_threshold=720, halign=Gtk.Align.START,
+                          child=listbox)
+        row.append(clamp)
+        row.opened_rows = []
+        for book in books:
+            item = Adw.ActionRow(title=book.title, use_markup=False, activatable=True,
+                                 title_lines=1, subtitle_lines=1)
+            # Translators: a book's author and how far into it the reader is ("Ada Lark · 45%").
+            item.set_subtitle(_('{author} · {progress}').format(author=book.author,
+                                                                progress=progress_text(book)))
+            cover = Cover(width=OPENED_COVER, valign=Gtk.Align.CENTER)
+            cover.add_css_class('small')
+            cover.set_book(book)
+            item.add_prefix(cover)
+            add = Gtk.Button(label=_('_Add'), use_underline=True, valign=Gtk.Align.CENTER,
+                             tooltip_text=_('Add to Library'))
+            add.add_css_class('flat')
+            add.book_id = book.id
+            connect_weak(add, 'clicked', self._on_keep_clicked)
+            forget = Gtk.Button(icon_name='window-close-symbolic', valign=Gtk.Align.CENTER,
+                                tooltip_text=_('Forget'))
+            forget.add_css_class('flat')
+            forget.book_id = book.id
+            connect_weak(forget, 'clicked', self._on_forget_clicked)
+            item.add_suffix(add)
+            item.add_suffix(forget)
+            item.book_id = book.id
+            item.add_button, item.forget_button = add, forget
+            listbox.append(item)
+            row.opened_rows.append(item)
+
+    def _on_opened_activated(self, _list, row):
+        app().open_book(row.book_id)
+
+    def _on_keep_clicked(self, button):
+        button.set_sensitive(False)
+        app().keep_book(button.book_id)
+
+    def _on_forget_clicked(self, button):
+        forget_book(app(), button.book_id)
+
     def _add_menu(self, button):
         click = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
         connect_weak(click, 'pressed', self._on_secondary_click)
@@ -416,6 +482,22 @@ class HomePage(Adw.NavigationPage):
         self._menu_ids = [button.book_id]
         self.book_actions.update()
         popup_menu(button, book_menu(app().library), x, y)
+
+
+def forget_book(application, book_id):
+    """Forget a book opened without adding (with Undo); its reader is closed first, so
+    nothing it saves on closing outlives the book."""
+    library = application.library
+    book = library.book(book_id)
+    if book is None:
+        return False
+    for window in application.get_windows():
+        if getattr(window, 'book_id', None) == book_id:
+            window.close()
+    if not library.forget_books([book_id]):
+        return False
+    application.toast(_('Forgot “{title}”').format(title=book.title), undo=True)
+    return True
 
 
 def _plan_key(plan):

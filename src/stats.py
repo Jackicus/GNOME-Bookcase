@@ -13,7 +13,13 @@
     stats.time_left(library, book_id, fraction, chapter_end_fraction=None)
                                                  # TimeLeft(book, chapter) in seconds, or None
     stats.summary(library, today=None)           # Summary: everything the Statistics page
-                                                 # shows, in one pass over the sessions
+                                                 # shows, in one pass over the sessions (a
+                                                 # past year's: today=its 31 December)
+    stats.years(library, today=None)             # [year] with reading or books finished,
+                                                 # newest first, this year always
+    stats.year_review(library, year)             # YearReview: a year's books, pages, hours,
+                                                 # longest streak, favourites, best month
+    stats.next_day_start(now=None)               # the Unix time the next reading day begins
     stats.goal_progress(done, target, today)     # Goal (on schedule?) or None for no goal
     stats.estimated_pages(book_file)             # a file's page count, estimated, or None
 
@@ -84,6 +90,26 @@ class Goal:
 
 
 @dataclasses.dataclass
+class YearReview:
+    """A year in reading (Year in Review)."""
+    year: int
+    finished: list  # [(book_id, when)] finished that year, oldest first
+    pages: int  # the page count of the books finished (known, else estimated)
+    seconds: float  # read that year
+    days: int  # days read
+    longest_streak: int  # days in a row, within the year
+    author: str  # the favourite author ('' when none): most books finished, then time
+    genre: str  # the favourite tag, as the author
+    best_month: datetime.date | None  # the first of the month with the most reading
+    best_month_seconds: float
+    finished_by_month: list  # 12 counts
+
+    @property
+    def empty(self):
+        return not self.finished and not self.seconds
+
+
+@dataclasses.dataclass
 class Summary:
     """What the Statistics page shows. Seconds throughout; days are reading days (dates)."""
     today: datetime.date
@@ -125,6 +151,12 @@ def current_day(now=None):
 def day_start(date):
     """The Unix time a reading day begins."""
     return datetime.datetime.combine(date, datetime.time(DAY_START_HOUR)).timestamp()
+
+
+def next_day_start(now=None):
+    """The Unix time the reading day after now's begins (a page showing \"today\" redraws
+    then)."""
+    return day_start(current_day(now) + datetime.timedelta(days=1))
 
 
 def daily_seconds(library, since=None):
@@ -331,7 +363,7 @@ def summary(library, today=None):
         if day >= first_month:
             month = day.replace(day=1)
             month_seconds[month] = month_seconds.get(month, 0.0) + session.seconds
-        if day >= last_year:
+        if last_year <= day <= today:
             weekdays[day.weekday()] += session.seconds
             hours[datetime.datetime.fromtimestamp(session.started).hour] += session.seconds
         if day < year_start or day > today:
@@ -393,3 +425,74 @@ def goal_progress(done, target, today):
     expected = target * elapsed / length
     return Goal(done=done, target=target, expected=expected,
                 ahead=done - math.floor(expected))
+
+
+# -- years ----------------------------------------------------------------------------------
+
+def years(library, today=None):
+    """The years with reading or books finished, newest first; this year always."""
+    today = today or current_day()
+    found = {today.year}
+    shift = f'-{DAY_START_HOUR} hours'
+    for (year,) in library.db.execute(
+            "SELECT DISTINCT strftime('%Y', started, 'unixepoch', 'localtime', ?) "
+            'FROM sessions', (shift,)):
+        if year:
+            found.add(int(year))
+    for _book_id, when in library.finished():
+        found.add(day_of(when).year)
+    return sorted((year for year in found if year <= today.year), reverse=True)
+
+
+def year_review(library, year):
+    """A year's reading (see YearReview)."""
+    start, end = datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1)
+    sessions = library.sessions(since=day_start(start))
+    days, month_seconds, book_seconds_read = {}, {}, {}
+    for session in sessions:
+        day = day_of(session.started)
+        if day >= end:
+            continue
+        days[day] = days.get(day, 0.0) + session.seconds
+        month = day.replace(day=1)
+        month_seconds[month] = month_seconds.get(month, 0.0) + session.seconds
+        book_seconds_read[session.book_id] = (book_seconds_read.get(session.book_id, 0.0)
+                                              + session.seconds)
+    finished = library.finished(since=day_start(start), until=day_start(end))
+    known = library.page_counts()
+    pages = 0
+    by_month = [0] * 12
+    authors, genres = {}, {}
+    finished_ids = set()
+    for book_id, when in finished:
+        by_month[day_of(when).month - 1] += 1
+        finished_ids.add(book_id)
+        pages += book_pages(library, book_id, known) or 0
+    for book_id in finished_ids | set(book_seconds_read):
+        book = library.book(book_id)
+        if book is None:
+            continue
+        score = (1 if book_id in finished_ids else 0, book_seconds_read.get(book_id, 0.0))
+        for name in book.authors[:1]:
+            authors[name] = _add_score(authors.get(name), score)
+        for name in book.tags:
+            genres[name] = _add_score(genres.get(name), score)
+    best = max(month_seconds.items(), key=lambda item: (item[1], -item[0].month),
+               default=(None, 0.0))
+    return YearReview(
+        year=year, finished=finished, pages=pages,
+        seconds=sum(days.values()),
+        days=sum(1 for seconds in days.values() if seconds >= MIN_DAY_SECONDS),
+        longest_streak=longest_streak(days), author=_favourite(authors),
+        genre=_favourite(genres), best_month=best[0] if best[1] > 0 else None,
+        best_month_seconds=best[1], finished_by_month=by_month)
+
+
+def _add_score(score, more):
+    return more if score is None else (score[0] + more[0], score[1] + more[1])
+
+
+def _favourite(scores):
+    if not scores:
+        return ''
+    return min(scores.items(), key=lambda item: (-item[1][0], -item[1][1], item[0]))[0]

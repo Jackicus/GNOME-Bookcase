@@ -796,5 +796,50 @@ class UnreadStartsOverTest(unittest.TestCase):
             self.assertEqual((book.progress, book.location), (0.4, 'epubcfi(/6/8!/4/2)'))
 
 
+class OpenedBooksTest(unittest.TestCase):
+    """Books opened without adding: listed apart, forgotten with Undo."""
+
+    def test_recently_opened_and_forget(self):
+        with temporary_library() as library:
+            kept = add_book(library, 'In the Library')
+            first = library.add_opened(BookInfo(title='Opened First', authors=['Ada Lark']),
+                                       '/invented/first.epub', hash='o1', size=1)
+            second = library.add_opened(BookInfo(title='Opened Second', authors=['Ben Ross']),
+                                        '/invented/second.epub', hash='o2', size=1)
+            library.set_progress(first, 0.3, 'epubcfi(/6/2)')
+            library.add_annotation(first, 'highlight', 'epubcfi(/6/4)', text='Salt')
+            library.log_session(first, 1000, 600, 0.0, 0.3)
+            self.assertEqual([book.title for book in library.opened_books()],
+                             ['Opened First', 'Opened Second'])
+            self.assertEqual(library.count(), 1)
+            before = snapshot(library)
+            self.assertEqual(library.forget_books([first, kept]), 1)  # the library's stays
+            self.assertEqual(library.undo_label, 'Forget Book')
+            self.assertIsNone(library.book(first))
+            self.assertIsNotNone(library.book(kept))
+            self.assertEqual(library.annotations(first), [])
+            self.assertEqual(library.sessions(first), [])
+            self.assertEqual([book.id for book in library.opened_books()], [second])
+            library.undo()
+            self.assertEqual(snapshot(library), before)
+            self.assertEqual(library.forget_books([kept]), 0)
+            self.assertEqual(len(library.opened_books(limit=1)), 1)
+
+
+class PagesTest(unittest.TestCase):
+
+    def test_page_count_is_editable_and_undone(self):
+        with temporary_library() as library:
+            book_id = add_book(library, 'Tides')
+            self.assertEqual(library.book(book_id).pages, 0)
+            library.update_book(book_id, pages=312)
+            self.assertEqual(library.book(book_id).pages, 312)
+            self.assertEqual(library.page_counts(), {book_id: 312})
+            library.update_book(book_id, pages=-4)
+            self.assertEqual(library.book(book_id).pages, 0)
+            library.undo()
+            self.assertEqual(library.books()[0].pages, 312)
+
+
 if __name__ == '__main__':
     unittest.main()

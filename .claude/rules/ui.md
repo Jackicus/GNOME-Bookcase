@@ -21,8 +21,9 @@ Platform behaviour worth knowing is in `gtk-notes.md`; the reader's in `reader.m
   `app.add_files(gio_files)` (the import, with progress), `app.window()` (the library window).
   `app.open_path(path, done=None)` (read a file without adding it: library.OPENED),
   `app.keep_book(book_id)` (Add to Library for such a book).
-  app.* actions: add-books, open-file, add-folder, link-calibre, preferences, shortcuts, about,
-  undo, quit;
+  `app.sharing` (sharing.Sharing: the library served to the network).
+  app.* actions: add-books, open-file, add-folder, link-calibre, preferences, sharing,
+  shortcuts, about, undo, quit;
   import-clippings and export-highlights (dialogs/highlights.add_actions).
 - The library window's seams (window.py): `show_root(key)`, `push(page)`, `pop()`,
   `show_book(book_id)` (pushes pages/book.py), `show_books(title, **filters)` (pushes a

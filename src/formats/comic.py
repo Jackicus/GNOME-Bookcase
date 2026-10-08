@@ -21,8 +21,6 @@ import tempfile
 import threading
 import zipfile
 
-from lxml import etree
-
 from . import BookInfo, FormatError, image_type
 
 IMAGE_SUFFIXES = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp')
@@ -143,6 +141,8 @@ def _extract(tool, path, name, limit=MAX_IMAGE):
 
 def _comic_info(data, info):
     """Fill info from ComicInfo.xml; return the FrontCover page's index, if it says."""
+    from lxml import etree  # here, not at the top: importing.py imports this at startup
+
     try:
         root = etree.fromstring(data, etree.XMLParser(resolve_entities=False,
                                                       no_network=True, recover=True))

@@ -1,18 +1,22 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # SPDX-FileCopyrightText: 2026 Jack Tully
 
-"""Reading a Calibre library (its metadata.db) to link its books in place. Read only.
+"""Reading a Calibre library (its metadata.db) to link its books in place. Read only:
+calibre_write.py is the one writer, for the libraries the user opted in.
 
     calibre.is_library(path) -> bool       a folder with a metadata.db
     calibre.read_library(path) -> [CalibreBook]
     CalibreError                           not a Calibre library, or one we cannot read
+    LINK_LOCK                              held by a link or rescan (importing.py) and by
+                                           calibre_write.flush(), so they take turns
 
 The database is opened read-only (`mode=ro`); when Calibre holds it locked, a copy taken to
-a temporary file is read instead. Nothing in the library folder is ever written.
+a temporary file is read instead. Nothing in the library folder is written here.
 
 A CalibreBook carries a formats.BookInfo (title, authors in Calibre's link order, series and
 index, tags, publisher, published, languages (the first), comments as the description,
-identifiers, Calibre's uuid as 'uuid'), the rating (0-10), the book's files ({format:
+identifiers, Calibre's uuid as 'uuid'; a '|' in an author's name is Calibre's stored ','),
+Calibre's author_sort, the rating (0-10), the book's files ({format:
 path}, from the data table: `<library>/<book path>/<name>.<format lowercased>`, only those
 that exist), the cover.jpg path when there is one, and Calibre's last_modified text, which a
 rescan compares with the Library's source_modified to know which books Calibre changed.
@@ -26,11 +30,14 @@ import os
 import shutil
 import sqlite3
 import tempfile
+import threading
 from urllib.parse import quote
 
 from .formats import BookInfo, normalize_date, normalize_language
 
 log = logging.getLogger(__name__)
+
+LINK_LOCK = threading.Lock()
 
 # Calibre's format names to ours.
 FORMATS = {'EPUB': 'epub', 'KEPUB': 'kepub', 'AZW3': 'azw3', 'MOBI': 'mobi', 'AZW': 'mobi',
@@ -46,6 +53,7 @@ class CalibreBook:
     cover_path: str | None = None
     last_modified: str = ''  # as Calibre wrote it: '2026-10-08 09:12:44.123456+00:00'
     folder: str = ''  # the book's own folder
+    author_sort: str = ''  # Calibre's books.author_sort
 
 
 class CalibreError(Exception):
@@ -100,10 +108,13 @@ def _open(folder):
             if os.path.exists(database + suffix):
                 with contextlib.suppress(OSError):
                     shutil.copyfile(database + suffix, copy + suffix)
+        db = None
         try:
             db = _connect('file:' + quote(copy) + '?mode=ro')
             db.execute('SELECT count(*) FROM books').fetchone()
         except sqlite3.Error as error:
+            if db is not None:
+                db.close()
             raise CalibreError(f'Cannot read {database}: {error}') from error
         try:
             yield db
@@ -155,11 +166,12 @@ def _read(db, folder):
 
     books = []
     rows = db.execute('SELECT id, title, pubdate, series_index, path, uuid, has_cover, '
-                      'last_modified FROM books ORDER BY id')
-    for book_id, title, pubdate, index, book_path, uuid, has_cover, modified in rows:
+                      'last_modified, author_sort FROM books ORDER BY id')
+    for book_id, title, pubdate, index, book_path, uuid, has_cover, modified, asort in rows:
         book_folder = os.path.join(folder, *(book_path or '').split('/'))
         info = BookInfo(
-            title=title or '', authors=authors.get(book_id, []),
+            title=title or '',
+            authors=[name.replace('|', ',') for name in authors.get(book_id, [])],
             series=(series.get(book_id) or [''])[0],
             series_index=float(index or 0) if series.get(book_id) else 0.0,
             tags=tags.get(book_id, []), publisher=(publishers.get(book_id) or [''])[0],
@@ -182,5 +194,5 @@ def _read(db, folder):
         books.append(CalibreBook(
             id=book_id, info=info, rating=max(0, min(10, int(rating))), files=files,
             cover_path=cover if has_cover and os.path.isfile(cover) else None,
-            last_modified=str(modified or ''), folder=book_folder))
+            last_modified=str(modified or ''), folder=book_folder, author_sort=asort or ''))
     return books

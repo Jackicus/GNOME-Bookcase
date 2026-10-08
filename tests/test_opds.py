@@ -6,6 +6,7 @@ search templates, the format chosen, matching the library, the catalogue list, a
 local HTTP server: credentials, redirects, errors, downloading and adding to the library.
 Every catalogue and book is invented (tests/opds_fixtures.py); nothing goes online."""
 
+import json
 import os
 import pathlib
 import shutil
@@ -565,6 +566,91 @@ class TestDownloads(ServerTestCase):
             loop.run()
             self.assertEqual(finished[0][:2], ('urn:gone', 0))
             self.assertEqual(downloads.state('urn:gone')[0], 'failed')
+            self.assertEqual(downloads.keys(), ['urn:gone'])
+            self.assertIs(downloads.entry('urn:gone'), entry)
+            downloads.clear()
+            self.assertEqual(downloads.keys(), [])
+
+    def test_the_list_newest_first(self):
+        downloads = opds.Downloads(importer=None)
+        started = []
+        downloads.connect('started', lambda _d, key: started.append(key))
+
+        class Never:
+            def download(self, *_args):
+                raise opds.Cancelled('stopped')
+
+        for key in ('urn:one', 'urn:two'):
+            entry = opds.Entry(key, id=key, acquisitions=[opds.Acquisition(
+                'https://books.example/x.epub', 'application/epub+zip', 'epub')])
+            downloads.start(key, Never(), entry.acquisitions[0], entry)
+        self.assertEqual(started, ['urn:one', 'urn:two'])
+        self.assertEqual(downloads.keys(), ['urn:two', 'urn:one'])
+        downloads.clear()  # both still under way
+        self.assertEqual(downloads.keys(), ['urn:two', 'urn:one'])
+
+
+ATOM_SHORT_ENTRY = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>urn:harbour:short</id>
+  <title>Short</title>
+  <entry>
+    <title>The Lantern Keeper</title>
+    <id>urn:harbour:1</id>
+    <author><name>Ada Lark</name></author>
+    <summary type="text">A keeper of lights.</summary>
+    <link rel="alternate" href="/opds/entry/1"
+          type="application/atom+xml;type=entry;profile=opds-catalog"/>
+    <link rel="http://opds-spec.org/acquisition" href="/get/1.epub"
+          type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+ATOM_FULL_ENTRY = """<?xml version="1.0" encoding="utf-8"?>
+<entry xmlns="http://www.w3.org/2005/Atom" xmlns:dcterms="http://purl.org/dc/terms/">
+  <title>The Lantern Keeper</title>
+  <id>urn:harbour:1</id>
+  <author><name>Ada Lark</name></author>
+  <content type="html">&lt;p&gt;A keeper of lights on a coast that has none, and the
+    winter the lamps came back.&lt;/p&gt;</content>
+  <category term="sea" label="The Sea"/>
+  <dcterms:publisher>Gull Press</dcterms:publisher>
+  <link rel="http://opds-spec.org/acquisition" href="/get/1.epub" type="application/epub+zip"/>
+</entry>
+"""
+
+
+class TestFullEntry(ServerTestCase):
+
+    def test_detail_link_fetched_and_merged(self):
+        routes = {'/opds/short': Route(ATOM_SHORT_ENTRY),
+                  '/opds/entry/1': Route(ATOM_FULL_ENTRY,
+                                         'application/atom+xml;type=entry;profile=opds-catalog')}
+        with CatalogServer(routes) as server:
+            client = opds.Client()
+            entry = client.feed(server.url('/opds/short')).books[0]
+            self.assertEqual(entry.detail, server.url('/opds/entry/1'))
+            full = client.full_entry(entry)
+            self.assertIn('lamps came back', full.summary)
+            self.assertEqual(full.categories, ['The Sea'])
+            self.assertEqual(full.publisher, 'Gull Press')
+            self.assertEqual(full.key, entry.key)  # still the same download
+            self.assertEqual(entry.summary, 'A keeper of lights.')  # a copy
+            plain = opds.Entry('No Record')
+            self.assertIs(client.full_entry(plain), plain)
+
+    def test_opds2_self_link(self):
+        feed = opds.parse(json.dumps({
+            'metadata': {'title': 'Feed'},
+            'publications': [{
+                'metadata': {'title': 'Winter Orchard', 'identifier': 'urn:harbour:4'},
+                'links': [{'rel': 'self', 'href': '/pub/4',
+                           'type': 'application/opds-publication+json'},
+                          {'rel': 'http://opds-spec.org/acquisition/open-access',
+                           'href': '/get/4.epub', 'type': 'application/epub+zip'}]}]}),
+            'https://books.example/opds2')
+        self.assertEqual(feed.books[0].detail, 'https://books.example/pub/4')
 
 
 class TestKeyring(unittest.TestCase):

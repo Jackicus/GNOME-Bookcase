@@ -6,8 +6,9 @@ using Adw 1;
 
 // The Statistics page: this year's goal (a ring) and the books finished, today's reading and
 // the streak in tiles, a year of reading days, time read per month, when the reading
-// happens, the most read authors and tags (pages/stats.py fills them from stats.py). With
-// no reading yet, a status page.
+// happens, the most read authors and tags (pages/stats.py fills them from stats.py). A past
+// year (the year drop-down) shows that year, with its Year in Review. With no reading yet,
+// a status page.
 template $BookcaseStatsPage: Adw.NavigationPage {
   title: _("Statistics");
   tag: "stats";
@@ -29,6 +30,16 @@ template $BookcaseStatsPage: Adw.NavigationPage {
     child: Adw.ToolbarView {
       [top]
       Adw.HeaderBar {
+        [start]
+        DropDown year_dropdown {
+          visible: false;
+          tooltip-text: _("Year");
+
+          accessibility {
+            label: _("Year");
+          }
+        }
+
         [end]
         Button {
           icon-name: "document-edit-symbolic";
@@ -57,6 +68,62 @@ template $BookcaseStatsPage: Adw.NavigationPage {
               child: Box {
                 orientation: vertical;
                 spacing: 24;
+
+                // A finished year's Year in Review (pages/year_review.py).
+                Button review_button {
+                  visible: false;
+                  clicked => $_on_review_clicked();
+
+                  styles [
+                    "card",
+                    "stats-review-button",
+                  ]
+
+                  child: Box {
+                    spacing: 12;
+
+                    Image {
+                      icon-name: "starred-symbolic";
+                      pixel-size: 24;
+                      accessible-role: presentation;
+
+                      styles [
+                        "accent",
+                      ]
+                    }
+
+                    Box {
+                      orientation: vertical;
+                      spacing: 2;
+                      hexpand: true;
+
+                      Label review_title {
+                        xalign: 0;
+                        wrap: true;
+
+                        styles [
+                          "heading",
+                        ]
+                      }
+
+                      Label {
+                        label: _("Your books, pages, hours and favourites, in one page to keep or share");
+                        xalign: 0;
+                        wrap: true;
+
+                        styles [
+                          "caption",
+                          "dimmed",
+                        ]
+                      }
+                    }
+
+                    Image {
+                      icon-name: "go-next-symbolic";
+                      accessible-role: presentation;
+                    }
+                  };
+                }
 
                 // This year's goal, and the books finished.
                 Box {

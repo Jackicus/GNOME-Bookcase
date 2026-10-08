@@ -6,6 +6,7 @@
     <value nick="sepia" value="2"/>
     <value nick="dark" value="3"/>
     <value nick="black" value="4"/>
+    <value nick="custom" value="5"/>
   </enum>
   <enum id="io.github.jackicus.Bookcase.ReaderFont">
     <value nick="publisher" value="0"/>
@@ -36,6 +37,11 @@
       <summary>Library folder</summary>
       <description>The folder books added to Bookcase are copied into, as Author/Title files. Empty means ~/Books.</description>
     </key>
+    <key name="calibre-write-libraries" type="as">
+      <default>[]</default>
+      <summary>Calibre libraries kept in step</summary>
+      <description>The linked Calibre libraries (their folders) that edits made in Bookcase are written to (Keep Calibre in Step). Others are only read.</description>
+    </key>
     <key name="view-mode" type="s">
       <choices>
         <choice value="grid"/>
@@ -62,6 +68,11 @@
       <default>150</default>
       <summary>Width of the covers in the grid, in pixels</summary>
     </key>
+    <key name="group-series" type="b">
+      <default>false</default>
+      <summary>Show each series as one stack in All Books</summary>
+      <description>The covers of All Books show the books of a series as one stacked tile, which opens the series' books.</description>
+    </key>
     <key name="sort-reversed" type="b">
       <default>false</default>
       <summary>Reverse the order of book lists</summary>
@@ -86,7 +97,12 @@
     <key name="reader-theme" enum="io.github.jackicus.Bookcase.ReaderTheme">
       <default>'auto'</default>
       <summary>Colours of the page</summary>
-      <description>"auto" follows the system's light or dark style.</description>
+      <description>"auto" follows the system's light or dark style; "custom" is reader-custom-theme's colours.</description>
+    </key>
+    <key name="reader-custom-theme" type="s">
+      <default>'{"bg": "#e8f0e3", "fg": "#26331f", "link": "#2c6a2e"}'</default>
+      <summary>The custom paper's colours</summary>
+      <description>JSON: {"bg": background, "fg": text, "link": links}, as #rrggbb.</description>
     </key>
     <key name="reader-font" enum="io.github.jackicus.Bookcase.ReaderFont">
       <default>'publisher'</default>
@@ -162,10 +178,40 @@
       <summary>The speed of Read Aloud</summary>
       <description>Speech Dispatcher's rate: 0 is the voice's normal speed.</description>
     </key>
+    <key name="reader-speech-voices" type="a{ss}">
+      <default>{}</default>
+      <summary>The Read Aloud voice of each language</summary>
+      <description>A language ("en", "fr") to the name of a Speech Dispatcher synthesis voice; a language not listed uses the default voice.</description>
+    </key>
+    <key name="lookup-automatic" type="b">
+      <default>true</default>
+      <summary>Look up a word when it is selected</summary>
+      <description>When off, nothing is looked up until Look Up is chosen.</description>
+    </key>
+    <key name="lookup-online" type="b">
+      <default>true</default>
+      <summary>Look up words online</summary>
+      <description>When off, words go to the StarDict dictionaries installed only, never to Wiktionary or Wikipedia.</description>
+    </key>
+    <key name="lookup-dictionary-order" type="as">
+      <default>[]</default>
+      <summary>The order of the StarDict dictionaries</summary>
+      <description>Their .ifo files' paths, first asked first; dictionaries not listed come after, by name.</description>
+    </key>
+    <key name="lookup-dictionaries-off" type="as">
+      <default>[]</default>
+      <summary>StarDict dictionaries not to use</summary>
+      <description>Their .ifo files' paths.</description>
+    </key>
     <key name="send-kepub" type="b">
       <default>true</default>
       <summary>Send EPUBs to a Kobo as Kobo EPUBs</summary>
       <description>A Kobo shows reading statistics and page numbers only for its own variant of EPUB (.kepub.epub).</description>
+    </key>
+    <key name="kobo-collections" type="as">
+      <default>[]</default>
+      <summary>Kobos whose collections follow the shelves</summary>
+      <description>The Kobos (by serial number, as “kobo:SERIAL”) on which Bookcase keeps a collection for each shelf, writing the reader’s database (with a backup beside it).</description>
     </key>
     <key name="google-books-key" type="s">
       <default>''</default>
@@ -266,6 +312,34 @@
       <default>''</default>
       <summary>Online catalogues</summary>
       <description>The OPDS catalogues on the Discover page, as JSON: [{"id", "title", "url", "username"}]. Empty means the free catalogues Bookcase comes with. Passwords are kept in the keyring, not here.</description>
+    </key>
+    <key name="sharing-enabled" type="b">
+      <default>false</default>
+      <summary>Share the library</summary>
+      <description>Serve the library to other devices (a catalogue and a web page) while Bookcase runs.</description>
+    </key>
+    <key name="sharing-scope" type="s">
+      <choices>
+        <choice value="network"/>
+        <choice value="local"/>
+      </choices>
+      <default>'network'</default>
+      <summary>Who can connect to the shared library</summary>
+      <description>“network”: devices on the local network; “local”: this computer only.</description>
+    </key>
+    <key name="sharing-port" type="i">
+      <range min="1024" max="65535"/>
+      <default>8095</default>
+      <summary>Sharing port</summary>
+    </key>
+    <key name="sharing-require-password" type="b">
+      <default>true</default>
+      <summary>Ask for a user name and password</summary>
+      <description>The password is kept in the keyring.</description>
+    </key>
+    <key name="sharing-username" type="s">
+      <default>'reader'</default>
+      <summary>Sharing user name</summary>
     </key>
   </schema>
 </schemalist>

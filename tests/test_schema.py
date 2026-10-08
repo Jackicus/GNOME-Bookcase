@@ -258,6 +258,8 @@ class MigrationTest(unittest.TestCase):
         finally:
             library.close()
         after = _rows(self.path)
+        # Version 4: book_state, empty.
+        self.assertEqual(after.pop('book_state'), [])
         self.assertEqual(set(after), set(before))
         for table, rows in before.items():
             if table == 'books':
@@ -289,6 +291,24 @@ class MigrationTest(unittest.TestCase):
             self.assertEqual(library.book(1).title, 'A Quiet Harbour')
             self.assertEqual([book.id for book in library.books(sort='added')],
                              [book_id, 2, 1])
+        finally:
+            library.close()
+
+    def test_version_4_keeps_a_books_reader_state_and_removes_it_with_the_book(self):
+        library = Library(self.path)
+        try:
+            self.assertEqual(library.book_state(2), {})
+            library.set_book_state(2, 'pdf', {'fit': 'width', 'rtl': True})
+            library.set_book_state(2, 'other', 1)
+            library.set_book_state(2, 'other', None)
+            self.assertEqual(library.book_state(2), {'pdf': {'fit': 'width', 'rtl': True}})
+            library.db.execute("UPDATE book_state SET state = 'not json' WHERE book_id = 2")
+            self.assertEqual(library.book_state(2), {})
+            library.set_book_state(2, 'pdf', {'zoom': 150})
+            library.remove_books([2])
+            self.assertEqual(library.book_state(2), {})
+            library.undo()
+            self.assertEqual(library.book_state(2), {'pdf': {'zoom': 150}})
         finally:
             library.close()
 

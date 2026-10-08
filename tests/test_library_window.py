@@ -14,7 +14,7 @@ import time
 import unittest
 
 from tests import ROOT
-from tests.gtk import pump, requires_gtk, wait_for
+from tests.gtk import close_window, pump, requires_gtk, wait_for
 from tests.support import add_book, temporary_library
 from tests.test_pages import Covers, stand_ins
 
@@ -89,7 +89,7 @@ class TextUndoTest(unittest.TestCase):
         box.append(button)
         window.set_child(box)
         window.present()
-        self.addCleanup(window.destroy)
+        self.addCleanup(close_window, window)
         self.assertTrue(wait_for(window.get_mapped))
         entry.grab_focus()
         self.assertTrue(text_undo(window))

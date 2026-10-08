@@ -38,6 +38,48 @@ damage the library people trust most; Calibre also caches the database in memory
 not see our writes. Edits made in Bookcase stay in Bookcase. A rescan at startup picks up
 what Calibre changed (by its `last_modified`).
 
+## Keep Calibre in Step: the one opt-in exception
+
+Some people keep Calibre for its plugins, its server or a device, and want the curation they
+do in Bookcase to show there. So a linked library can be opted in (Preferences → Library →
+the library's row → Keep Calibre in Step, confirmed once, with a count of earlier edits
+that go too). It is off by default and per library, and calibre_write.py is the only code
+that writes to a Calibre library. What it does and why:
+
+- **Exactly what Calibre writes, nothing more.** Title (and its sort), authors (`,` stored
+  as `|`, links in display order, new authors' sort by Calibre's own rule), author sort,
+  series and index, tags, publisher, pubdate, languages (ISO 639-3; Calibre's further
+  languages kept), comments, rating (through the ratings table), identifiers, cover.jpg; a
+  new `last_modified` and a `metadata_dirtied` row, so Calibre rewrites `metadata.opf`
+  itself the next time it runs (we do not write OPFs: Calibre's own writer stays the one
+  source of them). Items matching only in case are renamed as Calibre does; items left
+  unused are deleted as Calibre does, unless Calibre keeps a note on them. Custom columns,
+  plugin data, annotations, conversion options and `user_version` are never touched.
+- **No renaming.** Calibre names a book's folder after its title and first author, but finds
+  it by `books.path` whatever that says, and renames it the next time the title or author
+  changes in Calibre. Renaming folders under Calibre is the riskiest write there is
+  (calibre.md §3.10.5), so Bookcase leaves the path as it is.
+- **Dates at noon UTC.** A date-only pubdate written at midnight UTC shows as the day before
+  west of Greenwich; noon is the same day in every time zone.
+- **Never while Calibre runs.** Calibre caches the whole database in memory and would
+  overwrite our changes, so Bookcase binds Calibre's own single-instance lock (the abstract
+  socket `\0calibre-singleinstance-<euid>-db`, verified in calibre `utils/lock.py`, held by
+  the GUI, calibre-server and calibredb) for the whole write: if it is taken, the edits
+  wait and Preferences says how many; while Bookcase holds it, Calibre refuses to start.
+  The lock is per network namespace: a sandbox without the host network cannot see it.
+- **Refuse what we do not know.** A `user_version` above 28, a missing table or column, a
+  foreign `application_id`, or a failing `quick_check`, and nothing is written.
+- **Backed up and checked.** The first write of a day copies `metadata.db` beside it as
+  `metadata.db.bookcase-backup-YYYYMMDD` (three kept); each write is one transaction, checked
+  with `integrity_check` before the commit and after.
+- **No queue to lose.** A linked book's `source_values` already say what Calibre last held, so
+  the pending edits are the fields whose Bookcase value differs from it. They survive a
+  restart, and an undo after a write is simply written back. A field Calibre changed and
+  Bookcase did not still comes in through the rescan; one changed in both gets Bookcase's.
+
+It is verified against Calibre's published schema (a library built from
+`metadata_sqlite.sql`, read back row by row), not yet against a running Calibre.
+
 ## The library database lives in XDG data, not beside the books
 
 Calibre's FAQ warns against keeping its library on a network or cloud drive, because the
@@ -102,6 +144,12 @@ EPUBs instead. Bookcase has no conversion engine: Calibre's is a codebase of its
 its option tree is its second most frequent complaint. A Kindle reads AZW3 and MOBI over USB
 but not EPUB, so an EPUB-only book is converted with Calibre's `ebook-convert` when it is
 installed, and otherwise cannot be sent by cable.
+
+Convert… (a book's menu) makes another format of a book through `ebook-convert` when it is
+installed, with no options shown: the format is the only choice. The result is a new file in
+the library folder added to the book; the source is a copy carrying the library's details,
+and the book's own files are only read. EPUB to Kobo EPUB is kepub.py's and always works.
+Without `ebook-convert` the dialog says how to get it rather than hiding the formats.
 
 ## No DRM removal, ever
 
@@ -247,3 +295,126 @@ The filter bar's choices (format, status, rating, language) become search terms
 (search.filter_query) added to the typed search, so they combine with it and with any
 page's own filter with no second query path, and a smart shelf could be made of them.
 
+## Sharing the library: a read-only catalogue on the LAN, off until asked
+
+Calibre's content server is mostly used to get books onto a phone or an e-reader over Wi-Fi
+(calibre.md §2.2), so Bookcase serves exactly that: an OPDS 1.2 catalogue for reading apps
+(KOReader, Readest, Thorium) and plain HTML pages, without scripts, for any browser down to
+a Kindle's; no reader in the browser, no editing, no uploads, no users. The server is the
+standard library's (http.server, a thread per request with a library connection of its own
+from a small pool), so it brings no dependency. Choices made for safety:
+
+- **Off by default**, a switch in Preferences; it stops when the app quits. When on, it
+  starts with the app again, as Calibre's "run the server automatically" does.
+- **A password by default.** HTTP Basic over plain HTTP, like Calibre's server: every
+  e-reader browser and OPDS app speaks it, and a self-signed certificate would be refused by
+  them. The password is generated (14 characters from an unambiguous alphabet, typed easily
+  on an e-reader) and kept in the keyring under its own schema
+  (io.github.jackicus.Bookcase.Sharing), never in GSettings. Passwords are compared in
+  constant time; five wrong ones in a minute lock the address out for a minute (429).
+- **Local networks only.** It listens on all IPv4 interfaces ("Devices on This Network") or
+  on 127.0.0.1 ("This Computer Only"), and answers only private, loopback and link-local
+  client addresses, so a computer with a public address does not serve the internet.
+- **No DNS rebinding.** A Host header must be an address, a single-label name or a
+  .local/.lan/.home.arpa/.internal name: a web page on another domain cannot point its own
+  name at the server and read the library through the user's browser.
+- **Ids, never paths.** URLs name a book by its id and a format; the file is found through
+  the library. Books opened without adding (library.OPENED) are never served.
+- **Edits travel.** An EPUB is sent as exporting.export_copy makes it (metadata and cover
+  written in), cached for the session so a resumed (Range) download gets the same bytes.
+- **Quiet logs.** No request line, search, path or credential is logged; only refused
+  addresses and failures.
+- **Discoverable, cheaply.** The addresses are shown with a QR code (qr.py: a small encoder,
+  byte mode, versions 1-10, checked against libqrencode, since no QR library is in the GNOME
+  runtime) and announced through Avahi on the system bus when it runs.
+- **The QR code is black on white** whatever the style: phone cameras read light-on-dark
+  codes badly. It is the one place the sharing page draws its own colours.
+
+## Devices through Gio, so MTP readers work like drives
+
+2024 and later Kindles, and Android readers, mount over MTP: gvfs gives an mtp:// location and
+no local path (a FUSE path at best, slow and flaky). Rather than a second code path for them,
+devices.py does all its device I/O through Gio.File (devices.Storage: detect, list, copy with
+progress, rename, delete, free space, read), and a USB drive is the file:// case of the same
+code, with an fsync where there is a local path. Over MTP a file is written under a temporary
+name and then renamed (gvfs's MTP backend may refuse a move, so the old copy is deleted first
+then), and a folder is deleted only once empty (deleting a full folder over MTP may take its
+contents, or not). Books on an MTP reader are known by file name, not read, as reading each
+would mean fetching it. A Kindle over MTP still takes no EPUB by cable; the reason shown
+points to Send to Kindle by e-mail.
+
+## Kobo collections: opt-in per Kobo, backed up, checked
+
+Shelves as Kobo collections means writing the Kobo's own database, which also holds its
+reading progress, highlights and store account; Calibre's FAQ calls the Kobo's firmware buggy,
+and its schema is the Kobo's to change with any update. So it is off until turned on for a
+particular Kobo (remembered by serial number), and every write is guarded: the expected tables
+and columns are checked first (anything else and nothing is written); nothing is written while
+a `-journal` file or another program's lock says the database is in use; a copy is made beside
+it (`.kobo/KoboReader.sqlite.bookcase-backup`, the state before Bookcase's latest change,
+replaced each write, so it never holds stale reading progress for long); the change is one
+transaction; `PRAGMA integrity_check` runs after, and a failure puts the copy back. Bookcase
+only touches collections named after its shelves, and in them only books it knows (on the
+Kobo and in the library), so collections and entries the user made on the Kobo stay. Rows are
+written as Calibre's KoboTouch driver writes them (`Type` 'UserTag', 'true'/'false' flags,
+ContentID `file:///mnt/onboard/<path>`), the most-used writer of this database. Reading
+progress goes the other way read-only: the Kobo is opened `mode=ro`, and Bring Reading
+Progress From Kobo changes only the library, only where the Kobo is further on.
+
+
+## The Flatpak sees the usual places; the file chooser grants the rest
+
+The Flatpak (build-aux/flatpak, GNOME 51 runtime) does not ask for the whole home folder.
+`--filesystem=home` (and `home:ro`) is an error in Flathub's linter that needs an exception
+argued with reviewers, and most of what Bookcase reads is in a few known places. It gets:
+`~/Books` (the default library folder, made when missing), Documents and `~/Calibre Library`
+read-write (where people keep books and Calibre libraries: read in place, written by Keep
+Calibre in Step, trashed by Move to Trash), Downloads read-only (the welcome counts e-books
+there; adding copies them), `~/.config/calibre` read-only (Calibre's record of where its
+library is) and `~/.local/share/stardict` read-only (offline dictionaries). Every other folder
+comes through the file chooser, which in a Flatpak is the portal: a watched folder, a Calibre
+library or a library folder elsewhere is granted when the user picks it, and the grant is kept
+between runs (the path is then the portal's, `/run/user/…/doc/…`). The welcome's look finds
+only what is in the granted places; the rest is one Add Folder… away.
+
+The rest: the network (Open Library, catalogues, sync, mail, Look Up, Library Sharing's server;
+sharing the host's network namespace also lets calibre_write see Calibre's abstract lock
+socket); `/run/media` and `/media` with gvfs (`org.gtk.vfs.*`, `xdg-run/gvfs`) for e-readers,
+their MTP mounts and eject; the host's speech-dispatcher socket for Read Aloud (its Python
+client is built into the Flatpak; the daemon is the host's); Avahi on the system bus to
+advertise Library Sharing. Passwords go through libsecret's Secret portal, links and Open
+With through the OpenURI portal, so neither needs a bus name. Not given, so these degrade:
+logind (`finish-args-login1-system-talk-name` is a linter error), so KOReader sync does not
+push just before suspend, only on its usual triggers; and host programs (`flatpak-spawn
+--host` would be a sandbox escape), so Calibre's `ebook-convert` is not found and Convert…
+and sending offer only EPUB to Kobo EPUB (kepub.py's), as on a system without Calibre. Poppler, lxml
+and speechd's client are built into the Flatpak; the runtime has WebKitGTK 6, libsecret and
+bsdtar (CBR comics).
+
+## A PDF's zoom and layout are kept per book, in their own table
+
+A PDF read zoomed to fit its width, a manga read right to left, a slide deck read a page at
+a time: the layout belongs to the book, so the reader keeps it per book (the zoom or fit,
+pages or scrolling, right to left, the cover alone) in `book_state` (schema 4: a JSON object
+per book, the PDF's under 'pdf'). Not in the location string: that is the reading position,
+which sync, bookmarks and progress share, and a zoom does not move it. Not a column on
+books: the reader alone reads it, so Book and its queries stay as they are. Like progress it
+is no undo step, but it leaves and comes back with the book (remove_books, Undo). The
+reader-pdf-scrolled setting stays as the choice for a PDF never set. Right to left follows
+the PDF's /Direction where it can be seen (Poppler's GObject API does not give it, so the
+file is scanned) and the switch is always there.
+
+## Series stacks are Kindle's option, off at first; forgetting an opened book is undoable
+
+Apple Books groups a series only inside its collections; Kindle has "Collapse Series" as an
+option of the library. Bookcase follows Kindle: **Group Series** in All Books' menu (the
+group-series setting, off by default, so nobody's grid changes under them). A stack takes
+its first book's place in the order chosen, which keeps every sort meaningful; it stands for
+all its books when selected; a search and the list always show books, because a search is
+for finding one. The grouping is done in Python over the sorted books (collapse(): 4–14 ms
+over 10,000 books, 1,700 series), not in SQL, so it follows whatever sort and filters made
+the list. Forgetting a book opened without adding (Recently Opened on Home) removes its row,
+place, sessions and highlights as Remove from Library does, so Undo brings it all back;
+its reader is closed first so nothing is saved after. The Year in Review is offered for
+finished years only (a year still going reads as a verdict on unfinished work), and its
+favourites count books finished before time spent.

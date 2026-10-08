@@ -189,7 +189,7 @@ def dictzip(data, chunk_length):
 
 
 def make_stardict(directory, name, articles, types='', dz=False, gz_idx=False, wide=False,
-                  synonyms=None, chunk_length=16):
+                  synonyms=None, chunk_length=16, bookname='Tiny Invented Dictionary'):
     """A StarDict dictionary: articles {word: raw article str}; with `types` the
     sametypesequence, else each article's fields carry their own type characters."""
     data = b''
@@ -219,7 +219,7 @@ def make_stardict(directory, name, articles, types='', dz=False, gz_idx=False, w
             syn += synonym.encode('utf-8') + b'\x00' + struct.pack('>I', words.index(word))
         with open(base + '.syn', 'wb') as stream:
             stream.write(syn)
-    lines = ["StarDict's dict ifo file", 'version=3.0.0', 'bookname=Tiny Invented Dictionary',
+    lines = ["StarDict's dict ifo file", 'version=3.0.0', f'bookname={bookname}',
              f'wordcount={len(words)}', f'idxfilesize={len(index)}']
     if types:
         lines.append(f'sametypesequence={types}')
@@ -291,6 +291,79 @@ class StarDictTest(unittest.TestCase):
         with self.assertLogs('bookcase.lookup', 'WARNING'):
             found = lookup.find_dictionaries([self.directory, '/nonexistent/bookcase'])
         self.assertEqual(len(found), 2)
+
+
+class LemmaTest(unittest.TestCase):
+
+    def test_english_inflections(self):
+        cases = {'quillons': 'quillon', 'boxes': 'box', 'stories': 'story',
+                 'churches': 'church', 'stopped': 'stop', 'hoped': 'hope', 'walked': 'walk',
+                 'carried': 'carry', 'running': 'run', 'making': 'make', 'singing': 'sing',
+                 'bigger': 'big', 'later': 'late', 'happiest': 'happy', 'darkest': 'dark',
+                 'Brindles,': 'brindle'}
+        for word, lemma in cases.items():
+            self.assertEqual(lookup.lemmas(word)[0], lemma, word)
+        self.assertIn('spell', lookup.lemmas('spelled'))
+        self.assertEqual(lookup.lemmas('glass'), [])  # -ss is no plural
+        self.assertEqual(lookup.lemmas('is'), [])
+        self.assertEqual(lookup.lemmas('maisons', 'fr'), [])  # English only
+        self.assertNotIn('quillons', lookup.lemmas('quillons'))
+
+
+class PreferencesTest(unittest.TestCase):
+    """The service under the Look Up preferences: lemmas offline, online off, the
+    dictionaries' order and those turned off."""
+
+    def setUp(self):
+        self._directory = tempfile.TemporaryDirectory()
+        directory = self._directory.name
+        self.first = make_stardict(directory, 'first', WORDS, types='m', bookname='First')
+        self.second = make_stardict(directory, 'second', {'quillon': 'A second meaning.'},
+                                    types='m', bookname='Second')
+        self.fetch = FakeFetch({'definition/': DEFINITION, 'summary/': SUMMARY})
+        self.service = lookup.Lookup(fetch=self.fetch,
+                                     dictionaries=[lookup.StarDict(self.second),
+                                                   lookup.StarDict(self.first)])
+
+    def tearDown(self):
+        self._directory.cleanup()
+
+    def test_an_inflected_word_is_found_as_its_dictionary_form(self):
+        article = self.service.define_now('Quillons', 'en')
+        self.assertEqual(article.word, 'quillon')
+        self.assertEqual(self.fetch.urls, [])
+        article = self.service.define_now('brindled', 'en')
+        self.assertEqual(article.entries[0].senses[0].text, WORDS['Brindle'])
+
+    def test_order_and_disabled(self):
+        names = [d.name for d in self.service.dictionaries()]
+        self.assertEqual(names, ['First', 'Second'])  # by name when no order is set
+        self.service.configure(order=[self.second, self.first])
+        self.assertEqual([d.name for d in self.service.dictionaries()], ['Second', 'First'])
+        article = self.service.define_now('quillon')
+        self.assertEqual([e.heading for e in article.entries], ['Second', 'First'])
+        self.service.configure(order=[self.second], disabled=[self.second])
+        self.assertEqual([d.name for d in self.service.dictionaries()], ['First'])
+        self.assertEqual(len(self.service.all_dictionaries()), 2)
+        article = self.service.define_now('quillon')  # the cache was emptied
+        self.assertEqual([e.heading for e in article.entries], ['First'])
+
+    def test_offline_only_never_fetches(self):
+        self.service.configure(online=False)
+        with self.assertRaises(OnlineError) as caught:
+            self.service.define_now('absentword')
+        self.assertTrue(caught.exception.offline_only)
+        self.assertTrue(lookup.not_found(caught.exception))
+        with self.assertRaises(OnlineError) as caught:
+            self.service.summarize_now('Quillon Bay')
+        self.assertTrue(caught.exception.offline_only)
+        self.assertEqual(self.fetch.urls, [])
+        self.assertEqual(self.service.define_now('zephyrine').source, 'First')
+        self.service.configure(online=True)
+        self.assertEqual(self.service.define_now('absentword').source, 'wiktionary')
+
+    def test_the_link_to_free_dictionaries(self):
+        self.assertTrue(lookup.FREE_DICTIONARIES.startswith('https://'))
 
 
 if __name__ == '__main__':

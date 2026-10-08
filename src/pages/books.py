@@ -25,6 +25,13 @@ A refresh asks the library again; when the same books come back in the same orde
 item only takes its new Book (the tiles follow), so neither the scroll position nor the
 selection moves; otherwise the store is refilled and the selection kept by book id.
 
+Group Series (All Books' menu, the group-series setting, off by default as Kindle's
+"Collapse Series" is an option there): the covers show each series of two books or more as
+one stack (widgets/series_stack.py: its first covers fanned, "5 books", how far through the
+series the reader is) where its first book would come in the order chosen; activating it
+pushes the series' books, and a stack selected stands for all its books (the menu, a drag,
+Delete). While a search is typed, and in the list, every book shows on its own.
+
 Clicking selects (Ctrl and Shift add, the rubber band too); a double click or Enter opens the
 reader; a right click (or a long press) opens the book menu (pages/actions.py) on the
 selection; the keys are shortcuts.GRID's (Ctrl+A selects all, Ctrl+Shift+A none, Delete
@@ -46,6 +53,7 @@ from ..widgets.book_item import BookIds, BookItem
 from ..widgets.book_tile import BookTile, CoverSize, format_index, progress_text
 from ..widgets.cover import Cover
 from ..widgets.rating import Rating
+from ..widgets.series_stack import SeriesItem, SeriesStackTile, collapse
 from ..widgets.util import connect_weak
 from . import PageListener, app
 from .actions import BookActions, book_menu, popup_menu
@@ -192,11 +200,13 @@ class BooksPage(Adw.NavigationPage):
             self.set_tag(key)
         self.settings = app().settings
         self._store = Gio.ListStore(item_type=BookItem)
-        self._ids = []
+        self._ids = []  # the books shown, each in a stack too, in order
+        self._keys = []  # the items: a book's id, or a stack's ('series', name)
         self.selection = Gtk.MultiSelection(model=self._store)
         self._size = CoverSize(width=self.settings.get_int('cover-size'))
         self._compact = False
         self._last_query = None
+        self._grouped = False  # series shown as stacks at the last refresh
         self._loaded = False
         self._first_fill = None  # the idle that fills a page shown before its layout
         self.chosen = dict.fromkeys(FILTER_NAMES, '')  # the filter bar's choices
@@ -216,7 +226,7 @@ class BooksPage(Adw.NavigationPage):
         connect_weak(self.column_view, 'activate', self.on_activate)
         connect_weak(self.compact_breakpoint, 'apply', self._on_compact_apply)
         connect_weak(self.compact_breakpoint, 'unapply', self._on_compact_unapply)
-        for name in ('sort-order', 'sort-reversed', 'view-mode', 'cover-size'):
+        for name in ('sort-order', 'sort-reversed', 'view-mode', 'cover-size', 'group-series'):
             connect_weak(self.settings, f'changed::{name}', self._on_setting_changed)
         self.listener = PageListener(self, CHANGE_KINDS, BooksPage.refresh)
         self._update_title()
@@ -230,14 +240,17 @@ class BooksPage(Adw.NavigationPage):
         series_page = self.series_page
 
         def setup(_factory, list_item):
-            tile = BookTile(size)
-            tile.show_series_index = series_page
-            list_item.set_child(tile)
+            list_item.set_child(_GridCell(size, series_page))
 
         def bind(_factory, list_item):
-            list_item.get_child().set_item(list_item.get_item())
             item = list_item.get_item()
-            list_item.set_accessible_label(f'{item.book.title}, {item.book.author}')
+            list_item.get_child().set_item(item)
+            if isinstance(item, SeriesItem):
+                list_item.set_accessible_label(ngettext(
+                    '{series}, a series of {n} book', '{series}, a series of {n} books',
+                    len(item.books)).format(series=item.name, n=len(item.books)))
+            else:
+                list_item.set_accessible_label(f'{item.book.title}, {item.book.author}')
 
         def unbind(_factory, list_item):
             list_item.get_child().set_item(None)
@@ -278,6 +291,10 @@ class BooksPage(Adw.NavigationPage):
         group.add_action(self.settings.create_action('sort-order'))
         group.add_action(self.settings.create_action('view-mode'))
         group.add_action(self.settings.create_action('sort-reversed'))
+        if self.key == 'all':
+            group.add_action(self.settings.create_action('group-series'))
+            section = self.sort_button.get_menu_model().get_item_link(2, Gio.MENU_LINK_SECTION)
+            section.append(_('_Group Series'), 'books.group-series')
         self.insert_action_group('books', group)
         self.book_actions = BookActions(self, self.selected_ids, shelf_id=self._manual_shelf(),
                                         select_all=self.selection.select_all)
@@ -417,6 +434,8 @@ class BooksPage(Adw.NavigationPage):
     def _on_setting_changed(self, _settings, key):
         if key == 'view-mode':
             self._apply_view_mode()
+            if self._grouping_wanted() and self.get_mapped():
+                self.refresh()  # stacks in the covers, every book in the list
         elif key == 'cover-size':
             self._apply_cover_size()
         elif self.get_mapped():
@@ -475,6 +494,14 @@ class BooksPage(Adw.NavigationPage):
                  self._filter_query()]
         return ' '.join(part for part in parts if part)
 
+    def _grouping_wanted(self):
+        return self.key == 'all' and self.settings.get_boolean('group-series')
+
+    def _grouping(self):
+        """Whether series show as stacks now: All Books' covers, nothing typed."""
+        return (self._grouping_wanted() and self.settings.get_string('view-mode') != 'list'
+                and not self.search_entry.get_text().strip())
+
     def refresh(self):
         library = app().library
         self._update_title()
@@ -500,6 +527,7 @@ class BooksPage(Adw.NavigationPage):
         filters = dict(self.filters)
         filters['query'] = self._query()
         self._last_query = filters['query']
+        self._grouped = self._grouping()
         try:
             books = library.books(sort=self._sort(), descending=self._descending(),
                                   **filters)
@@ -513,31 +541,44 @@ class BooksPage(Adw.NavigationPage):
 
     def _show(self, books):
         ids = [book.id for book in books]
-        if ids == self._ids:
-            for position, book in enumerate(books):
-                self._store.get_item(position).set_book(book)
+        shown = collapse(books) if self._grouping() else books
+        keys = [entry.id if not isinstance(entry, tuple) else ('series', entry[0])
+                for entry in shown]
+        self._ids = ids
+        if keys == self._keys:
+            for position, entry in enumerate(shown):
+                item = self._store.get_item(position)
+                if isinstance(entry, tuple):
+                    item.set_books(entry[1])
+                else:
+                    item.set_book(entry)
             return
-        keep = set(self.selected_ids())
+        keep = set(self._selected_keys())
         old = {}
         for position in range(self._store.get_n_items()):
             item = self._store.get_item(position)
-            old[item.id] = item
+            old[_key(item)] = item
         items = []
-        for book in books:
-            item = old.get(book.id)
-            if item is None:
-                item = BookItem(book)
+        for key, entry in zip(keys, shown, strict=True):
+            item = old.get(key)
+            if isinstance(entry, tuple):
+                if item is None:
+                    item = SeriesItem(*entry)
+                else:
+                    item.set_books(entry[1])
+            elif item is None:
+                item = BookItem(entry)
             else:
-                item.set_book(book)
+                item.set_book(entry)
             items.append(item)
-        self._ids = ids
+        self._keys = keys
         self._store.splice(0, self._store.get_n_items(), items)
         if keep:
             selected = Gtk.Bitset.new_empty()
-            for position, book_id in enumerate(ids):
-                if book_id in keep:
+            for position, key in enumerate(keys):
+                if key in keep:
                     selected.add(position)
-            mask = Gtk.Bitset.new_range(0, len(ids)) if ids else Gtk.Bitset.new_empty()
+            mask = Gtk.Bitset.new_range(0, len(keys)) if keys else Gtk.Bitset.new_empty()
             self.selection.set_selection(selected, mask)
 
     def _update_title(self):
@@ -567,7 +608,7 @@ class BooksPage(Adw.NavigationPage):
         self.book_actions.update()
 
     def _update_subtitle(self):
-        selected = self.selection.get_selection().get_size()
+        selected = len(self.selected_ids())
         if selected > 1:
             text = ngettext('{n} selected', '{n} selected', selected).format(n=f'{selected:n}')
         elif self._ids:
@@ -581,8 +622,17 @@ class BooksPage(Adw.NavigationPage):
         return list(self._ids)
 
     def selected_ids(self):
+        """The books selected (a stack's, all of them)."""
         bitset = self.selection.get_selection()
-        return [self._store.get_item(bitset.get_nth(index)).id
+        ids = []
+        for index in range(bitset.get_size()):
+            item = self._store.get_item(bitset.get_nth(index))
+            ids.extend(item.ids if isinstance(item, SeriesItem) else (item.id,))
+        return ids
+
+    def _selected_keys(self):
+        bitset = self.selection.get_selection()
+        return [_key(self._store.get_item(bitset.get_nth(index)))
                 for index in range(bitset.get_size())]
 
     def _on_selection_changed(self, *_args):
@@ -603,7 +653,8 @@ class BooksPage(Adw.NavigationPage):
         self.refresh()
 
     def on_search_changed(self, _entry):
-        if self._loaded and self._query() != self._last_query:
+        if self._loaded and (self._query() != self._last_query or (
+                self._grouping_wanted() and self._grouping() != self._grouped)):
             self.refresh()
 
     def on_search_activate(self, _entry):
@@ -623,6 +674,9 @@ class BooksPage(Adw.NavigationPage):
 
     def on_activate(self, _view, position):
         item = self._store.get_item(position)
+        if isinstance(item, SeriesItem):
+            self.open_series(item.name)
+            return
         if item is not None:
             if item.book.missing:
                 window = self.get_root()
@@ -631,24 +685,32 @@ class BooksPage(Adw.NavigationPage):
                 return
             app().open_book(item.id)
 
+    def open_series(self, name):
+        """Push a series' books (a stack activated)."""
+        window = self.get_root()
+        group = next((group for group in app().library.series() if group.name == name), None)
+        if group is not None and window is not None and hasattr(window, 'show_books'):
+            window.show_books(group.name, series=group.id)
+
+    def _position(self, key):
+        try:
+            return self._keys.index(key)
+        except ValueError:
+            return None
+
     def _position_at(self, view, x, y):
         """The position of the item under (x, y) of the view, or None."""
         widget = view.pick(x, y, Gtk.PickFlags.DEFAULT)
         while widget is not None and widget is not view:
-            if isinstance(widget, (BookTile, _Cell)):
-                book = widget.cover.book if isinstance(widget, BookTile) else widget.book
-                if book is None:
-                    return None
-                try:
-                    return self._ids.index(book.id)
-                except ValueError:
-                    return None
+            if isinstance(widget, _GridCell):
+                return self._position(_key(widget.item)) if widget.item is not None else None
+            if isinstance(widget, _Cell):
+                return self._position(widget.book.id) if widget.book is not None else None
             if widget.get_css_name() == 'row':
                 cell = widget.get_first_child()
                 child = cell.get_first_child() if cell is not None else None
                 if isinstance(child, _Cell) and child.book is not None:
-                    return self._ids.index(child.book.id) if child.book.id in self._ids \
-                        else None
+                    return self._position(child.book.id)
             widget = widget.get_parent()
         return None
 
@@ -702,6 +764,45 @@ class BooksPage(Adw.NavigationPage):
         single = len(self.selected_ids()) == 1
         model = book_menu(app().library, shelf_id=self._manual_shelf(), details=single)
         popup_menu(view, model, x, y)
+
+
+# -- the grid's cells ------------------------------------------------------------------------
+
+def _key(item):
+    """What an item is known by across refreshes: a book's id, a stack's series."""
+    return item.key if isinstance(item, SeriesItem) else item.id
+
+
+class _GridCell(Gtk.Box):
+    """A grid's cell: a book's tile, or a series' stack (made the first time one is
+    bound here: a grid recycles its cells)."""
+
+    __gtype_name__ = 'BookcaseBooksGridCell'
+
+    def __init__(self, size, series_page):
+        super().__init__(halign=Gtk.Align.CENTER, valign=Gtk.Align.START)
+        self.size = size
+        self.item = None
+        self.tile = BookTile(size)
+        self.tile.show_series_index = series_page
+        self.append(self.tile)
+        self.stack_tile = None
+
+    def set_item(self, item):
+        self.item = item
+        stacked = isinstance(item, SeriesItem)
+        if stacked and self.stack_tile is None:
+            self.stack_tile = SeriesStackTile(self.size, width=self.size.props.width)
+            self.append(self.stack_tile)
+        self.tile.set_visible(not stacked)
+        self.tile.set_item(None if stacked else item)
+        if self.stack_tile is not None:
+            self.stack_tile.set_visible(stacked)
+            self.stack_tile.set_item(item if stacked else None)
+
+    @property
+    def cover(self):
+        return self.tile.cover
 
 
 # -- the list's cells ------------------------------------------------------------------------

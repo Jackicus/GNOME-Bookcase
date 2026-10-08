@@ -18,8 +18,9 @@ other. The header bar has the title and the
 chapter, the sidebar button, a bookmark toggle, the Text and Layout popover (the reader-*
 settings, applied as they change: the paper theme, typeface, size, spacing, margins, width,
 justification, hyphenation, pages or scrolling, two pages, the publisher's styles; for a
-PDF the paper, the zoom, Fit Width or Fit Page, and pages or scrolling, kept in
-reader-pdf-scrolled) and the main menu (Open With… hands the file to another app). The
+PDF the paper, the zoom, Fit Width or Fit Page, pages or scrolling, right to left and the
+cover alone, kept per book by reader_pdf.py, which adds Print…) and the main menu (Open
+With… hands the file to another app). The
 sidebar (an Adw.OverlaySplitView, docked when the window is wide) has the
 contents (the current chapter selected), the highlights and bookmarks (click to go, edit a
 note, change a colour, remove with Undo) and the search (results as they come, Ctrl+G and
@@ -62,16 +63,17 @@ import os
 import threading
 import time
 from gettext import gettext as _
+from gettext import ngettext
 from xml.sax.saxutils import escape
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
-from . import converting, lookup, pdf_location, reader_sync, reading, speech, stats
+from . import converting, lookup, pdf_location, reader_pdf, reader_sync, reading, speech, stats
 from .formats import FormatError
 from .library import COLORS, OPENED, LibraryError
 from .shortcuts import READER
 from .widgets import book_view as book_view_module
-from .widgets import lookup_popover, pdf_view, read_aloud
+from .widgets import lookup_popover, pdf_view, read_aloud, reader_theme
 from .widgets.book_view import BookView  # noqa: F401  (the template's child)
 from .widgets.util import connect_weak
 
@@ -95,7 +97,7 @@ def color_names():
 
 def theme_names():
     return {'auto': _('Follow System Style'), 'light': _('Light'), 'sepia': _('Sepia'),
-            'dark': _('Dark'), 'black': _('Black')}
+            'dark': _('Dark'), 'black': _('Black'), 'custom': _('Custom')}
 
 
 def open(app, book_id):  # noqa: A001  (the module's entry point, called as reader_window.open)
@@ -198,6 +200,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._selection = None  # the selection or highlight the popover is for
         self._toc_rows = []
         self._chapter_labels = {}  # href -> the label shown for it, where not the book's
+        self._announced_chapter = None  # the chapter a screen reader was last told of
         self._search_rows = []  # [(row, cfi)]
         self._search_index = -1
         self._search_count = 0
@@ -208,6 +211,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._closed = False
         self._rate = None  # the reader's pace in this book (fraction per second), or None
         self._keys = _keymap()
+        self._pdf = None  # a PDF's reader_pdf.ReaderPdf: its kept layout, Print…
+        self._fxl_zoom = None  # a fixed layout's zoom: {'fit', 'percent'}
 
         self._build_actions()
         self._build_controllers()
@@ -219,8 +224,6 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._apply_theme_classes()
         self._update_title()
         self._open_book()
-        if self._read_aloud is not None and self.view is not self.book_view:
-            self.lookup_action('read-aloud').set_enabled(False)  # a PDF: no page to read
         self._sync = reader_sync.ReaderSync(self)  # kosync: the banner, pushes, the menu
 
     # -- setting up ------------------------------------------------------------------------
@@ -289,6 +292,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._settings_handler = connect_weak(self.settings, 'changed', self._on_setting_changed)
         self._style_handler = connect_weak(Adw.StyleManager.get_default(), 'notify::dark',
                                            self._on_dark_changed)
+        self._contrast_handler = connect_weak(Adw.StyleManager.get_default(),
+                                              'notify::high-contrast', self._on_dark_changed)
 
     def _connect_view(self, view):
         connect_weak(view, 'loaded', self._on_loaded)
@@ -382,6 +387,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         popover.unparent()
         popover.set_parent(view)
         self._show_pdf_controls()
+        self._pdf = reader_pdf.ReaderPdf(self)
 
     @property
     def is_pdf(self):
@@ -487,7 +493,8 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _style(self):
         dark = Adw.StyleManager.get_default().get_dark()
         title = self.book.title if self.book else ''
-        style = reading.build_style(self._setting, dark, title)
+        style = reading.build_style(self._setting, dark, title,
+                                    Adw.StyleManager.get_default().get_high_contrast())
         if self.is_pdf:
             style['flow'] = 'scrolled' if self._layout_key_value() else 'paginated'
         return style
@@ -497,6 +504,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         return 'reader-pdf-scrolled' if self.is_pdf else 'reader-scrolled'
 
     def _layout_key_value(self):
+        if self._pdf is not None:
+            return self._pdf.scrolled()  # kept per PDF
         return self.settings.get_boolean(self._layout_key())
 
     def _setting(self, key):
@@ -510,9 +519,11 @@ class ReaderWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _apply_theme_classes(self):
-        dark = Adw.StyleManager.get_default().get_dark()
-        name = reading.theme_colors(self.settings.get_string('reader-theme'), dark)['name']
-        for theme in reading.THEMES:
+        manager = Adw.StyleManager.get_default()
+        dark = manager.get_dark()
+        name = reading.theme_colors(self.settings.get_string('reader-theme'), dark,
+                                    high_contrast=manager.get_high_contrast())['name']
+        for theme in (*reading.THEMES, 'custom'):
             self.toolbar_view.remove_css_class(f'theme-{theme}')
         self.toolbar_view.add_css_class('reader-page')
         self.toolbar_view.add_css_class(f'theme-{name}')
@@ -527,6 +538,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             self._update_layout_group()
         elif key == 'reader-theme':
             self._update_theme_chips()
+        elif key == 'reader-custom-theme':
+            reader_theme.apply_css(self.settings)
         elif key == 'reader-progress-label':
             self._update_progress_label()
 
@@ -540,7 +553,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._theme_chips = {}
         group = None
         names = theme_names()
-        for name in reading.THEME_NAMES:
+        reader_theme.apply_css(self.settings)
+        for name in (*reading.THEME_NAMES, 'custom'):
             chip = Gtk.ToggleButton(tooltip_text=names[name], group=group,
                                     width_request=36, height_request=36)
             chip.update_property([Gtk.AccessibleProperty.LABEL], [names[name]])
@@ -554,6 +568,13 @@ class ReaderWindow(Adw.ApplicationWindow):
             self.theme_box.append(chip)
             self._theme_chips[name] = chip
         self._update_theme_chips()
+        self.custom_theme_button = Gtk.Button(label=_('Custom Colours…'),
+                                              halign=Gtk.Align.CENTER)
+        self.custom_theme_button.add_css_class('flat')
+        self.custom_theme_button.connect('clicked',
+                                         _weak_callback(self, self._edit_custom_theme))
+        self.theme_box.get_parent().insert_child_after(self.custom_theme_button,
+                                                       self.theme_box)
 
         flags = Gio.SettingsBindFlags.DEFAULT
         self.settings.bind('reader-font', self.font_group, 'active-name', flags)
@@ -583,15 +604,22 @@ class ReaderWindow(Adw.ApplicationWindow):
         if chip.get_active() and self.settings.get_string('reader-theme') != name:
             self.settings.set_string('reader-theme', name)
 
+    def _edit_custom_theme(self):
+        self.typography_popover.popdown()
+        reader_theme.present(self, self.settings)
+
     def _update_layout_group(self):
         name = 'scrolled' if self._layout_key_value() else 'paginated'
         if self.layout_group.get_active_name() != name:
             self.layout_group.set_active_name(name)
-        self.two_pages_row.set_sensitive(name == 'paginated')  # scrolling: one column
+        # scrolling: one column (a fixed layout's pages turn, whichever)
+        self.two_pages_row.set_sensitive(name == 'paginated' or self._fixed_layout())
 
     def _on_layout_changed(self, group, _pspec):
         scrolled = group.get_active_name() == 'scrolled'
-        if self._layout_key_value() != scrolled:
+        if self._pdf is not None:
+            self._pdf.set_scrolled(scrolled)
+        elif self._layout_key_value() != scrolled:
             self.settings.set_boolean(self._layout_key(), scrolled)
 
     def _show_pdf_controls(self):
@@ -601,6 +629,17 @@ class ReaderWindow(Adw.ApplicationWindow):
         for widget in (self.font_group, self.line_height_row.get_parent(), self.justify_row,
                        self.hyphenate_row, self.publisher_row):
             widget.set_visible(False)
+        self._add_zoom_controls()
+        self.two_pages_row.set_subtitle(_('Side by side when the window is wide, the first '
+                                          'page alone'))
+        self._update_layout_group()
+        self._update_size_label()
+
+    def _add_zoom_controls(self):
+        """The size buttons as Zoom Out and Zoom In, and Fit Width or Fit Page under them
+        (a PDF, a fixed layout)."""
+        if getattr(self, '_fit_group', None) is not None:
+            return
         for button, icon, tooltip in ((self.smaller_button, 'zoom-out-symbolic', _('Zoom Out')),
                                       (self.bigger_button, 'zoom-in-symbolic', _('Zoom In'))):
             button.set_icon_name(icon)
@@ -615,20 +654,20 @@ class ReaderWindow(Adw.ApplicationWindow):
         connect_weak(self._fit_group, 'notify::active-name', self._on_fit_changed)
         size_box = self.size_label.get_parent()
         size_box.get_parent().insert_child_after(self._fit_group, size_box)
-        self.two_pages_row.set_subtitle(_('Side by side when the window is wide, the first '
-                                          'page alone'))
-        self._update_layout_group()
-        self._update_size_label()
 
     def _show_fixed_layout_controls(self):
         """A fixed layout (a comic, a picture book) has pages drawn as they are: the Text and
-        Layout popover keeps the paper only, the text size keys do nothing, nothing reads
-        aloud."""
-        self.typography_button.set_tooltip_text(_('Paper'))
-        for widget in (self.font_group, self.smaller_button.get_parent(),
-                       self.line_height_row.get_parent(), self.layout_group,
-                       self.two_pages_row.get_parent()):
+        Layout popover has the paper, the zoom (out, in, fit width or page: the size keys and
+        Ctrl+scroll zoom too) and two pages; nothing reads aloud."""
+        self.typography_button.set_tooltip_text(_('Zoom and Layout'))
+        for widget in (self.font_group, self.line_height_row.get_parent(), self.layout_group,
+                       self.justify_row, self.hyphenate_row, self.publisher_row):
             widget.set_visible(False)
+        self._fxl_zoom = (self._loaded or {}).get('zoom') or {'fit': 'page', 'percent': 100}
+        self._add_zoom_controls()
+        self.two_pages_row.set_subtitle(_('Side by side when the window is wider than tall'))
+        self.two_pages_row.set_sensitive(True)
+        self._update_size_label()
         action = self.lookup_action('read-aloud')
         if action is not None:
             action.set_enabled(False)
@@ -638,8 +677,22 @@ class ReaderWindow(Adw.ApplicationWindow):
 
     def _on_fit_changed(self, group, _pspec):
         name = group.get_active_name()
-        if name in ('width', 'page') and self.view.fit != name:
+        if name in ('width', 'page') and self._fixed_layout():
+            if (self._fxl_zoom or {}).get('fit') != name:
+                self._zoom_fixed_layout('fit-' + name)
+        elif name in ('width', 'page') and self.view.fit != name:
             self.view.set_fit(name)
+
+    def _zoom_fixed_layout(self, action):
+        """A fixed layout's zoom: 'in', 'out', 'fit-page' or 'fit-width' (BookView.zoom)."""
+        zoom = getattr(self.view, 'zoom', None)
+        if zoom is not None:
+            zoom(action, _weak_callback(self, self._on_fixed_zoom, argument=0))
+
+    def _on_fixed_zoom(self, state):
+        if state:
+            self._fxl_zoom = state
+            self._on_zoom_changed(self.view)
 
     def _on_zoom_changed(self, _view):
         self._update_size_label()
@@ -648,7 +701,7 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _sync_fit_group(self):
         """Fit Width or Fit Page active as the view fits; neither for the automatic zoom
         or a percentage."""
-        fit = self.view.fit
+        fit = (self._fxl_zoom or {}).get('fit') if self._fixed_layout() else self.view.fit
         if fit in ('width', 'page'):
             if self._fit_group.get_active_name() != fit:
                 self._fit_group.set_active_name(fit)
@@ -658,12 +711,20 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _update_size_label(self):
         if self.is_pdf:
             percent = self.view.zoom_percent
-            self.size_label.set_label(_('{}%').format(percent))
+            # Translators: a percentage ("45%").
+            self.size_label.set_label(_('{percent}%').format(percent=percent))
             self.smaller_button.set_sensitive(percent > round(pdf_view.ZOOM_STEPS[0] * 100))
             self.bigger_button.set_sensitive(percent < round(pdf_view.ZOOM_STEPS[-1] * 100))
             return
+        if self._fixed_layout() and self._fxl_zoom:
+            percent = self._fxl_zoom.get('percent') or 100
+            # Translators: a percentage ("45%").
+            self.size_label.set_label(_('{percent}%').format(percent=percent))
+            self.smaller_button.set_sensitive(self._fxl_zoom.get('fit') != 'page')
+            self.bigger_button.set_sensitive(percent < 790)
+            return
         size = self.settings.get_int('reader-font-size')
-        self.size_label.set_label(_('{} px').format(size))
+        self.size_label.set_label(_('{size} px').format(size=size))
         self.smaller_button.set_sensitive(size > FONT_SIZES[0])
         self.bigger_button.set_sensitive(size < FONT_SIZES[1])
 
@@ -678,8 +739,9 @@ class ReaderWindow(Adw.ApplicationWindow):
             else:
                 self.view.set_fit('auto')
             return
-        if self._fixed_layout():
-            return  # no text to size: the setting is every other book's
+        if self._fixed_layout():  # no text to size: the pages zoom
+            self._zoom_fixed_layout('in' if step > 0 else 'out' if step < 0 else 'fit-page')
+            return
         if step == 0:
             self.settings.reset('reader-font-size')
             return
@@ -714,7 +776,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._toc_rows = []
         if self._comic():
             # A comic's contents are its pictures' file names ("012.jpg"): pages read better.
-            toc = [{**item, 'label': _('Page {}').format(number)}
+            toc = [{**item, 'label': _('Page {page}').format(page=number)}
                    for number, item in enumerate(toc, 1)]
             self._chapter_labels = {item['href']: item['label'] for item in toc}
 
@@ -766,6 +828,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         # Reaching the end, not opening there (a book marked unread or reading again stays so).
         if place.get('atEnd') and fraction >= 0.5 and previous is not None:
             self._mark_finished()
+        if place.get('ttsMoved') and self._read_aloud is not None:
+            self._read_aloud.moved()  # reading aloud goes on from the new page
         self._sync.relocated(place)
 
     def _on_view_error(self, _view, message):
@@ -879,6 +943,12 @@ class ReaderWindow(Adw.ApplicationWindow):
         chapter = (self._place or {}).get('chapter') or {}
         label = self._chapter_labels.get(chapter.get('href'), chapter.get('label'))
         self.window_title.set_subtitle(label or '')
+        # A screen reader hears the chapter when it changes (not every page: the page is
+        # WebKit's to read), not the one the book opens at.
+        if label and label != self._announced_chapter:
+            if self._announced_chapter is not None:
+                self.announce(label, Gtk.AccessibleAnnouncementPriority.MEDIUM)
+            self._announced_chapter = label
 
     # -- the return button -----------------------------------------------------------------
 
@@ -886,11 +956,11 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._return_cfi = cfi
         self._turns_since_jump = 0
         if previous.get('pages'):  # a PDF's page, without "of 300"
-            label = _('Page {}').format(previous['page'])
+            label = _('Page {page}').format(page=previous['page'])
         else:
             label = reading.progress_text('page' if previous.get('page') else 'percent',
                                           previous)
-        self.return_content.set_label(_('Back to {}').format(label))
+        self.return_content.set_label(_('Back to {place}').format(place=label))
         self.return_revealer.set_reveal_child(True)
 
     def _hide_return(self):
@@ -1021,7 +1091,7 @@ class ReaderWindow(Adw.ApplicationWindow):
             note.add_css_class('dimmed')
             texts.append(note)
         page = pdf_location.parse(annotation.location)
-        where = Gtk.Label(label=_('Page {}').format(page.page) if page is not None
+        where = Gtk.Label(label=_('Page {page}').format(page=page.page) if page is not None
                           else reading.progress_text('percent',
                                                      {'fraction': annotation.position}),
                           xalign=0)
@@ -1174,7 +1244,7 @@ class ReaderWindow(Adw.ApplicationWindow):
 
     def _toggle_read_aloud(self):
         if self._read_aloud is None or self.content_stack.get_visible_child_name() != 'book' \
-                or self.view is not self.book_view or self._fixed_layout():
+                or self._fixed_layout():
             return False
         self._read_aloud.toggle()
         return True
@@ -1191,7 +1261,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         for color in COLORS:
             button = Gtk.Button(tooltip_text=names[color], width_request=30, height_request=30)
             button.update_property([Gtk.AccessibleProperty.LABEL],
-                                   [_('Highlight in {}').format(names[color])])
+                                   [_('Highlight in {color}').format(color=names[color])])
             button.add_css_class('circular')
             button.add_css_class('reader-color-chip')
             button.add_css_class(f'color-{color}')
@@ -1216,7 +1286,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             self._selection_buttons[name] = button
         box.append(actions)
         self._lookup_panel = lookup_popover.LookupPanel(
-            on_search=_weak_callback(self, self._search_for, argument=0), visible=False)
+            on_search=_weak_callback(self, self._search_for, argument=0), visible=False,
+            settings=self.settings)
         box.append(self._lookup_panel)
         popover.set_child(box)
         popover.set_parent(self.view)
@@ -1317,7 +1388,8 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _show_lookup(self, text, force=False):
         """The definition of a selected word in the popover, in a wide window (else Look Up
         opens a bottom sheet); with force, the summary of a longer selection too."""
-        shown = bool(text) and lookup_popover.inline(self) and (force or lookup.is_word(text))
+        shown = bool(text) and lookup_popover.inline(self) and (force or (
+            lookup.is_word(text) and self.settings.get_boolean('lookup-automatic')))
         self._lookup_panel.set_visible(shown)
         self._selection_buttons['lookup'].set_visible(not shown)
         if shown:
@@ -1334,7 +1406,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             return
         self._take_selection()
         lookup_popover.present_sheet(self, selection['text'], self._lookup_language(),
-                                     _weak_callback(self, self._search_for, argument=0))
+                                     _weak_callback(self, self._search_for, argument=0),
+                                     settings=self.settings)
 
     def _search_for(self, text):
         self._selection_popover.popdown()
@@ -1409,7 +1482,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             self._search_rows.append(row)
             self._search_count += 1
         self.search_stack.set_visible_child_name('list')
-        self.search_status.set_label(_('{} results so far').format(self._search_count))
+        self.search_status.set_label(ngettext('{n} result so far', '{n} results so far',
+                                              self._search_count).format(n=self._search_count))
 
     def _on_search_done(self, _view, done):
         if done.get('query') != self.search_entry.get_text().strip():
@@ -1420,7 +1494,7 @@ class ReaderWindow(Adw.ApplicationWindow):
             self.search_status.set_visible(False)
             return
         self.search_status.set_label(
-            (_('{} result') if count == 1 else _('{} results')).format(count))
+            ngettext('{n} result', '{n} results', count).format(n=count))
 
     def _on_search_row(self, _list, row):
         cfi = getattr(row, 'cfi', None)
@@ -1459,7 +1533,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         if typing and not (mods & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) \
                 and name not in ('fullscreen', 'leave-fullscreen'):
             return False
-        if typing and name in ('leave-fullscreen', 'copy'):
+        if typing and name in ('leave-fullscreen', 'copy', 'read-aloud-next',
+                               'read-aloud-previous'):
             return False  # the search entry's stop-search, its own copy
         if name == 'leave-fullscreen' and focus is not None \
                 and focus.get_ancestor(Gtk.Popover) is not None:
@@ -1560,6 +1635,13 @@ class ReaderWindow(Adw.ApplicationWindow):
             self._show_details()
         elif name == 'read-aloud':
             return self._toggle_read_aloud()
+        elif name == 'print':
+            return self._pdf is not None and self._pdf.print()
+        elif name in ('read-aloud-next', 'read-aloud-previous'):
+            bar = self._read_aloud
+            if bar is None or bar.state == 'stopped':
+                return False
+            return bar.skip(1 if name == 'read-aloud-next' else -1)
         elif name == 'close':
             self.close()
         else:
@@ -1626,9 +1708,16 @@ class ReaderWindow(Adw.ApplicationWindow):
         if self._place is None:
             return
         pages = self._place.get('pages') if self.is_pdf else None  # a PDF goes by its pages
+        items = self._page_items()  # an EPUB with the printed book's page numbers
         if pages:
-            body = _('A page number, from 1 to {}').format(pages)
+            body = _('A page number, from 1 to {pages}').format(pages=pages)
             text = str(self._place.get('page') or 1)
+        elif items:
+            pages = items
+            body = _('A page number of the printed book, from {first} to {last}, or a '
+                     'percentage (50%)').format(first=items[0]['label'],
+                                                last=items[-1]['label'])
+            text = str(self._place.get('page') or items[0]['label'])
         else:
             body = _('A percentage of the book, from 0 to 100')
             text = str(int((self._place.get('fraction') or 0) * 100))
@@ -1656,9 +1745,27 @@ class ReaderWindow(Adw.ApplicationWindow):
         dialog.present(self)
         entry.grab_focus()
 
+    def _page_items(self):
+        """The book's page list ([{label, href}], an EPUB's printed pages), else []."""
+        if self.is_pdf:
+            return []
+        return [item for item in (self._loaded or {}).get('pageItems') or ()
+                if item.get('label') and item.get('href')]
+
     def _go_to_entered(self, text, pages=None):
-        """Go where the Go to Location dialog says: a page of `pages` (a PDF), else a
-        percentage. False when the text is no number."""
+        """Go where the Go to Location dialog says: a page of `pages` (a PDF's count, or an
+        EPUB's page list: a page label, or a percentage ending in %), else a percentage.
+        False when it is neither."""
+        if isinstance(pages, list):
+            wanted = text.strip().casefold()
+            item = next((i for i in pages if i['label'].casefold() == wanted), None)
+            if item is not None:
+                self.view.go_to(item['href'])
+                return True
+            if not text.strip().endswith('%'):
+                self.toast(_('This book has no page {page}').format(page=text.strip()))
+                return False
+            pages = None
         try:
             number = float(text.strip().rstrip('%').replace(',', '.'))
         except ValueError:
@@ -1726,7 +1833,8 @@ class ReaderWindow(Adw.ApplicationWindow):
                 self.settings.set_int('reader-height', height)
         for obj, handler in ((self.library, self._library_handler),
                              (self.settings, self._settings_handler),
-                             (Adw.StyleManager.get_default(), self._style_handler)):
+                             (Adw.StyleManager.get_default(), self._style_handler),
+                             (Adw.StyleManager.get_default(), self._contrast_handler)):
             if obj.handler_is_connected(handler):
                 obj.disconnect(handler)
         self._release_popover()

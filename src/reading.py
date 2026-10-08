@@ -7,7 +7,12 @@ progress label, the reading-session clock.
     build_style(get, dark, title='')     # the style dict reader.js's setStyle() takes;
                                          # get(key) reads a reader-* setting
     STYLE_KEYS                           # the settings that change the style
-    theme_colors(name, dark)             # {'name', 'bg', 'fg', 'link', 'dim', 'dark'}
+    theme_colors(name, dark, custom='', high_contrast=False)  # {'name', 'bg', 'fg', 'link',
+                                         # 'dark'}; custom the reader-custom-theme JSON, for
+                                         # name 'custom'; "auto" under the system's high
+                                         # contrast is a contrast-* paper
+    custom_theme(text) / custom_theme_json(bg, fg, link)   # that JSON read and written
+    is_dark(color)                       # whether a #rrggbb colour is a dark paper's
     progress_text(kind, place, ...)      # the progress label: 'percent', 'page',
     next_label(kind)                     # 'chapter-time' or 'book-time'; the next to show
     format_minutes(minutes)              # '2 h 5 min'
@@ -21,6 +26,8 @@ chapter, page, section, location, time…
 """
 
 import dataclasses
+import json
+import re
 from gettext import gettext as _
 from gettext import ngettext
 
@@ -34,8 +41,15 @@ THEMES = {
     'sepia': {'bg': '#f4ecd8', 'fg': '#5b4636', 'link': '#8a4b08', 'dark': False},
     'dark': {'bg': '#222226', 'fg': '#deddda', 'link': '#99c1f1', 'dark': True},
     'black': {'bg': '#000000', 'fg': '#c0bfbc', 'link': '#99c1f1', 'dark': True},
+    # "auto" under the system's High Contrast: not offered as choices of their own.
+    'contrast-light': {'bg': '#ffffff', 'fg': '#000000', 'link': '#0b3d91', 'dark': False},
+    'contrast-dark': {'bg': '#000000', 'fg': '#ffffff', 'link': '#9fd0ff', 'dark': True},
 }
 THEME_NAMES = ('auto', 'light', 'sepia', 'dark', 'black')
+# The user's own paper (reader-theme 'custom', its colours in reader-custom-theme): the
+# schema's default until it is set.
+CUSTOM_THEME = {'bg': '#e8f0e3', 'fg': '#26331f', 'link': '#2c6a2e'}
+COLOR = re.compile(r'#[0-9a-fA-F]{6}')
 
 FONTS = {
     'serif': '"Literata", "Noto Serif", "Source Serif 4", "DejaVu Serif", Georgia, serif',
@@ -45,7 +59,7 @@ FONTS = {
 STYLE_KEYS = ('reader-theme', 'reader-font', 'reader-custom-font', 'reader-font-size',
               'reader-line-height', 'reader-margin', 'reader-max-width', 'reader-justify',
               'reader-hyphenate', 'reader-publisher-styles', 'reader-scrolled',
-              'reader-two-pages', 'reader-animate')
+              'reader-two-pages', 'reader-animate', 'reader-custom-theme')
 
 LABEL_KINDS = ('percent', 'page', 'chapter-time', 'book-time')
 
@@ -57,10 +71,46 @@ def readable(fmt):
     return (fmt or '').lower() in READABLE
 
 
-def theme_colors(name, dark):
-    """The colours of a theme; "auto" (or an unknown name) is dark or light by `dark`."""
-    if name not in THEMES:
-        name = 'dark' if dark else 'light'
+def is_dark(color):
+    """Whether a #rrggbb background is dark (its relative luminance under a half)."""
+    if not COLOR.fullmatch(color or ''):
+        return False
+
+    def linear(channel):
+        value = int(channel, 16) / 255
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (linear(color[i:i + 2]) for i in (1, 3, 5))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.18
+
+
+def custom_theme(text):
+    """The custom paper's colours from reader-custom-theme's JSON ({'bg', 'fg', 'link',
+    'dark'}): a colour that is missing or no #rrggbb is CUSTOM_THEME's."""
+    try:
+        data = json.loads(text or '{}')
+    except ValueError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    colors = {key: (data.get(key) if isinstance(data.get(key), str)
+                    and COLOR.fullmatch(data.get(key)) else default).lower()
+              for key, default in CUSTOM_THEME.items()}
+    return {**colors, 'dark': is_dark(colors['bg'])}
+
+
+def custom_theme_json(bg, fg, link):
+    return json.dumps({'bg': bg, 'fg': fg, 'link': link})
+
+
+def theme_colors(name, dark, custom='', high_contrast=False):
+    """The colours of a theme; "auto" (or an unknown name) is dark or light by `dark`,
+    contrast-dark or contrast-light with `high_contrast` (the system's High Contrast);
+    "custom" is the reader-custom-theme JSON `custom`."""
+    if name == 'custom':
+        return {'name': 'custom', **custom_theme(custom)}
+    if name not in THEME_NAMES[1:]:
+        name = ('contrast-' if high_contrast else '') + ('dark' if dark else 'light')
     return {'name': name, **THEMES[name]}
 
 
@@ -72,11 +122,13 @@ def font_family(font, custom=''):
     return FONTS.get(font, '')
 
 
-def build_style(get, dark, title=''):
+def build_style(get, dark, title='', high_contrast=False):
     """The style reader.js's setStyle() takes, from the reader-* settings (`get(key)`
-    returns a setting's value: an int, float, bool or str) and the system's dark style."""
+    returns a setting's value: an int, float, bool or str) and the system's dark style (and
+    High Contrast)."""
     return {
-        'theme': theme_colors(get('reader-theme'), dark),
+        'theme': theme_colors(get('reader-theme'), dark, get('reader-custom-theme') or '',
+                              high_contrast),
         'font': font_family(get('reader-font'), get('reader-custom-font')),
         'fontSize': int(get('reader-font-size')),
         'lineHeight': round(float(get('reader-line-height')), 2),
@@ -105,10 +157,11 @@ def format_minutes(minutes):
     if minutes < 1:
         return _('less than a minute')
     if minutes < 60:
-        return ngettext('{} min', '{} min', minutes).format(minutes)
+        return ngettext('{n} min', '{n} min', minutes).format(n=minutes)
     hours, rest = divmod(minutes, 60)
     if rest == 0:
-        return ngettext('{} h', '{} h', hours).format(hours)
+        # Translators: hours, abbreviated ("2 h").
+        return ngettext('{n} h', '{n} h', hours).format(n=hours)
     return _('{hours} h {minutes} min').format(hours=hours, minutes=rest)
 
 
@@ -123,7 +176,7 @@ def progress_text(kind, place, chapter_minutes=None, book_minutes=None):
         if page and place.get('pages'):  # a PDF
             return _('Page {page} of {pages}').format(page=page, pages=place['pages'])
         if page:
-            return _('Page {}').format(page)
+            return _('Page {page}').format(page=page)
         location = place.get('location') or {}
         total = location.get('total')
         if total:
@@ -135,12 +188,13 @@ def progress_text(kind, place, chapter_minutes=None, book_minutes=None):
         if kind == 'chapter-time':
             minutes = chapter_minutes if chapter_minutes is not None else time.get('section')
             if minutes is not None:
-                return _('{} left in chapter').format(format_minutes(minutes))
+                return _('{time} left in chapter').format(time=format_minutes(minutes))
         else:
             minutes = book_minutes if book_minutes is not None else time.get('total')
             if minutes is not None:
-                return _('{} left in book').format(format_minutes(minutes))
-    return _('{}%').format(int(fraction * 100 + 1e-9))
+                return _('{time} left in book').format(time=format_minutes(minutes))
+    # Translators: a percentage ("45%").
+    return _('{percent}%').format(percent=int(fraction * 100 + 1e-9))
 
 
 @dataclasses.dataclass

@@ -52,6 +52,9 @@ Application (main.py)    app.library, app.covers, app.settings, app.devices; app
 ├─ importing.py          adding files (copied into the library folder), scanning watched
 │                        folders in place, content hashes, duplicates
 ├─ calibre.py            reading a Calibre library (metadata.db) to link its books in place
+├─ calibre_write.py      Keep Calibre in Step (opt-in per library): Bookcase's edits written
+│                        to metadata.db as Calibre writes them; app.calibre
+│                        (dialogs/calibre_step.py)
 ├─ existing_books.py     the welcome's look for a user's Calibre libraries and book folders
 ├─ covers.py             the cover store and its thumbnail cache
 ├─ online.py             metadata and covers from Open Library (and Google Books with a key)
@@ -61,12 +64,16 @@ Application (main.py)    app.library, app.covers, app.settings, app.devices; app
 │                        undo step (dialogs/bulk_metadata.py)
 ├─ lookup.py             Look Up: StarDict dictionaries, Wiktionary, Wikipedia summaries
 ├─ speech.py             Read Aloud: the speech engine (speech-dispatcher) and the player
-├─ devices.py, kepub.py  e-readers on USB (Kobo, Kindle, any reader with a books folder);
-│                        sending a book, as kepub for a Kobo
+├─ devices.py, kepub.py  e-readers over USB or MTP, all through Gio (Kobo, Kindle, any
+│                        reader with a books folder); sending a book, as kepub for a Kobo
+├─ kobo.py               a Kobo's KoboReader.sqlite: reading progress read back; shelves as
+│                        collections (opt-in per Kobo, checked, backed up: decisions.md)
 ├─ mail.py, passwords.py Send to Kindle by e-mail (SMTP); passwords in the keyring (libsecret)
 ├─ kosync.py             reading sync over KOReader's protocol: app.sync (reader_sync.py,
 │                        dialogs/sync_prefs.py)
 ├─ exporting.py          copies of books with their metadata written in (export, devices)
+├─ sharing.py, qr.py     the library served read-only to the LAN (OPDS and HTML pages,
+│                        app.sharing, dialogs/sharing_prefs.py); QR codes of its address
 ├─ annotations.py        highlights and notes to Markdown; Kindle's My Clippings.txt in
 └─ stats.py              reading time, speed (time left), streaks, pages and goals, from
                          reading sessions and books' finished dates
@@ -84,10 +91,14 @@ read in place. GSettings: one schema for both builds.
 - **The user's files are theirs**: a book file is never moved, renamed or rewritten in place.
   Added books are copied; metadata edits live in the library database; a copy sent to a
   device or exported carries the edited metadata. A linked Calibre library's metadata.db is
-  read, never written. Removing a book from the library leaves its file; Move to Trash is a
-  separate, confirmed action that trashes it (Gio, recoverable).
+  read, never written, with one opt-in exception: Keep Calibre in Step (calibre_write.py, the
+  only module that writes there; per library, confirmed, Calibre closed, backed up, checked;
+  docs/decisions.md). Even then no book file or folder is renamed or rewritten; only
+  metadata.db and the book's cover.jpg are. Convert… writes the new format as a new file in
+  the library folder; the source is only read. Removing a book from the library leaves its
+  file; Move to Trash is a separate, confirmed action that trashes it (Gio, recoverable).
 - **Model code has no GTK**: library.py, schema.py, search.py, formats/, importing.py,
-  calibre.py, covers.py, online.py, opds.py, lookup.py, speech.py, devices.py, kepub.py, exporting.py,
+  calibre.py, calibre_write.py, covers.py, online.py, opds.py, sharing.py, qr.py, lookup.py, speech.py, devices.py, kepub.py, kobo.py, exporting.py,
   annotations.py, stats.py, converting.py, pdf_location.py, mail.py, passwords.py,
   kosync.py, bulk_metadata.py and existing_books.py import Gio/GLib/GObject/GdkPixbuf/Poppler (passwords.py: Secret) at most,
   and are tested without a display. Pages and widgets call them; they never reach into
@@ -146,7 +157,8 @@ read in place. GSettings: one schema for both builds.
 ## Verifying a change
 
 1. `scripts/check.sh` passes (byte-compile, ruff, meson build, unit tests, data validation).
-   CI runs it in an Arch Linux container under Xvfb.
+   CI runs it in an Arch Linux container under Xvfb, and builds the Flatpak
+   (build-aux/flatpak: FLATHUB.md has the local build, lint and in-sandbox test commands).
 2. Anything visible: `scripts/headless.sh scripts/screenshot.py build/x.png --page PAGE`
    (also `--light`, `--size 360x640`, `--book TITLE`, `--read TITLE`), each looked at with
    the Read tool. Sessions building side by side wrap the build and install in

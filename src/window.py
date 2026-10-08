@@ -72,6 +72,11 @@ class Window(Adw.ApplicationWindow):
                     'removed', self._on_device_removed)))
             except TypeError:
                 pass
+        if getattr(app, 'sharing', None) is not None:  # 'Sharing on …' in the main menu
+            from .dialogs.sharing_prefs import attach_menu
+
+            self._handlers.append((app.sharing, attach_menu(
+                self.primary_menu_button.get_menu_model(), app.sharing)))
         self.connect('close-request', self._on_close_request)
         self.connect('unrealize', self._on_unrealize)
         last = self.settings.get_string('last-page')

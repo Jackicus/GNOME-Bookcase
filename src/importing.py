@@ -43,12 +43,13 @@ missing file anywhere is that file moved (its path updated); other new files are
 place. Files marked missing that are back are unmarked.
 
 link_calibre(path): adds the folder as 'calibre' and its books in place (no copies, never
-writing metadata.db): one book per Calibre book with its formats, Calibre's metadata,
-rating and cover.jpg, keyed by Calibre's id (source_key) with Calibre's last_modified
-(source_modified). Run again, it is the rescan: a book whose last_modified changed gets
-Calibre's metadata (and cover) again, new formats are added, a file Calibre renamed (it
-renames a book's folder when its title or author changes) is followed to its new path, and
-the files of books gone from Calibre are marked missing.
+writing metadata.db: calibre_write.py does that, for a library opted in to Keep Calibre in
+Step): one book per Calibre book with its formats, Calibre's metadata, rating and cover.jpg,
+keyed by Calibre's id (source_key) with Calibre's last_modified (source_modified). Run
+again, it is the rescan: a book whose last_modified changed gets Calibre's metadata (and
+cover) again, new formats are added, a file Calibre renamed (it renames a book's folder
+when its title or author changes) is followed to its new path, and the files of books gone
+from Calibre are marked missing.
 
 Threads: Importer methods are blocking. The UI runs them through the *_async helpers,
 which run the work in a thread on a worker Library (`library.open_worker()`, closed after)
@@ -140,23 +141,23 @@ def describe(report):
     """One sentence about a report, for a toast."""
     parts = []
     if report.added:
-        parts.append(ngettext('{} book added', '{} books added',
-                              len(report.added)).format(len(report.added)))
+        parts.append(ngettext('{n} book added', '{n} books added',
+                              len(report.added)).format(n=len(report.added)))
     if report.merged:
-        parts.append(ngettext('{} format added', '{} formats added',
-                              len(report.merged)).format(len(report.merged)))
+        parts.append(ngettext('{n} format added', '{n} formats added',
+                              len(report.merged)).format(n=len(report.merged)))
     if report.updated:
-        parts.append(ngettext('{} book updated', '{} books updated',
-                              len(report.updated)).format(len(report.updated)))
+        parts.append(ngettext('{n} book updated', '{n} books updated',
+                              len(report.updated)).format(n=len(report.updated)))
     if report.duplicates:
-        parts.append(ngettext('{} already in the library', '{} already in the library',
-                              len(report.duplicates)).format(len(report.duplicates)))
+        parts.append(ngettext('{n} already in the library', '{n} already in the library',
+                              len(report.duplicates)).format(n=len(report.duplicates)))
     if report.failed:
-        parts.append(ngettext('{} could not be read', '{} could not be read',
-                              len(report.failed)).format(len(report.failed)))
+        parts.append(ngettext('{n} could not be read', '{n} could not be read',
+                              len(report.failed)).format(n=len(report.failed)))
     if report.missing:
-        parts.append(ngettext('{} file missing', '{} files missing',
-                              len(report.missing)).format(len(report.missing)))
+        parts.append(ngettext('{n} file missing', '{n} files missing',
+                              len(report.missing)).format(n=len(report.missing)))
     if not parts:
         return _('No new books')
     return ', '.join(parts)
@@ -191,18 +192,20 @@ class Job:
 
 
 
-SOURCE_FIELDS = ('title', 'authors', 'series', 'series_index', 'tags', 'publisher',
-                 'published', 'language', 'description', 'identifiers', 'rating')
+SOURCE_FIELDS = ('title', 'authors', 'author_sort', 'series', 'series_index', 'tags',
+                 'publisher', 'published', 'language', 'description', 'identifiers', 'rating')
 
 
 def source_values(book, cover):
     """A book's details as JSON-ready values, for comparing what the library holds with what
-    a source last said: lists for tuples, the cover as its MD5."""
+    a source last said: lists for tuples, the cover as its MD5 (and the book's
+    cover_version it was taken at, which spares calibre_write.py hashing covers)."""
     values = {}
     for field in SOURCE_FIELDS:
         value = getattr(book, field)
         values[field] = list(value) if isinstance(value, tuple) else value
     values['cover'] = hashlib.md5(cover).hexdigest() if cover else ''
+    values['cover_version'] = book.cover_version
     return values
 
 
@@ -465,8 +468,12 @@ class Importer:
     # -- Calibre libraries --------------------------------------------------------------
 
     def link_calibre(self, path, progress=None, cancelled=None):
-        report = ImportReport()
         folder = os.path.abspath(os.path.expanduser(str(path)))
+        with calibre.LINK_LOCK:  # not while calibre_write.py writes Bookcase's edits there
+            return self._link_calibre(folder, progress, cancelled)
+
+    def _link_calibre(self, folder, progress, cancelled):
+        report = ImportReport()
         books = calibre.read_library(folder)  # CalibreError for a folder that is not one
         self._folder(folder, 'calibre')
         seen = set()
@@ -525,6 +532,7 @@ class Importer:
         for field, value in (kept or {}).items():
             if field == 'cover':
                 value = hashlib.md5(value).hexdigest()
+                values.pop('cover_version', None)  # Calibre's cover is not the book's
             elif isinstance(value, tuple):
                 value = list(value)
             values[field] = value

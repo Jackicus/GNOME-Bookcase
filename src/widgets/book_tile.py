@@ -56,6 +56,7 @@ def progress_text(book, minutes_left=None):
     if book.status != 'reading' and not book.progress:
         return _('New')
     percent = max(1, min(99, round(book.progress * 100))) if book.progress else 0
+    # Translators: a percentage ("45%").
     text = _('{percent}%').format(percent=percent)
     if minutes_left:
         # Translators: progress and time left to read: "45% · 2 h left".
@@ -80,8 +81,8 @@ class BookTile(Gtk.Box):
 
         overlay = Gtk.Overlay(halign=Gtk.Align.CENTER)
         overlay.set_child(self.cover)
-        self.progress = Gtk.ProgressBar(valign=Gtk.Align.END, visible=False,
-                                        accessible_role=Gtk.AccessibleRole.PRESENTATION)
+        self.progress = Gtk.ProgressBar(valign=Gtk.Align.END, visible=False)
+        self.progress.update_property([Gtk.AccessibleProperty.LABEL], [_('Reading Progress')])
         self.progress.add_css_class('cover-progress')
         overlay.add_overlay(self.progress)
         self.badge = Gtk.Label(halign=Gtk.Align.START, valign=Gtk.Align.START, visible=False)
@@ -134,6 +135,9 @@ class BookTile(Gtk.Box):
         reading = book.status == 'reading' or (book.status != 'finished' and book.progress > 0)
         self.progress.set_visible(reading)
         self.progress.set_fraction(max(0.03, book.progress) if reading else 0)
+        if reading:
+            self.progress.update_property([Gtk.AccessibleProperty.VALUE_TEXT],
+                                          [progress_text(book)])
         index = format_index(book.series_index) if self.show_series_index else ''
         self.badge.set_text(index)
         self.badge.set_visible(bool(index))
@@ -151,6 +155,7 @@ class BookTile(Gtk.Box):
             self.mark.set_visible(False)
         tooltip = book.title
         if book.authors:
+            # Translators: a book's title, then its author on the next line.
             tooltip = _('{title}\n{author}').format(title=book.title, author=book.author)
         self.set_tooltip_text(tooltip)
 

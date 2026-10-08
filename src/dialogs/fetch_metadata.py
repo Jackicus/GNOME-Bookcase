@@ -55,7 +55,8 @@ class Field:
 def _field_labels():
     return {
         'title': _('Title'), 'authors': _('Authors'), 'series': _('Series'),
-        'publisher': _('Publisher'), 'published': _('Published'), 'language': _('Language'),
+        'publisher': _('Publisher'), 'published': _('Published'), 'pages': _('Pages'),
+        'language': _('Language'),
         'isbn': _('ISBN'), 'tags': _('Tags'), 'description': _('Description'),
         'cover': _('Cover'),
     }
@@ -84,6 +85,8 @@ def _shown(key, values):
         return ', '.join(values.get('tags') or ())
     if key == 'cover':
         return 'cover' if values.get('cover') is not None else ''
+    if key == 'pages':
+        return str(values['pages']) if values.get('pages') else ''
     return str(values.get(key) or '')
 
 
@@ -96,6 +99,7 @@ def candidate_values(candidate):
         'series_index': candidate.series_index,
         'publisher': candidate.publisher,
         'published': candidate.published,
+        'pages': candidate.pages,
         'language': candidate.language,
         'isbn': candidate.identifiers.get('isbn', ''),
         'tags': list(candidate.tags),
@@ -323,10 +327,15 @@ class FetchMetadataDialog(Adw.Dialog):
 
     # -- the candidates ----------------------------------------------------------------------
 
-    def _picture(self, width, height, url):
-        """A width x height picture (a card) of the image at `url`, fetched in a thread."""
+    def _picture(self, width, height, url, label=None):
+        """A width x height picture (a card) of the image at `url`, fetched in a thread:
+        labelled `label` for a screen reader, else presentation (its row names it)."""
         picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True,
                               width_request=width, height_request=height)
+        if label:
+            picture.update_property([Gtk.AccessibleProperty.LABEL], [label])
+        else:
+            picture.set_accessible_role(Gtk.AccessibleRole.PRESENTATION)
         picture.add_css_class('card')
         picture.add_css_class('fetch-thumbnail')
         if url:
@@ -466,7 +475,8 @@ class FetchMetadataDialog(Adw.Dialog):
         if field.key == 'cover':
             covers = Gtk.Box(spacing=18, margin_top=4)
             found = self._picture(COMPARE_COVER_WIDTH, COMPARE_COVER_HEIGHT,
-                                  self.candidate.thumbnail_url or self.candidate.cover_url)
+                                  self.candidate.thumbnail_url or self.candidate.cover_url,
+                                  label=_('The cover found'))
             covers.append(found)
             if self.current.get('cover') is not None:
                 current = Gtk.Picture(paintable=self.current['cover'],
@@ -475,6 +485,8 @@ class FetchMetadataDialog(Adw.Dialog):
                                       height_request=COMPARE_COVER_HEIGHT)
                 current.add_css_class('card')
                 current.add_css_class('fetch-thumbnail')
+                current.update_property([Gtk.AccessibleProperty.LABEL],
+                                        [_('The current cover')])
                 column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4,
                                  valign=Gtk.Align.END)
                 column.append(fixed_size(current, COMPARE_COVER_WIDTH * 2 // 3,

@@ -12,11 +12,12 @@ on itself, and the menu that names them (a grid's context menu, the details page
 
 Actions: read, details, edit, find-metadata (dialogs/bulk_metadata.py), add-to-shelf (a
 shelf id), new-shelf, remove-from-shelf (on a manual shelf's page), mark-reading,
-mark-finished, mark-unread, send, export, show-in-files, remove, trash, select-all (when the
-page gives `select_all`). Each change goes through the library's undoable methods and toasts
-with Undo; Move to Trash asks first (and trashes the books' files through Gio, recoverable,
-then removes the books); a book with a file in a linked Calibre library (linked from it, or
-merged with one) is never trashed: its files are Calibre's.
+mark-finished, mark-unread, send, export, convert (one book: dialogs/convert.py),
+show-in-files, remove, trash, select-all (when the page gives `select_all`). Each change
+goes through the library's undoable methods and toasts with Undo; Move to Trash asks first
+(and trashes the books' files through Gio, recoverable, then removes the books); a book with
+a file in a linked Calibre library (linked from it, or merged with one) is never trashed:
+its files are Calibre's.
 """
 
 import logging
@@ -40,8 +41,8 @@ def _title(library, book_ids):
 
 def book_menu(library, shelf_id=None, details=True, read=True):
     """The book actions as a menu model: Read, Details; Edit Details…, Add to Shelf ▸; the
-    reading state; Send to Device…, Export…, Show in Files; Remove from Library, Move to
-    Trash…. Add to Shelf lists the manual shelves now."""
+    reading state; Send to Device…, Export…, Convert…, Show in Files; Remove from Library,
+    Move to Trash…. Add to Shelf lists the manual shelves now."""
     menu = Gio.Menu()
     first = Gio.Menu()
     if read:
@@ -74,6 +75,7 @@ def book_menu(library, shelf_id=None, details=True, read=True):
     out = Gio.Menu()
     out.append(_('Send to _Device…'), 'book.send')
     out.append(_('E_xport…'), 'book.export')
+    out.append(_('_Convert…'), 'book.convert')
     out.append(_('Show in _Files'), 'book.show-in-files')
     menu.append_section(None, out)
     remove = Gio.Menu()
@@ -104,7 +106,7 @@ class BookActions:
 
     NAMES = ('read', 'details', 'edit', 'find-metadata', 'new-shelf', 'remove-from-shelf',
              'mark-reading', 'mark-finished', 'mark-unread', 'send', 'export', 'show-in-files',
-             'remove', 'trash')
+             'remove', 'trash', 'convert')
 
     def __init__(self, widget, get_ids, shelf_id=None, select_all=None, details=None):
         self._widget = widget.weak_ref()
@@ -161,6 +163,7 @@ class BookActions:
         some_file = some and not all(book.missing for book in books)
         for name in ('read', 'send', 'export'):
             self.group.lookup_action(name).set_enabled(some_file)
+        self.group.lookup_action('convert').set_enabled(one and not books[0].missing)
         statuses = {book.status for book in books}
         self.group.lookup_action('mark-reading').set_enabled(some and statuses != {'reading'})
         self.group.lookup_action('mark-finished').set_enabled(some and statuses != {'finished'})
@@ -232,6 +235,11 @@ class BookActions:
 
     def export(self, ids):
         export_books(self._window(), ids)
+
+    def convert(self, ids):
+        from ..dialogs import convert
+
+        convert.present(app(), self._window(), ids[0])
 
     def show_in_files(self, ids):
         show_in_files(self._window(), ids[0])

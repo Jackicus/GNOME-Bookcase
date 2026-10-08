@@ -5,6 +5,7 @@ src/shortcuts.py
 src/dialogs/about.py
 src/dialogs/shortcuts.py
 src/devices.py
+src/kobo.py
 src/pages/device.py
 src/pages/device.blp
 src/dialogs/send.py
@@ -51,12 +52,17 @@ src/dialogs/quick_open.py
 src/lookup.py
 src/widgets/lookup_popover.py
 src/widgets/read_aloud.py
+src/widgets/reader_theme.py
+src/dialogs/lookup_prefs.py
 src/pages/stats.py
 src/pages/stats.blp
+src/pages/year_review.py
+src/widgets/series_stack.py
 src/dialogs/goals.py
 src/widgets/charts.py
 src/widgets/goal_card.py
 src/kosync.py
+src/reader_pdf.py
 src/reader_sync.py
 src/dialogs/sync_prefs.py
 src/mail.py
@@ -75,3 +81,10 @@ src/dialogs/catalog_entry.blp
 src/dialogs/add_catalog.py
 src/dialogs/add_catalog.blp
 src/widgets/remote_cover.py
+src/calibre_write.py
+src/converting.py
+src/dialogs/calibre_step.py
+src/dialogs/convert.py
+src/sharing.py
+src/dialogs/sharing_prefs.py
+src/widgets/qr_code.py

@@ -6,7 +6,8 @@ and signals, so the window drives either without caring which it has.
 
     view = PdfView()                        # PdfView.available(): False without Poppler
     view.open(path, fmt, location=None, fraction=None, annotations=(), bookmarks=(),
-              style=None)                   # locations are pdf_location strings ('page:12')
+              style=None, layout=None)      # locations are pdf_location strings ('page:12');
+                                            # layout: pdf_location.layout_state()
     view.set_style(style)                   # theme (a recolouring), flow, maxColumns
     view.next() / prev() / go_left() / go_right() / scroll(direction)
     view.start() / end() / next_section() / prev_section() / back() / forward()
@@ -16,6 +17,12 @@ and signals, so the window drives either without caring which it has.
     view.set_annotations([{'cfi', 'color'}]) / add_annotation() / remove_annotation()
     view.set_bookmarks(locations, callback=None)
     view.zoom_in() / zoom_out() / set_fit('auto' | 'width' | 'page') / zoom_percent / fit
+    view.set_rtl(bool) / rtl / set_cover(bool) / cover   # spreads' order, the cover alone
+    view.layout_state()                     # {'fit', 'zoom', 'rtl', 'cover'} to keep per book
+    view.restore_layout(state)              # what was kept, before open() (or at once)
+    view.tts_start(callback) / tts_next(callback) / tts_prev(callback) / tts_word(offset)
+    view.tts_stop()                         # Read Aloud: BookView's contract, from Poppler's text
+    view.print_document(parent)             # Print… (Gtk.PrintOperation); returns it
     view.show_progress(visible) / get_toc(callback) / close()
 
 Signals as BookView's ('loaded', 'toc-ready', 'relocated', 'selection',
@@ -25,25 +32,42 @@ place of CFIs; and 'zoom-changed' when the zoom or the fit changes.
 
 Layout: continuous vertical scrolling ('flow' scrolled), or a page at a time (paginated),
 two side by side ('maxColumns' 2) when the view is wider than tall, the first page alone (a
-cover). Zoom: automatic (the default: the width up to AUTO_MAX when scrolling, the whole
-page when paginated), fit width, fit page, or a percentage (100% = 96 px per inch);
-Ctrl+scroll and the window's bigger/smaller keys go through the window, a pinch through
-the view's Gtk.GestureZoom, each keeping the point under it in place.
+cover) unless set_cover(False); right to left with set_rtl (a spread's first page on the
+right; the left arrow, the left third and go_left turn forward), by default as the PDF's
+viewer preferences say (Direction R2L; a PageLayout of TwoPageLeft or TwoColumnLeft puts
+the cover beside page 2). Zoom: automatic (the default: the width up to AUTO_MAX when
+scrolling, the whole page when paginated), fit width, fit page, or a percentage (100% = 96
+px per inch); Ctrl+scroll and the window's bigger/smaller keys go through the window, a
+pinch through the view's Gtk.GestureZoom, each keeping the point under it in place.
+layout_state() is what the window keeps per book (Library.book_state()) and gives back to
+open().
 
 Rendering: pages are drawn by a thread of its own, with its own Poppler.Document (Poppler's
 documents are not thread-safe), at the zoom times the monitor's scale, into textures kept
 in a least-recently-used cache of CACHE_BYTES; the main thread's document gives sizes, text,
-links, the outline and search. A page not drawn yet shows as blank paper, or as its last
-texture scaled while the new one is drawn. The paper themes recolour the page with a GSK
-colour matrix: light is the page as it is, sepia maps white to the paper and black to its
-ink, dark and black invert the lightness (keeping hues) onto their paper and ink.
+links, the outline and search. A page bigger than TILE_ABOVE pixels at that scale (a big
+page zoomed in) is drawn in TILE-pixel tiles, only those on screen (and a tile around
+them), over a whole texture of at most BACKDROP_PIXELS that shows until they come. A page
+not drawn yet shows as blank paper, or as its last texture scaled while the new one is
+drawn. The paper themes recolour the page with a GSK colour matrix: light is the page as it
+is, sepia maps white to the paper and black to its ink, dark and black invert the lightness
+(keeping hues) onto their paper and ink.
 
-Selecting: drag across text (one page at a time), double-click a word; the selection goes
-to the window as 'selection' with the rects in the location ('page:3#x0,y0,x1,y1;…'), and
-highlights are drawn from the locations the window sends. Links inside the PDF go there
-(a jump: 'jumpedFrom'); links out open in the browser (http, https, mailto). A click on
-the middle of the page toggles the window's bars; in paginated mode the left and right
-thirds turn pages. An encrypted PDF asks for its password.
+Selecting: drag across text, into the next pages too (the view scrolls when the pointer
+nears its edge), double-click a word; the selection goes to the window as 'selection' with
+the rects in the location ('page:3#x0,y0,x1,y1;…', over pages 'page:3#…|4#…'), and
+highlights are drawn from the locations the window sends.
+
+Reading aloud: the sentences (pdf_location.sentences) of Poppler's page text, from the top
+of the page shown, each highlighted (its characters' boxes from get_text_layout) and turned
+to; a sentence a page break cuts is read whole. When the reader moves while reading (a jump,
+or the sentence scrolled off screen), the relocated message says ttsMoved and the next
+sentence is the new page's first.
+
+Links inside the PDF go there (a jump: 'jumpedFrom'); links out open in the browser (http,
+https, mailto). A click on the middle of the page toggles the window's bars; in paginated
+mode the left and right thirds turn pages. An encrypted PDF asks for its password. Print…
+draws the pages with Poppler's render_for_printing, each fitted to the paper.
 """
 
 import bisect
@@ -84,8 +108,11 @@ ZOOM_STEPS = (0.25, 0.33, 0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2
 AUTO_MAX = 1.25  # the automatic zoom fits the width up to 125% (the page, paginated)
 MARGIN = 16  # around the pages, in pixels
 GAP = 12  # between pages
-CACHE_BYTES = 192 * 1024 * 1024
-MAX_PIXELS = 36_000_000  # a page's texture at most; beyond, the last one is scaled
+CACHE_BYTES = 128 * 1024 * 1024
+TILE = 512  # a tile's side, in pixels
+TILE_ABOVE = 6_000_000  # a page with more pixels than this at its scale is drawn in tiles
+BACKDROP_PIXELS = 3_000_000  # a tiled page's whole texture, under its tiles
+AUTOSCROLL_EDGE = 24  # pixels from the view's edge where a drag scrolls it
 PRERENDER = 2  # pages drawn ahead of the reader, and behind
 SEARCH_PAGES = 6  # pages searched per idle step
 CLICK_DELAY_MS = 220
@@ -175,26 +202,42 @@ def is_encrypted_error(error):
             and error.code == int(Poppler.Error.ENCRYPTED))
 
 
-def render_texture(page, scale):
-    """A page drawn on white at `scale` pixels per point, as a Gdk.Texture."""
-    width, height = page.get_size()
-    pixels_w = max(1, round(width * scale))
-    pixels_h = max(1, round(height * scale))
-    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, pixels_w, pixels_h)
+def page_pixels(size, scale):
+    """(width, height) in pixels of a page of `size` points drawn at `scale`."""
+    return max(1, round(size[0] * scale)), max(1, round(size[1] * scale))
+
+
+def tile_box(size, scale, tile):
+    """(x, y, width, height) in pixels of tile (column, row) of a page drawn at `scale`."""
+    pixels_w, pixels_h = page_pixels(size, scale)
+    x, y = tile[0] * TILE, tile[1] * TILE
+    return x, y, max(1, min(TILE, pixels_w - x)), max(1, min(TILE, pixels_h - y))
+
+
+def render_texture(page, scale, tile=None):
+    """A page drawn on white at `scale` pixels per point, as a Gdk.Texture: the whole page,
+    or its tile (column, row) of TILE pixels."""
+    size = page.get_size()
+    pixels_w, pixels_h = page_pixels(size, scale)
+    x, y, width, height = (0, 0, pixels_w, pixels_h) if tile is None \
+        else tile_box(size, scale, tile)
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
     context = cairo.Context(surface)
     context.set_source_rgb(1, 1, 1)
     context.paint()
-    context.scale(pixels_w / width, pixels_h / height)
+    context.translate(-x, -y)
+    context.scale(pixels_w / size[0], pixels_h / size[1])
     page.render(context)
     surface.flush()
+    # bytes() first: PyGObject copies a memoryview a byte at a time, holding the GIL
     data = GLib.Bytes.new(bytes(surface.get_data()))
-    return Gdk.MemoryTexture.new(pixels_w, pixels_h, TEXTURE_FORMAT, data,
-                                 surface.get_stride())
+    return Gdk.MemoryTexture.new(width, height, TEXTURE_FORMAT, data, surface.get_stride())
 
 
 class _Renderer:
-    """A thread drawing pages with its own document. want([(index, scale)]) replaces what
-    it should draw next, in order; deliver(index, scale, texture) runs in the main loop."""
+    """A thread drawing pages with its own document. want([(index, scale, tile)]) replaces
+    what it should draw next, in order (tile None: the whole page); deliver(index, scale,
+    tile, texture) runs in the main loop."""
 
     def __init__(self, path, password, deliver):
         self._path = path
@@ -231,9 +274,9 @@ class _Renderer:
                 if self._stopped:
                     return
                 job = self._busy = self._wanted.pop(0)
-            index, scale = job
+            index, scale, tile = job
             try:
-                texture = render_texture(document.get_page(index), scale)
+                texture = render_texture(document.get_page(index), scale, tile)
             except Exception:  # noqa: BLE001  (a page that cannot be drawn stays blank)
                 log.warning('drawing page %d', index + 1, exc_info=True)
                 texture = None
@@ -241,7 +284,7 @@ class _Renderer:
                 self._busy = None
                 if self._stopped:
                     return
-            GLib.idle_add(self._deliver, index, scale, texture)
+            GLib.idle_add(self._deliver, index, scale, tile, texture)
 
 
 class _Pages(Gtk.Widget, Gtk.Scrollable):
@@ -343,24 +386,40 @@ class PdfView(Adw.Bin):
         self._matrix = None
         self._continuous = True
         self._two_pages = False
+        self._rtl = None  # None: as the PDF says (self._rtl_default)
+        self._cover = None  # None: as the PDF says (self._cover_default)
+        self._rtl_default = False
+        self._cover_default = True
+        self._layout_start = None  # the layout state open() was given
         self._fit = 'auto'  # 'auto', 'width', 'page' or None (a percentage: self._scale)
         self._scale = POINT
         self._viewport = (0, 0)
         self._boxes = []  # (x, y, w, h) in content pixels per page laid out
         self._laid_out = []  # the page indexes in _boxes, in order
+        self._tops = []  # continuous: each box's y, for bisecting
         self._content = (0, 0)
         self._spreads = []  # [[index]] in paginated mode
         self._spread = 0
         self._pending = None  # (page, offset) to show once laid out
-        self._cache = collections.OrderedDict()  # index -> (scale, texture, bytes)
+        # index -> (scale, texture, bytes) for a whole page; (index, scale, column, row)
+        # for a tile
+        self._cache = collections.OrderedDict()
         self._cache_bytes = 0
         self._links = {}  # index -> [(rect, action)]
-        self._layouts = collections.OrderedDict()  # index -> [char rects], a few pages
+        # ('chars', index) -> [char boxes], ('sentences', index) -> [sentence]: a few pages
+        self._layouts = collections.OrderedDict()
         self._annotations = {}  # index -> [(location, rects, color)]
         self._bookmarks = []
         self._hits = {}  # index -> [rects], the search's matches
         self._current_hit = None  # (index, rects)
-        self._selection = None  # {'index', 'rects', 'text', 'start', 'end', 'style'}
+        self._selection = None  # {'parts': [(index, rects, text)]}, in page order
+        self._regions = {}  # (index, area, style) -> (rects, text) while a drag selects
+        self._drag_pointer = None  # the drag's last point, in view pixels
+        self._autoscroll_source = 0
+        self._tts = None  # {'index', 'items', 'position', 'moved'} while reading aloud
+        self._tts_parts = None  # [(index, rects)] of the sentence being read
+        self._tts_word = None  # [(index, rects)] of the word being read
+        self._tts_turning = False  # the view moves to a sentence: not the reader moving
         self._toc = []
         self._flat_toc = []  # [(page, offset, item)] in the outline's order
         self._sections = []  # the first page (1-based) of each top-level section
@@ -389,10 +448,13 @@ class PdfView(Adw.Bin):
     # -- opening -------------------------------------------------------------------------
 
     def open(self, path, fmt='pdf', location=None, fraction=None, annotations=(),
-             bookmarks=(), style=None, password=None):
-        """Open the PDF at `path` at a location ('page:N…'), else a fraction, else page 1."""
+             bookmarks=(), style=None, password=None, layout=None):
+        """Open the PDF at `path` at a location ('page:N…'), else a fraction, else page 1,
+        with the zoom and layout kept for it (pdf_location.layout_state())."""
         self.close()
         self._path = str(path)
+        if layout is not None:
+            self._layout_start = pdf_location.layout_state(layout)
         if style is not None:
             self.set_style(style)
         self._start = (location, fraction)
@@ -423,6 +485,8 @@ class PdfView(Adw.Bin):
         for index in range(self._count):
             width, height = document.get_page(index).get_size()
             self._sizes.append((max(1.0, width), max(1.0, height)))
+        self._read_preferences(document)
+        self._apply_layout_state(self._layout_start)
         self._renderer = _Renderer(self._path, password, _weak_method(self, PdfView._deliver))
         self.set_annotations(self._annotation_list)
         self._toc = self._read_outline()
@@ -436,11 +500,84 @@ class PdfView(Adw.Bin):
         else:
             self._pending = (1, 0.0)
         self._relayout()
+        GLib.idle_add(_weak_method(self, PdfView._zoom_changed))
         title = (document.props.title or '').strip()
-        self.emit('loaded', {'title': title, 'dir': 'ltr', 'fixedLayout': True,
+        self.emit('loaded', {'title': title, 'dir': 'rtl' if self.rtl else 'ltr',
+                             'fixedLayout': True,
                              'sectionFractions': self._section_fractions(),
                              'toc': self._toc, 'pages': self._count})
         self.emit('toc-ready', self._toc)
+
+    def _read_preferences(self, document):
+        """The PDF's own say on spreads: right to left (its ViewerPreferences' Direction
+        R2L), the cover alone (unless its PageLayout is TwoPageLeft or TwoColumnLeft)."""
+        try:
+            preferences = document.props.viewer_preferences
+            self._rtl_default = bool(preferences & Poppler.ViewerPreferences.DIRECTION_RTL)
+        except (AttributeError, TypeError):
+            self._rtl_default = False
+        if not self._rtl_default:  # Poppler leaves the flag unset: the file says it
+            self._rtl_default = pdf_location.declares_rtl(self._path)
+        try:
+            layout = document.get_page_layout()
+            self._cover_default = layout not in (Poppler.PageLayout.TWO_PAGE_LEFT,
+                                                 Poppler.PageLayout.TWO_COLUMN_LEFT)
+        except (AttributeError, TypeError):
+            self._cover_default = True
+
+    def _apply_layout_state(self, state):
+        """A kept layout (pdf_location.layout_state()) before the first layout."""
+        state = state or {}
+        self._rtl = state.get('rtl')
+        self._cover = state.get('cover')
+        if state.get('fit') in pdf_location.FITS:
+            self._fit = state['fit']
+        elif state.get('zoom'):
+            self._fit = None
+            self._scale = state['zoom'] / 100 * POINT
+
+    def restore_layout(self, state):
+        """The zoom and layout kept for the book (pdf_location.layout_state(); its flow is
+        the style's): for the next open(), or at once on an open document."""
+        self._layout_start = pdf_location.layout_state(state)
+        if self._document is not None:
+            self._apply_layout_state(self._layout_start)
+            self._relayout(keep=True)
+            self.emit('zoom-changed')
+
+    def layout_state(self):
+        """What to keep for this book: {'fit', 'zoom' (a percentage, with no fit), 'rtl',
+        'cover'} (rtl and cover None while they follow the PDF)."""
+        return {'fit': self._fit, 'zoom': None if self._fit else self.zoom_percent,
+                'rtl': self._rtl, 'cover': self._cover}
+
+    @property
+    def rtl(self):
+        return self._rtl_default if self._rtl is None else self._rtl
+
+    @property
+    def cover(self):
+        return self._cover_default if self._cover is None else self._cover
+
+    def set_rtl(self, rtl):
+        """Spreads and page turns right to left (True), left to right, or as the PDF says
+        (None)."""
+        if rtl == self._rtl:
+            return
+        before = self.rtl
+        self._rtl = rtl
+        if self.rtl != before and self._document is not None:
+            self._relayout(keep=True)
+
+    def set_cover(self, cover):
+        """The first page alone in spreads (True), beside the second, or as the PDF says
+        (None)."""
+        if cover == self._cover:
+            return
+        before = self.cover
+        self._cover = cover
+        if self.cover != before and self._document is not None:
+            self._relayout(keep=True)
 
     def _ask_password(self, retry):
         root = self.get_root()
@@ -471,7 +608,8 @@ class PdfView(Adw.Bin):
                 view.emit('error', _('This PDF is locked with a password'))
                 return
             view.open(view._path, 'pdf', *view._start, annotations=view._annotation_list,
-                      bookmarks=view._bookmarks, password=entry.get_text())
+                      bookmarks=view._bookmarks, password=entry.get_text(),
+                      layout=view._layout_start)
 
         dialog.connect('response', response)
         if window is not None:
@@ -485,7 +623,8 @@ class PdfView(Adw.Bin):
         if self._renderer is not None:
             self._renderer.stop()
             self._renderer = None
-        for name in ('_report_source', '_search_source', '_click_source'):
+        for name in ('_report_source', '_search_source', '_click_source',
+                     '_autoscroll_source'):
             source = getattr(self, name)
             if source:
                 GLib.source_remove(source)
@@ -520,7 +659,7 @@ class PdfView(Adw.Bin):
                 title = action.goto_dest.title or ''
             if target is not None:
                 page, offset = target
-                item = {'label': ' '.join(title.split()) or _('Page {}').format(page),
+                item = {'label': ' '.join(title.split()) or _('Page {page}').format(page=page),
                         'href': pdf_location.location(page, offset), 'subitems': [],
                         'depth': depth}
                 self._flat_toc.append((page, offset, item))
@@ -644,8 +783,9 @@ class PdfView(Adw.Bin):
         self._layout()
         if point is not None:
             index, fx, fy = point
-            if index in self._laid_out:
-                x, y, w, h = self._boxes[self._laid_out.index(index)]
+            box = self._box(index)
+            if box is not None:
+                x, y, w, h = box
                 self._set_values(x + fx * w - anchor[0], y + fy * h - anchor[1])
         self._pages.queue_draw()
         self.emit('zoom-changed')
@@ -705,8 +845,10 @@ class PdfView(Adw.Bin):
         else:
             first = self._spreads[self._spread][0] if self._spreads else 0
             if self._wants_two():
-                self._spreads = [[0]] + [list(range(i, min(i + 2, count)))
-                                         for i in range(1, count, 2)]
+                first_pair = 1 if self.cover else 0
+                self._spreads = [[0]] if self.cover else []
+                self._spreads += [list(range(i, min(i + 2, count)))
+                                  for i in range(first_pair, count, 2)]
             else:
                 self._spreads = [[i] for i in range(count)]
             self._spread = next((n for n, group in enumerate(self._spreads) if first in group), 0)
@@ -733,7 +875,9 @@ class PdfView(Adw.Bin):
                 laid_out.append(index)
                 y += ph + GAP
             content_h = y - GAP + MARGIN
+            self._tops = [box[1] for box in boxes]
         else:
+            self._tops = []
             group = self._spreads[self._spread]
             pw = [self._sizes[i][0] * scale for i in group]
             ph = [self._sizes[i][1] * scale for i in group]
@@ -741,7 +885,10 @@ class PdfView(Adw.Bin):
             content_w = max(total + 2 * MARGIN, width)
             content_h = max(max(ph) + 2 * MARGIN, height)
             x = (content_w - total) / 2
-            for index, w, h in zip(group, pw, ph, strict=True):
+            placed = list(zip(group, pw, ph, strict=True))
+            if self.rtl:
+                placed.reverse()  # the first page of the spread on the right
+            for index, w, h in placed:
                 boxes.append((x, (content_h - h) / 2, w, h))
                 laid_out.append(index)
                 x += w + GAP
@@ -784,7 +931,7 @@ class PdfView(Adw.Bin):
             if spread != self._spread:
                 self._spread = spread
                 self._layout()
-            box = self._boxes[self._laid_out.index(index)]
+            box = self._box(index)
             self._set_values(None, box[1] + offset * box[3] - MARGIN if offset else 0)
             self._pages.queue_draw()
             return
@@ -793,14 +940,20 @@ class PdfView(Adw.Bin):
         content_w = self._content[0]
         self._set_values((content_w - self._viewport[0]) / 2, top)
 
+    def _box(self, index):
+        """Page `index`'s box (x, y, w, h) in content pixels, or None when not laid out."""
+        if self._continuous:
+            return self._boxes[index] if 0 <= index < len(self._boxes) else None
+        if index in self._laid_out:
+            return self._boxes[self._laid_out.index(index)]
+        return None
+
     def _point_at(self, x, y):
         """(index, fx, fy): the page under a point of the view and where on it (0-1), or
         None between pages."""
-        hvalue, vvalue = self._values()
-        cx, cy = x + hvalue, y + vvalue
-        for index, (bx, by, bw, bh) in zip(self._laid_out, self._boxes, strict=True):
-            if bx <= cx <= bx + bw and by <= cy <= by + bh:
-                return index, (cx - bx) / bw, (cy - by) / bh
+        for index, (bx, by, bw, bh) in self._visible():
+            if bx <= x <= bx + bw and by <= y <= by + bh:
+                return index, (x - bx) / bw, (y - by) / bh
         return None
 
     def _visible(self):
@@ -809,8 +962,7 @@ class PdfView(Adw.Bin):
         width, height = self._viewport
         shown = []
         if self._continuous and self._boxes:
-            tops = [box[1] for box in self._boxes]
-            start = max(0, bisect.bisect_right(tops, vvalue) - 1)
+            start = max(0, bisect.bisect_right(self._tops, vvalue) - 1)
             for index in range(start, self._count):
                 x, y, w, h = self._boxes[index]
                 if y > vvalue + height:
@@ -830,8 +982,7 @@ class PdfView(Adw.Bin):
             group = self._spreads[self._spread] if self._spreads else [0]
             return group[0] + 1, 0.0
         _hvalue, vvalue = self._values()
-        tops = [box[1] for box in self._boxes]
-        index = max(0, bisect.bisect_right(tops, vvalue) - 1)
+        index = max(0, bisect.bisect_right(self._tops, vvalue) - 1)
         _x, y, _w, h = self._boxes[index]
         if vvalue >= y + h and index + 1 < self._count:
             return index + 2, 0.0  # in the gap: the next page
@@ -846,8 +997,7 @@ class PdfView(Adw.Bin):
             group = self._spreads[self._spread] if self._spreads else [0]
             return group[0] + 1
         _hvalue, vvalue = self._values()
-        tops = [box[1] for box in self._boxes]
-        index = bisect.bisect_right(tops, vvalue + self._viewport[1] / 3) - 1
+        index = bisect.bisect_right(self._tops, vvalue + self._viewport[1] / 3) - 1
         return max(0, min(self._count - 1, index)) + 1
 
     # -- moving --------------------------------------------------------------------------
@@ -906,7 +1056,7 @@ class PdfView(Adw.Bin):
         if self._document is None:
             return
         if not self._continuous:
-            self._turn(1)
+            self._turn(-1 if self.rtl else 1)
             return
         page = self._current_page()
         if page < self._count:
@@ -917,7 +1067,7 @@ class PdfView(Adw.Bin):
         if self._document is None:
             return
         if not self._continuous:
-            self._turn(-1)
+            self._turn(1 if self.rtl else -1)
             return
         page, offset = self._top_place() or (1, 0.0)
         target = page if offset > 0.02 else page - 1
@@ -1000,9 +1150,10 @@ class PdfView(Adw.Bin):
         page = index + 1
         if not self._continuous:
             self._show_place(page, 0.0)
-        if index not in self._laid_out:
+        box = self._box(index)
+        if box is None:
             return
-        x, y, w, h = self._boxes[self._laid_out.index(index)]
+        x, y, w, h = box
         scale = w / self._sizes[index][0]
         top = min(r[1] for r in rects) * scale + y
         left = min(r[0] for r in rects) * scale + x
@@ -1098,10 +1249,20 @@ class PdfView(Adw.Bin):
             'jumpedFrom': self._jumped_from,
             'canGoBack': bool(self._history), 'canGoForward': bool(self._future),
         }
+        tts = self._tts
+        if tts is not None and self._tts_parts and not tts['moved'] and (
+                self._reason == 'jump' or not any(self._visible_index(i)
+                                                  for i, _rects in self._tts_parts)):
+            # the reader went elsewhere: Read Aloud goes on from there
+            tts['moved'] = True
+            message['ttsMoved'] = True
+            self._tts_parts = self._tts_word = None
+            self._pages.queue_draw()
         self._jumped_from = None
         self._reason = 'scroll'
         if self.place is not None and all(self.place.get(k) == message.get(k) for k in (
-                'cfi', 'page', 'atEnd', 'bookmark')) and not message['jumpedFrom']:
+                'cfi', 'page', 'atEnd', 'bookmark')) and not message['jumpedFrom'] \
+                and not message.get('ttsMoved'):
             return GLib.SOURCE_REMOVE
         self.place = message
         self.location = location
@@ -1126,6 +1287,36 @@ class PdfView(Adw.Bin):
             factor = surface.get_scale()
         return self._scale * max(1.0, factor)
 
+    def _tiled(self, index, scale):
+        """Whether page `index` drawn at `scale` is drawn in tiles."""
+        width, height = self._sizes[index]
+        return width * height * scale * scale > TILE_ABOVE
+
+    def _tiles_on_screen(self, index, box, scale, margin=0):
+        """The tiles (column, row) of a page drawn at `scale` that the view shows, its box
+        (x, y, w, h) in view pixels, `margin` tiles more around them."""
+        x, y, w, h = box
+        width, height = self._viewport
+        pixels_w, pixels_h = page_pixels(self._sizes[index], scale)
+        ratio = pixels_w / w  # pixels of the texture per pixel of the view
+        left = max(0.0, -x) * ratio
+        top = max(0.0, -y) * ratio
+        right = min(w, width - x) * ratio
+        bottom = min(h, height - y) * ratio
+        if right <= left or bottom <= top:
+            return []
+        columns = (pixels_w - 1) // TILE
+        rows = (pixels_h - 1) // TILE
+        first_c = max(0, int(left // TILE) - margin)
+        last_c = min(columns, int((right - 1) // TILE) + margin)
+        first_r = max(0, int(top // TILE) - margin)
+        last_r = min(rows, int((bottom - 1) // TILE) + margin)
+        middle = ((left + right) / 2 / TILE, (top + bottom) / 2 / TILE)
+        tiles = [(c, r) for r in range(first_r, last_r + 1) for c in range(first_c, last_c + 1)]
+        # the middle of the view first
+        tiles.sort(key=lambda t: (t[0] + 0.5 - middle[0]) ** 2 + (t[1] + 0.5 - middle[1]) ** 2)
+        return tiles
+
     def _draw(self, snapshot, width, height):
         snapshot.append_color(self._surround(), _rect(0, 0, width, height))
         if self._document is None:
@@ -1147,13 +1338,14 @@ class PdfView(Adw.Bin):
                 snapshot.push_blend(Gsk.BlendMode.SCREEN if dark else Gsk.BlendMode.MULTIPLY)
             if self._matrix is not None:
                 snapshot.push_color_matrix(*self._matrix)
+            snapshot.append_color(paper, rect)
             cached = self._cache.get(index)
             if cached is not None:
                 self._cache.move_to_end(index)
-                snapshot.append_color(paper, rect)
                 snapshot.append_scaled_texture(cached[1], Gsk.ScalingFilter.LINEAR, rect)
-            else:
-                snapshot.append_color(paper, rect)
+            scale = round(target, 3)
+            if self._tiled(index, scale):
+                self._draw_tiles(snapshot, index, (x, y, w, h), scale)
             if self._matrix is not None:
                 snapshot.pop()
             if marked:
@@ -1162,12 +1354,31 @@ class PdfView(Adw.Bin):
                 snapshot.pop()
         self._request(shown, target)
 
+    def _draw_tiles(self, snapshot, index, box, scale):
+        x, y, w, _h = box
+        ratio = w / page_pixels(self._sizes[index], scale)[0]  # view pixels per texture pixel
+        for tile in self._tiles_on_screen(index, box, scale):
+            key = (index, scale) + tile
+            cached = self._cache.get(key)
+            if cached is None:
+                continue
+            self._cache.move_to_end(key)
+            tx, ty, tw, th = tile_box(self._sizes[index], scale, tile)
+            snapshot.append_scaled_texture(
+                cached[1], Gsk.ScalingFilter.LINEAR,
+                _rect(x + tx * ratio, y + ty * ratio, tw * ratio, th * ratio))
+
     def _has_marks(self, index):
-        selection = self._selection
         return bool(self._annotations.get(index) or self._hits.get(index)
                     or (self._current_hit is not None and self._current_hit[0] == index)
-                    or (selection is not None and selection['index'] == index
-                        and selection['rects']))
+                    or self._selection_rects(index)
+                    or any(i == index for i, _rects in self._tts_parts or ()))
+
+    def _selection_rects(self, index):
+        selection = self._selection
+        if selection is None:
+            return ()
+        return next((rects for i, rects, _text in selection['parts'] if i == index), ())
 
     def _draw_marks(self, snapshot, index, x, y, scale, dark):
         def boxes(rects, color):
@@ -1183,15 +1394,24 @@ class PdfView(Adw.Bin):
             boxes(hits, _rgba('#f6d32d' if not dark else '#c8a600', 0.35))
         if self._current_hit is not None and self._current_hit[0] == index:
             boxes(self._current_hit[1], _rgba('#ff7800', 0.5))
-        selection = self._selection
-        if selection is not None and selection['index'] == index and selection['rects']:
-            accent = Adw.StyleManager.get_default().get_accent_color_rgba()
+        accent = Adw.StyleManager.get_default().get_accent_color_rgba()
+        for page, rects in self._tts_parts or ():
+            if page == index:
+                accent.alpha = 0.22
+                boxes(rects, accent.copy())
+        for page, rects in self._tts_word or ():
+            if page == index:
+                accent.alpha = 0.3
+                boxes(rects, accent.copy())
+        selected = self._selection_rects(index)
+        if selected:
             accent.alpha = 0.35
-            boxes(selection['rects'], accent)
+            boxes(selected, accent)
 
     def _request(self, shown, target):
         """Ask the renderer for the pages on screen (then those around them) at `target`
-        pixels per point, unless their texture already is."""
+        pixels per point, unless their texture already is; a tiled page's tiles on screen
+        come first, then its whole texture under them, then the tiles around."""
         if self._renderer is None or self._zoom_start is not None:
             return
         indexes = [index for index, _box in shown]
@@ -1204,40 +1424,71 @@ class PdfView(Adw.Bin):
                          for i in self._spreads[n]]
                 behind = [i for n in range(max(0, self._spread - 1), self._spread)
                           for i in self._spreads[n]]
-            indexes += list(ahead) + list(behind)
-        jobs = []
-        for index in indexes:
-            scale = self._clamped(index, target)
-            cached = self._cache.get(index)
-            if cached is None or abs(cached[0] - scale) > 1e-3:
-                jobs.append((index, scale))
-        self._renderer.want(jobs)
+            around = list(ahead) + list(behind)
+        else:
+            around = []
+        jobs, later = [], []
+        for index, box in shown:
+            scale = round(target, 3)
+            if not self._tiled(index, scale):
+                self._want_whole(jobs, index, scale)
+                continue
+            near = set(self._tiles_on_screen(index, box, scale))
+            for tile in self._tiles_on_screen(index, box, scale, margin=1):
+                if (index, scale) + tile not in self._cache:
+                    (jobs if tile in near else later).append((index, scale, tile))
+            self._want_whole(jobs, index, self._backdrop_scale(index, scale), backdrop=True)
+        for index in around:
+            scale = round(target, 3)
+            if self._tiled(index, scale):
+                scale = self._backdrop_scale(index, scale)
+            self._want_whole(later, index, scale, backdrop=True)
+        self._renderer.want(jobs + later)
 
-    def _clamped(self, index, scale):
+    def _want_whole(self, jobs, index, scale, backdrop=False):
+        cached = self._cache.get(index)
+        if cached is None or (abs(cached[0] - scale) > 1e-3 and not (
+                backdrop and cached[0] >= scale * 0.99)):
+            jobs.append((index, scale, None))
+
+    def _backdrop_scale(self, index, scale):
         width, height = self._sizes[index]
-        if width * height * scale * scale > MAX_PIXELS:
-            scale = (MAX_PIXELS / (width * height)) ** 0.5
-        return round(scale, 3)
+        return round(min(scale, (BACKDROP_PIXELS / (width * height)) ** 0.5), 3)
 
-    def _deliver(self, index, scale, texture):
+    def _deliver(self, index, scale, tile, texture):
         if self._document is None or texture is None:
             return GLib.SOURCE_REMOVE
+        key = index if tile is None else (index, scale) + tile
         size = texture.get_width() * texture.get_height() * 4
-        old = self._cache.pop(index, None)
+        old = self._cache.pop(key, None)
         if old is not None:
             self._cache_bytes -= old[2]
-        self._cache[index] = (scale, texture, size)
+        self._cache[key] = (scale, texture, size)
         self._cache_bytes += size
-        shown = {i for i, _box in self._visible()}
+        shown = self._visible()
+        if self._cache_bytes > CACHE_BYTES:
+            self._evict(shown, key)
+        if any(i == index for i, _box in shown):
+            self._pages.queue_draw()
+        return GLib.SOURCE_REMOVE
+
+    def _evict(self, shown, keep):
+        """Drop the least recently drawn textures until the cache fits CACHE_BYTES, never
+        what is on screen."""
+        target = self._render_scale()
+        protected = {keep}
+        for index, box in shown:
+            protected.add(index)
+            scale = round(target, 3)
+            if self._tiled(index, scale):
+                protected.update((index, scale) + t for t in self._tiles_on_screen(index, box,
+                                                                                  scale))
         for key in list(self._cache):
             if self._cache_bytes <= CACHE_BYTES:
                 break
-            if key in shown or key == index:
+            if key in protected:
                 continue
             self._cache_bytes -= self._cache.pop(key)[2]
-        if index in shown:
-            self._pages.queue_draw()
-        return GLib.SOURCE_REMOVE
 
     # -- the pointer ---------------------------------------------------------------------
 
@@ -1265,31 +1516,22 @@ class PdfView(Adw.Bin):
         wheel.connect('scroll', _weak_method(self, PdfView._on_wheel))
         pages.add_controller(wheel)
 
-    def _page_point(self, x, y, clamp_index=None):
-        """(index, px, py) in PDF points for a point of the view; with clamp_index, the
-        point is held to that page's edges."""
-        if clamp_index is not None:
-            if clamp_index not in self._laid_out:
-                return None
-            hvalue, vvalue = self._values()
-            bx, by, bw, bh = self._boxes[self._laid_out.index(clamp_index)]
-            fx = max(0.0, min(1.0, (x + hvalue - bx) / bw))
-            fy = max(0.0, min(1.0, (y + vvalue - by) / bh))
-            index = clamp_index
-        else:
-            point = self._point_at(x, y)
-            if point is None:
-                return None
-            index, fx, fy = point
+    def _page_point(self, x, y):
+        """(index, px, py) in PDF points for a point of the view, or None off the pages."""
+        point = self._point_at(x, y)
+        if point is None:
+            return None
+        index, fx, fy = point
         width, height = self._sizes[index]
         return index, fx * width, fy * height
 
     def _view_rect(self, index, rects):
         """A Gdk.Rectangle-like dict around rects of a page, in the view's pixels."""
-        if index not in self._laid_out or not rects:
+        box = self._box(index)
+        if box is None or not rects:
             return None
         hvalue, vvalue = self._values()
-        x, y, w, _h = self._boxes[self._laid_out.index(index)]
+        x, y, w, _h = box
         scale = w / self._sizes[index][0]
         x0 = min(r[0] for r in rects) * scale + x - hvalue
         y0 = min(r[1] for r in rects) * scale + y - vvalue
@@ -1340,18 +1582,20 @@ class PdfView(Adw.Bin):
     def _on_click(self, x):
         self._click_source = 0
         width = self._viewport[0]
+        forward = -1 if self.rtl else 1
         if not self._continuous and x < width / 3:
-            self._turn(-1)
+            self._turn(-forward)
         elif not self._continuous and x > width * 2 / 3:
-            self._turn(1)
+            self._turn(forward)
         else:
             self.emit('toggle-chrome')
         return GLib.SOURCE_REMOVE
 
     def _on_drag_begin(self, gesture, x, y):
-        point = self._page_point(x, y)
-        self._drag_start = point
+        self._drag_start = self._page_point(x, y)
+        self._drag_pointer = (x, y)
         self._dragged = False
+        self._regions = {}
 
     def _on_drag_update(self, gesture, dx, dy):
         start = self._drag_start
@@ -1362,18 +1606,80 @@ class PdfView(Adw.Bin):
         self._dragged = True
         self._cancel_click()
         ok, x, y = gesture.get_start_point()
-        end = self._page_point(x + dx, y + dy, clamp_index=start[0])
-        if end is None:
+        self._drag_pointer = (x + dx, y + dy)
+        self._drag_select()
+        self._autoscroll()
+
+    def _drag_select(self):
+        end = self._nearest_point(*self._drag_pointer)
+        if end is not None and self._drag_start is not None:
+            self._select_range(self._drag_start, end, Poppler.SelectionStyle.GLYPH)
+
+    def _autoscroll(self):
+        """Scroll while a drag holds the pointer near (or past) the view's edge, selecting
+        on into the pages that come."""
+        if self._autoscroll_source or self._drag_pointer is None:
             return
-        self._select(start[0], (start[1], start[2]), (end[1], end[2]),
-                     Poppler.SelectionStyle.GLYPH)
+        if self._edge_speed() != (0, 0):
+            self._autoscroll_source = GLib.timeout_add(
+                30, _weak_method(self, PdfView._autoscroll_step))
+
+    def _edge_speed(self):
+        """(dx, dy) pixels to scroll per step for the drag's pointer."""
+        x, y = self._drag_pointer
+        width, height = self._viewport
+
+        def speed(position, size):
+            if position < AUTOSCROLL_EDGE:
+                return -min(60, (AUTOSCROLL_EDGE - position) / 2 + 4)
+            if position > size - AUTOSCROLL_EDGE:
+                return min(60, (position - size + AUTOSCROLL_EDGE) / 2 + 4)
+            return 0
+
+        return speed(x, width), speed(y, height)
+
+    def _autoscroll_step(self):
+        if self._drag_start is None or self._drag_pointer is None or not self._dragged:
+            self._autoscroll_source = 0
+            return GLib.SOURCE_REMOVE
+        dx, dy = self._edge_speed()
+        hvalue, vvalue = self._values()
+        self._set_values(hvalue + dx if dx else None, vvalue + dy if dy else None)
+        if (dx, dy) == (0, 0) or self._values() == (hvalue, vvalue):
+            self._autoscroll_source = 0
+            return GLib.SOURCE_REMOVE
+        self._drag_select()
+        return GLib.SOURCE_CONTINUE
 
     def _on_drag_end(self, gesture, dx, dy):
         if self._dragged and self._drag_start is not None:
             self._selection_done()
         self._drag_start = None
+        self._drag_pointer = None
+        self._regions = {}
+        if self._autoscroll_source:
+            GLib.source_remove(self._autoscroll_source)
+            self._autoscroll_source = 0
 
-    def _select(self, index, start, end, style):
+    def _nearest_point(self, x, y):
+        """(index, px, py) in PDF points: the point of the view on the page shown nearest
+        it, held to that page's edges (a point between pages or past the view's edge)."""
+        best = None
+        for index, (bx, by, bw, bh) in self._visible():
+            cx = max(bx, min(bx + bw, x))
+            cy = max(by, min(by + bh, y))
+            distance = (cx - x) ** 2 + (cy - y) ** 2
+            if best is None or distance < best[0]:
+                width, height = self._sizes[index]
+                best = (distance, (index, (cx - bx) / bw * width, (cy - by) / bh * height))
+        return best[1] if best else None
+
+    def _region(self, index, start, end, style):
+        """(rects, text) Poppler selects on a page from `start` to `end` (PDF points)."""
+        key = (index, start, end, style)
+        found = self._regions.get(key)
+        if found is not None:
+            return found
         page = self._document.get_page(index)
         area = Poppler.Rectangle()
         area.x1, area.y1 = start
@@ -1386,28 +1692,56 @@ class PdfView(Adw.Bin):
                 r = region.get_rectangle(n)
                 rects.append((r.x / precision, r.y / precision, (r.x + r.width) / precision,
                               (r.y + r.height) / precision))
-        text = page.get_selected_text(style, area) or '' if rects else ''
-        self._selection = {'index': index, 'rects': _merge_lines(rects), 'text': text}
+        text = (page.get_selected_text(style, area) or '') if rects else ''
+        found = (_merge_lines(rects), text)
+        if len(self._regions) > 64:
+            self._regions.clear()
+        self._regions[key] = found
+        return found
+
+    def _select(self, index, start, end, style):
+        """Select on one page, from `start` to `end` (PDF points)."""
+        self._select_range((index,) + tuple(start), (index,) + tuple(end), style)
+
+    def _select_range(self, start, end, style):
+        """Select from `start` to `end`, each (index, px, py): over the pages between too,
+        whole, and to the end of the first page and from the top of the last."""
+        if end[0] < start[0]:
+            start, end = end, start  # on one page, Poppler orders the points itself
+        parts = []
+        for index in range(start[0], end[0] + 1):
+            width, height = self._sizes[index]
+            first = start[1:] if index == start[0] else (0.0, 0.0)
+            last = end[1:] if index == end[0] else (width, height)
+            rects, text = self._region(index, first, last, style)
+            if rects:
+                parts.append((index, rects, text))
+        self._selection = {'parts': parts}
         self._pages.queue_draw()
 
     def _selection_done(self):
         selection = self._selection
-        if selection is None or not selection['rects'] or not selection['text'].strip():
+        if selection is None or not selection['parts'] or not self.selected_text():
             self._selection = None
             self._pages.queue_draw()
             return
-        index = selection['index']
-        rects = selection['rects']
+        parts = selection['parts']
+        index, rects, _text = parts[0]
         height = self._sizes[index][1]
         fraction = pdf_location.fraction(index + 1, min(r[1] for r in rects) / height,
                                          self._count)
+        # The popover points at the end of the selection where it is on screen.
+        rect = next((r for i, rects_, _t in reversed(parts)
+                     if (r := self._view_rect(i, rects_)) is not None), None)
         self.emit('selection', {
-            'cfi': pdf_location.location(index + 1, rects=rects),
-            'text': ' '.join(selection['text'].split()),
-            'rect': self._view_rect(index, rects), 'fraction': fraction})
+            'cfi': pdf_location.span_location([(i + 1, r) for i, r, _t in parts]),
+            'text': self.selected_text(), 'rect': rect, 'fraction': fraction})
 
     def selected_text(self):
-        return ' '.join(self._selection['text'].split()) if self._selection else ''
+        if not self._selection:
+            return ''
+        return ' '.join(' '.join(text.split()) for _i, _r, text in self._selection['parts']
+                        if text.strip())
 
     def clear_selection(self):
         if self._selection is not None:
@@ -1464,13 +1798,7 @@ class PdfView(Adw.Bin):
         return None
 
     def _text_at(self, index, px, py):
-        layout = self._layouts.get(index)
-        if layout is None:
-            ok, rects = self._document.get_page(index).get_text_layout()
-            layout = [(r.x1, r.y1, r.x2, r.y2) for r in rects] if ok and rects else []
-            self._layouts[index] = layout
-            while len(self._layouts) > 6:
-                self._layouts.popitem(last=False)
+        layout = self._char_boxes(index)
         return any(x0 <= px <= x1 and y0 <= py <= y1 for x0, y0, x1, y1 in layout)
 
     def _on_motion(self, _controller, x, y):
@@ -1524,6 +1852,188 @@ class PdfView(Adw.Bin):
             self._turn(1 if self._wheel > 0 else -1)
             self._wheel = 0.0
         return True
+
+    # -- reading aloud -------------------------------------------------------------------
+
+    def tts_start(self, callback):
+        """Read aloud from the top of the page shown: callback(True), or callback(False)
+        with no document."""
+        if self._document is None:
+            callback(False)
+            return
+        self._tts = {'index': None, 'items': [], 'position': -1, 'moved': True}
+        callback(True)
+
+    def tts_next(self, callback):
+        """callback(text) with the next sentence (highlighted and turned to), None at the
+        end of the book."""
+        callback(self._tts_step(1))
+
+    def tts_prev(self, callback):
+        """callback(text) with the sentence before the one given last."""
+        callback(self._tts_step(-1))
+
+    def tts_word(self, offset):
+        """Mark the word at `offset` of the sentence being read (as tts_next gave it)."""
+        tts = self._tts
+        if tts is None or not 0 <= tts['position'] < len(tts['items']):
+            return
+        item = tts['items'][tts['position']]
+        text = item['text']
+        if not 0 <= offset < len(text) or text[offset].isspace():
+            return
+        start = offset
+        while start > 0 and not text[start - 1].isspace():
+            start -= 1
+        end = offset
+        while end < len(text) and not text[end].isspace():
+            end += 1
+        self._tts_word = self._char_parts(item['chars'][start:end])
+        self._pages.queue_draw()
+
+    def tts_stop(self):
+        self._tts = None
+        self._tts_parts = self._tts_word = None
+        self._pages.queue_draw()
+
+    def _tts_step(self, step):
+        tts = self._tts
+        if tts is None or self._document is None:
+            return None
+        if tts['moved']:
+            # from the top of the page shown: its first sentence below the view's top
+            page, offset = self._top_place() or (1, 0.0)
+            index = page - 1
+            items = self._tts_items(index, starting=True)
+            top = offset * self._sizes[index][1]
+            position = next((n for n, item in enumerate(items) if item['bottom'] > top),
+                            len(items))
+            tts.update(index=index, items=items, position=position - 1, moved=False)
+            if step < 0:
+                step = 1
+        position = tts['position'] + step
+        while not 0 <= position < len(tts['items']):
+            index = tts['index'] + (1 if position >= 0 else -1)
+            if not 0 <= index < self._count:
+                if step > 0:
+                    tts['position'] = len(tts['items'])
+                    self._tts_parts = self._tts_word = None
+                    self._pages.queue_draw()
+                return None
+            items = self._tts_items(index)
+            tts.update(index=index, items=items)
+            position = 0 if step > 0 else len(items) - 1
+        tts['position'] = position
+        item = tts['items'][position]
+        self._tts_parts = self._char_parts(item['chars'])
+        self._tts_word = None
+        self._tts_show(self._tts_parts)
+        return item['text']
+
+    def _tts_items(self, index, starting=False):
+        """The sentences to read on page `index`: [{'text', 'chars': [(index, char)],
+        'bottom'}]; one the page break cuts is the last of its first page, read whole (the
+        next page's start then left out, unless reading starts on that page)."""
+        items = self._page_sentences(index)
+        if items and items[0].get('continued') and index > 0 and not starting:
+            before = self._page_sentences(index - 1)
+            if before and before[-1].get('runs_on'):
+                items = items[1:]
+        if items and items[-1].get('runs_on') and index + 1 < self._count:
+            after = self._page_sentences(index + 1)
+            if after and after[0].get('continued'):
+                last = items[-1]
+                items = items[:-1] + [{
+                    'text': last['text'] + ' ' + after[0]['text'],
+                    'chars': last['chars'] + after[0]['chars'], 'bottom': last['bottom']}]
+        return items
+
+    def _page_sentences(self, index):
+        cached = self._layouts.get(('sentences', index))
+        if cached is not None:
+            return cached
+        page = self._document.get_page(index)
+        text = page.get_text() or ''
+        sentences = []
+        for start, end in pdf_location.sentences(text):
+            spoken, positions = pdf_location.speakable_map(text[start:end])
+            if spoken:
+                sentences.append({'text': spoken,
+                                  'chars': [(index, start + p) for p in positions]})
+        if sentences:
+            boxes = self._char_boxes(index)
+            for sentence in sentences:
+                rects = [boxes[c] for _i, c in sentence['chars'] if c < len(boxes)]
+                sentence['bottom'] = max((r[3] for r in rects), default=0.0)
+            # a page that ends mid-sentence, and one that starts with a sentence's rest
+            sentences[-1]['runs_on'] = not pdf_location.ends_sentence(text)
+            first = sentences[0]['text']
+            sentences[0]['continued'] = first[:1].islower()
+        self._layouts[('sentences', index)] = sentences
+        self._trim_layouts()
+        return sentences
+
+    def _char_boxes(self, index):
+        """Each character's box of page `index`'s text, (x0, y0, x1, y1) in points."""
+        key = ('chars', index)
+        boxes = self._layouts.get(key)
+        if boxes is None:
+            ok, rects = self._document.get_page(index).get_text_layout()
+            boxes = [(r.x1, r.y1, r.x2, r.y2) for r in rects] if ok and rects else []
+            self._layouts[key] = boxes
+            self._trim_layouts()
+        return boxes
+
+    def _trim_layouts(self):
+        while len(self._layouts) > 12:
+            self._layouts.popitem(last=False)
+
+    def _char_parts(self, chars):
+        """[(index, rects)]: the boxes of characters [(index, char)], a box per line."""
+        parts = []
+        for index in dict.fromkeys(i for i, _c in chars):
+            boxes = self._char_boxes(index)
+            rects = [boxes[c] for i, c in chars if i == index and c < len(boxes)
+                     and boxes[c][2] > boxes[c][0]]
+            if rects:
+                parts.append((index, _merge_lines(rects)))
+        return parts
+
+    def _tts_show(self, parts):
+        """Turn or scroll to the sentence read, when it is not on screen."""
+        if not parts:
+            return
+        index, rects = parts[0]
+        self._tts_turning = True
+        try:
+            self._reveal(index, rects)
+        finally:
+            self._tts_turning = False
+        self._reason = 'page'
+        self._schedule_report()
+        self._pages.queue_draw()
+
+    # -- printing ------------------------------------------------------------------------
+
+    def print_document(self, parent=None):
+        """Print… : the print dialog over `parent`, the pages drawn by Poppler, each fitted
+        to the paper. Returns the Gtk.PrintOperation (None with no document)."""
+        if self._document is None:
+            return None
+        operation = self.print_operation()
+        operation.run(Gtk.PrintOperationAction.PRINT_DIALOG, parent)
+        return operation
+
+    def print_operation(self):
+        """A Gtk.PrintOperation printing the PDF (its own document: printing may outlast
+        the view)."""
+        document = open_document(self._path, self._password)
+        title = (document.props.title or '').strip() or GLib.path_get_basename(self._path)
+        operation = Gtk.PrintOperation(job_name=title, n_pages=document.get_n_pages(),
+                                       allow_async=True, embed_page_setup=True)
+        operation.set_use_full_page(False)
+        operation.connect('draw-page', _print_page, document)
+        return operation
 
     # -- search --------------------------------------------------------------------------
 
@@ -1583,7 +2093,7 @@ class PdfView(Adw.Bin):
                               'pre': '', 'match': search['query'], 'post': ''})
         search['count'] += len(items)
         chapter = self._chapter(index + 1)
-        label = _('Page {}').format(index + 1)
+        label = _('Page {page}').format(page=index + 1)
         if chapter is not None:
             label = f'{chapter["label"]} · {label}'
         self.emit('search-result', {'label': label, 'items': items})
@@ -1619,8 +2129,9 @@ class PdfView(Adw.Bin):
             place = pdf_location.parse(annotation.get('cfi') or '')
             if place is None or not place.rects:
                 continue
-            marks.setdefault(place.page - 1, []).append(
-                (annotation['cfi'], place.rects, annotation.get('color') or 'yellow'))
+            for page, rects in place.parts:
+                marks.setdefault(page - 1, []).append(
+                    (annotation['cfi'], rects, annotation.get('color') or 'yellow'))
         self._annotations = marks
         self._pages.queue_draw()
 
@@ -1639,6 +2150,18 @@ class PdfView(Adw.Bin):
             self.place['bookmark'] = on_page
         if callback is not None:
             callback(on_page)
+
+
+def _print_page(operation, context, number, document):
+    """Draw page `number` on the print context's paper, fitted and centred, as printed."""
+    page = document.get_page(number)
+    width, height = page.get_size()
+    paper_w, paper_h = context.get_width(), context.get_height()
+    scale = min(paper_w / width, paper_h / height)
+    cr = context.get_cairo_context()
+    cr.translate((paper_w - width * scale) / 2, (paper_h - height * scale) / 2)
+    cr.scale(scale, scale)
+    page.render_for_printing(cr)
 
 
 def _merge_lines(rects):

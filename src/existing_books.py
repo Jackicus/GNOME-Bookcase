@@ -82,7 +82,13 @@ def _config_dirs(home):
         config = os.path.join(home, '.config')
     else:
         config = GLib.get_user_config_dir()
-    return [config, os.path.join(home, '.var', 'app', 'com.calibre_ebook.calibre', 'config')]
+    dirs = [config, os.path.join(home, '.var', 'app', 'com.calibre_ebook.calibre', 'config')]
+    # In a Flatpak the user config dir is the sandbox's own (~/.var/app/ID/config): native
+    # Calibre's configuration is in the home's .config.
+    host_config = os.path.join(home, '.config')
+    if os.path.realpath(host_config) != os.path.realpath(config):
+        dirs.insert(1, host_config)
+    return dirs
 
 
 def _special_dir(home, directory, fallback):

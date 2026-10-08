@@ -12,7 +12,9 @@ format Bookcase cannot take says why: a price, a loan, DRM, a format it does not
 While the book downloads the sheet shows the progress (Cancel stops it), and once it is in
 the library (or was already: same identifier, or same title and an author in common) Read
 and Show in Library. The download goes on when the sheet is closed (pages/catalog.py's
-downloads(), which toasts when it is done).
+downloads(), which toasts when it is done, and lists it in the catalogue's Downloads). When
+the entry links its full record (opds Entry.detail), the sheet fetches it in a thread as it
+opens (client.full_entry) and shows the longer summary and what else it adds.
 """
 
 import logging
@@ -93,6 +95,16 @@ class CatalogEntryDialog(Adw.Dialog):
         self.cover.set_entry(entry, client, url=entry.cover or entry.thumbnail)
         self.cover_box.append(self.cover)
         self._fill()
+        self._detail_task = None
+        if entry.detail and client is not None:
+            ref = self.weak_ref()
+
+            def loaded(full, error):
+                dialog = ref()
+                if dialog is not None:
+                    dialog._on_full_entry(full, error)
+
+            self._detail_task = opds.run_async(client.full_entry, loaded, entry)
         connect_weak(self.download_button, 'clicked', self._on_download)
         connect_weak(self.cancel_button, 'clicked', self._on_cancel)
         connect_weak(self.read_button, 'clicked', self._on_read)
@@ -104,6 +116,28 @@ class CatalogEntryDialog(Adw.Dialog):
         self.update_state()
 
     def _fill(self):
+        self._fill_text()
+        entry = self.entry
+        best = opds.best_acquisition(entry)
+        if best is not None:
+            self.download_button.set_label(_('_Download {format}').format(
+                format=best.format_name))
+        for acquisition in sorted(entry.acquisitions, key=lambda a: not a.available):
+            self.formats_group.add(self._format_row(acquisition))
+        self.formats_group.set_visible(bool(entry.acquisitions))
+
+    def _on_full_entry(self, full, error):
+        """The entry's full record has come: its summary and details shown."""
+        self._detail_task = None
+        if error is not None or full is None:
+            log.info('the full record of %s: %s', self.entry.title, error)
+            return
+        acquisitions = self.entry.acquisitions
+        self.entry = full
+        self.entry.acquisitions = acquisitions  # the formats listed stay the ones shown
+        self._fill_text()
+
+    def _fill_text(self):
         entry = self.entry
         self.title_label.set_text(entry.title)
         self.authors_label.set_text(entry.author)
@@ -124,13 +158,6 @@ class CatalogEntryDialog(Adw.Dialog):
         self.summary_label.set_visible(bool(markup))
         self.categories_label.set_text(', '.join(entry.categories[:12]))
         self.categories_label.set_visible(bool(entry.categories))
-        best = opds.best_acquisition(entry)
-        if best is not None:
-            self.download_button.set_label(_('_Download {format}').format(
-                format=best.format_name))
-        for acquisition in sorted(entry.acquisitions, key=lambda a: not a.available):
-            self.formats_group.add(self._format_row(acquisition))
-        self.formats_group.set_visible(bool(entry.acquisitions))
 
     def _format_row(self, acquisition):
         note = acquisition_note(acquisition)
@@ -196,6 +223,9 @@ class CatalogEntryDialog(Adw.Dialog):
         else:
             self._stop_pulse()
             self.progress_bar.set_fraction(fraction)
+            self.progress_bar.update_property([Gtk.AccessibleProperty.VALUE_TEXT], [
+                # Translators: a percentage ("45%").
+                _('{percent}%').format(percent=round(fraction * 100))])
 
     def _on_pulse(self):
         self.progress_bar.pulse()
@@ -248,6 +278,8 @@ class CatalogEntryDialog(Adw.Dialog):
 
     def _on_closed(self, _dialog):
         self._stop_pulse()
+        if self._detail_task is not None:
+            self._detail_task.cancel()
 
 
 def _language_name(code):

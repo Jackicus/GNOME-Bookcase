@@ -5,18 +5,24 @@
 
     dialog = present(app, parent, book_ids)   # the SendDialog (an Adw.Dialog)
     dialog.device                             # the devices.Device chosen, or None
+    dialog.choose(device)                     # choose one of dialog.devices
+    dialog.needed_bytes()                     # about what the sendable books take
     dialog.send()                             # what the Send button does
 
-With no e-reader connected the dialog says to connect one by USB, and fills in when one
+With no e-reader connected the dialog says to connect one by cable, and fills in when one
 appears (the device monitor's added/removed signals). Otherwise it shows the device (a
 choice when there are several, with its free space), for a Kobo the Kobo EPUB switch (the
 `send-kepub` setting), and each book with what will be sent ("EPUB → Kobo EPUB", "PDF") or
-why it cannot be. Send copies the books in a thread (devices.Device.send(), with a library
-connection of its own), showing progress; Cancel stops it between chunks, and the books
-sent so far stay; unplugging the e-reader stops it too. The dialog closes when done, with a
+why it cannot be (a Kindle, over USB or MTP, takes no EPUB by cable: the reason names Send
+to Kindle by e-mail). When the books would not fit in the device's free space, a warning row
+says so before Send (each book is still tried, and one that does not fit fails). Send
+copies the books in a thread (devices.Device.send(), with a library connection of its own),
+showing progress; Cancel stops it (Gio's copy, through the cancellable), and the books sent
+so far stay; unplugging the e-reader stops it too. The dialog closes when done, with a
 toast ("Sent 3 books to Kobo Clara"), and tells the monitor the device's books changed.
 Each copy sent is remembered for reading sync (app.sync.remember_copy: KOReader on the
-device names the book by the copy's hash).
+device names the book by the copy's hash): devices.Device.send hands the copy, named as on
+the device, to `remember` before deleting it, so this works over MTP too.
 
 Send to Kindle by e-mail (mail.py) is a destination beside the devices once it is set up
 (mail.KindleDestination, listed last): each book shows what Amazon gets (EPUB, PDF, TXT) or
@@ -115,7 +121,14 @@ class SendDialog(Adw.Dialog):
         self.setup_row.add_suffix(Gtk.Image(icon_name='go-next-symbolic',
                                             accessible_role=Gtk.AccessibleRole.PRESENTATION))
         connect_weak(self.setup_row, 'activated', self._on_setup)
-        for row in (self.device_row, self.device_combo, self.kepub_row, self.setup_row):
+        self.space_row = Adw.ActionRow(title=_('Not Enough Space'), visible=False,
+                                       subtitle_lines=3)
+        space_icon = Gtk.Image(icon_name='dialog-warning-symbolic',
+                               accessible_role=Gtk.AccessibleRole.PRESENTATION)
+        space_icon.add_css_class('warning')
+        self.space_row.add_prefix(space_icon)
+        for row in (self.device_row, self.device_combo, self.kepub_row, self.space_row,
+                    self.setup_row):
             device_group.add(row)
         page.add(device_group)
         self.books_group = Adw.PreferencesGroup()
@@ -130,6 +143,7 @@ class SendDialog(Adw.Dialog):
         self.progress_title = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
         self.progress_title.add_css_class('title-4')
         self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.update_property([Gtk.AccessibleProperty.LABEL], [_('Sending')])
         self.progress_label = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
         self.progress_label.add_css_class('dimmed')
         for child in (self.progress_title, self.progress_bar, self.progress_label):
@@ -187,6 +201,12 @@ class SendDialog(Adw.Dialog):
         self.device_row.set_visible(len(self.devices) == 1)
         self._set_device(previous)
         self.stack.set_visible_child_name('form')
+
+    def choose(self, device):
+        """Choose one of self.devices to send to."""
+        if device in self.devices and not self.sending:
+            self.device_combo.set_selected(self.devices.index(device))
+            self._set_device(device)
 
     def _on_device_selected(self, *_args):
         if self._choosing:
@@ -255,9 +275,39 @@ class SendDialog(Adw.Dialog):
             self.books_list.append(row)
         self.books_group.set_title(ngettext('{count} Book', '{count} Books', len(plans)).format(
             count=len(plans)))
+        self._update_space()
         self.send_button.set_sensitive(sendable > 0)
         self.send_button.set_label(_('_Send') if sendable == len(plans) else ngettext(
             '_Send {count}', '_Send {count}', sendable).format(count=sendable))
+
+    def needed_bytes(self):
+        """About the bytes the sendable books take on the device: their library files'
+        sizes (a kepub is a little larger than its EPUB)."""
+        library = self.app.library
+        total = 0
+        for book_id, _book, plan, _formats in self.plans():
+            if plan is None:
+                continue
+            sizes = [file.size or 0 for file in library.files(book_id)
+                     if not file.missing and file.format == plan.source]
+            size = max(sizes, default=0)
+            total += int(size * 1.05) if plan.convert == 'kepub' else size
+        return total
+
+    def _update_space(self):
+        device = self.device
+        if device is None or device.kind == 'email':
+            self.space_row.set_visible(False)
+            return
+        free, total = device.space()
+        needed = self.needed_bytes()
+        short = bool(total) and needed > free
+        self.space_row.set_visible(short)
+        if short:
+            self.space_row.set_subtitle(
+                _('These books need about {needed}; {device} has {free} free').format(
+                    needed=GLib.format_size(needed), device=device.name,
+                    free=GLib.format_size(free)))
 
     # -- sending -----------------------------------------------------------------------------
 
@@ -300,13 +350,17 @@ class SendDialog(Adw.Dialog):
                 def progress(fraction, index=index, title=title):
                     GLib.idle_add(self._show_progress, index, len(work), title, fraction)
 
-                try:
-                    copy = device.send(library, self.app.covers, book_id, kepub=kepub,
-                                       progress=progress, cancellable=self.cancellable)
-                    sent.append(title)
-                    sync = getattr(self.app, 'sync', None)
-                    if sync is not None and copy:  # the copy's sync ids are the book's
+                sync = getattr(self.app, 'sync', None)
+
+                def remember(copy, book_id=book_id, sync=sync):
+                    if sync is not None:  # the copy's sync ids are the book's
                         sync.remember_copy(book_id, copy)
+
+                try:
+                    device.send(library, self.app.covers, book_id, kepub=kepub,
+                                progress=progress, cancellable=self.cancellable,
+                                remember=remember)
+                    sent.append(title)
                 except devices.Cancelled:
                     cancelled = True
                     break
@@ -375,6 +429,8 @@ class SendDialog(Adw.Dialog):
         # Translators: sending books: the book's title, then how far along the list.
         self.progress_label.set_text(_('“{title}” ({number} of {total})').format(
             title=title, number=index + 1, total=total))
+        self.progress_bar.update_property([Gtk.AccessibleProperty.VALUE_TEXT],
+                                          [self.progress_label.get_text()])
         return GLib.SOURCE_REMOVE
 
     def _finished(self, device, total, sent, failed, cancelled):
@@ -427,8 +483,10 @@ def result_text(device_name, total, sent, failed, cancelled):
         if not count:
             return _('Could not send “{title}”: {reason}').format(title=title, reason=reason) \
                 if title else _('Could not send the books: {reason}').format(reason=reason)
-        return _('Sent {count} of {total} books to {device}. “{title}”: {reason}').format(
-            count=count, total=total, device=device_name, title=title, reason=reason)
+        return ngettext('Sent {count} of {total} book to {device}. “{title}”: {reason}',
+                        'Sent {count} of {total} books to {device}. “{title}”: {reason}',
+                        total).format(count=count, total=total, device=device_name,
+                                      title=title, reason=reason)
     if count == 1:
         return _('Sent “{title}” to {device}').format(title=sent[0], device=device_name)
     return ngettext('Sent {count} book to {device}', 'Sent {count} books to {device}',

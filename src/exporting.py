@@ -118,6 +118,6 @@ def export_copy(library, covers, book_id, dest_dir, format=None, embed=True, nam
     except OSError as error:
         with contextlib.suppress(OSError):
             os.unlink(temporary)
-        raise ExportError(_('The book could not be copied: {}').format(error.strerror
+        raise ExportError(_('The book could not be copied: {error}').format(error=error.strerror
                                                                         or error)) from error
     return dest

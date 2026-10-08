@@ -11,18 +11,25 @@ change, applied as one undo step.
                                     # on_done(cancelled) at the end
     queue.cancel()                  # stops after the request in flight
     run_lookup(lookup, fetch=None, google_key='')   # one book, in the calling thread
+    choose(lookup, index, fetch=None)   # take lookup.choices[index] instead (completed and
+                                    # its cover fetched, blocking; remembered)
+    complete_choice(lookup, index, fetch=None)   # what choose() fetches, for a thread;
+                                    # lookup.completed[index] = it, then choose() is quick
     changes(book, lookup, replace=False)   # {group: [Change]} it would make
     apply(library, covers, lookups, selection, replace=False)   # one undo step; books changed
 
 A lookup asks online.search() (by ISBN first when the book has one, else title and first
 author), judges the best candidate (classify: 'found', 'ambiguous' or 'not-found'),
-fetches what the search leaves out (online.complete) and the candidate's cover (Open
+keeps up to CHOICES plausible candidates (lookup.choices, the best first: the review offers
+them in a drop-down), fetches what the search leaves out (online.complete) and the
+candidate's cover (Open
 Library's covers by id, which are not rate limited). online's default fetch keeps Open
 Library's API requests a second apart, so a queue of a hundred books takes a few minutes and
 never floods it (the reason r/Calibre begs users not to bulk-download, calibre.md §2).
 
 Changes come in four groups the review can switch per book: 'details' (publisher,
-published, language, series and number, identifiers: the ISBN and the source's ids),
+published, language, series and number, page count, identifiers: the ISBN and the source's
+ids),
 'description', 'cover' and 'tags'. Title and authors are never changed in bulk. By default
 only empty fields are filled (no publisher, no description, no cover, no tags); `replace`
 also overwrites what is there (tags are only ever added). apply() writes the selected groups
@@ -44,7 +51,8 @@ STATUSES = ('waiting', 'searching', 'found', 'ambiguous', 'not-found', 'error')
 FOUND_TITLE = 0.9  # title similarity for a sure match
 FOUND_AUTHOR = 0.8
 MAYBE_TITLE = 0.6  # below this: not found
-DETAIL_FIELDS = ('publisher', 'published', 'language', 'series')
+DETAIL_FIELDS = ('publisher', 'published', 'language', 'series', 'pages')
+CHOICES = 3  # candidates offered for a book
 
 
 @dataclasses.dataclass
@@ -55,6 +63,9 @@ class Lookup:
     candidate: object = None  # online.Candidate, completed
     cover: bytes = None  # the candidate's cover, fetched
     error: str = ''
+    choices: list = dataclasses.field(default_factory=list)  # [online.Candidate]
+    chosen: int = 0  # the index in choices of `candidate`
+    completed: dict = dataclasses.field(default_factory=dict)  # index -> (candidate, cover)
 
     @classmethod
     def of(cls, book):
@@ -71,7 +82,8 @@ class Change:
 
 def labels():
     return {'publisher': _('Publisher'), 'published': _('Published'),
-            'language': _('Language'), 'series': _('Series'), 'isbn': _('ISBN'),
+            'language': _('Language'), 'series': _('Series'), 'pages': _('Pages'),
+            'isbn': _('ISBN'),
             'description': _('Description'), 'cover': _('Cover'), 'tags': _('Tags')}
 
 
@@ -105,6 +117,59 @@ def classify(book, candidates):
     return 'not-found', None
 
 
+def plausible(book, candidates, best=None):
+    """Up to CHOICES candidates worth offering for the book: `best` (classify's) first,
+    then the others whose title is close enough."""
+    chosen = [best] if best is not None else []
+    for candidate in candidates:
+        if len(chosen) >= CHOICES:
+            break
+        if candidate is best:
+            continue
+        main = candidate.title.split(':')[0]
+        title = max(online.similarity(book.title, candidate.title),
+                    online.similarity(book.title, main))
+        if title >= MAYBE_TITLE:
+            chosen.append(candidate)
+    return chosen
+
+
+def complete_choice(lookup, index, fetch=None):
+    """(lookup.choices[index] completed, its cover's bytes or None), blocking; the lookup
+    is not changed (choose() takes it)."""
+    return _complete(lookup, lookup.choices[index], fetch)
+
+
+def _complete(lookup, candidate, fetch):
+    """(the candidate completed, its cover's bytes or None)."""
+    try:
+        candidate = online.complete(candidate, fetch=fetch)
+    except online.OnlineError as error:
+        log.info('completing %s: %s', lookup.book.title, error)
+    cover = None
+    for url in (candidate.cover_url, candidate.thumbnail_url):
+        if not url:
+            continue
+        try:
+            cover = online.fetch_cover(url, fetch=fetch)
+            break
+        except online.OnlineError as error:
+            log.info('cover of %s: %s', lookup.book.title, error)
+    return candidate, cover
+
+
+def choose(lookup, index, fetch=None):
+    """Make lookup.choices[index] the lookup's candidate (blocking: completed and its
+    cover fetched the first time)."""
+    if not 0 <= index < len(lookup.choices):
+        raise IndexError(index)
+    if index not in lookup.completed:
+        lookup.completed[index] = _complete(lookup, lookup.choices[index], fetch)
+    lookup.candidate, lookup.cover = lookup.completed[index]
+    lookup.chosen = index
+    return lookup
+
+
 def run_lookup(lookup, fetch=None, google_key=''):
     """Look one book up (blocking): sets lookup.status, candidate, cover and error."""
     book = lookup.book
@@ -122,20 +187,9 @@ def run_lookup(lookup, fetch=None, google_key=''):
     lookup.status = status
     if candidate is None:
         return lookup
-    try:
-        candidate = online.complete(candidate, fetch=fetch)
-    except online.OnlineError as error:
-        log.info('completing %s: %s', book.title, error)
-    lookup.candidate = candidate
-    for url in (candidate.cover_url, candidate.thumbnail_url):
-        if not url:
-            continue
-        try:
-            lookup.cover = online.fetch_cover(url, fetch=fetch)
-            break
-        except online.OnlineError as error:
-            log.info('cover of %s: %s', book.title, error)
-    return lookup
+    lookup.choices = plausible(book, candidates, candidate)
+    lookup.completed = {}
+    return choose(lookup, 0, fetch)
 
 
 class Queue:
@@ -209,6 +263,9 @@ def changes(book, lookup, replace=False, has_cover=None):
         if field == 'series':
             new = _series_text(candidate.series, candidate.series_index)
             old = _series_text(book.series, book.series_index)
+        elif field == 'pages':
+            new = str(candidate.pages) if candidate.pages > 0 else ''
+            old = str(book.pages) if getattr(book, 'pages', 0) else ''
         else:
             new, old = getattr(candidate, field), getattr(book, field)
         if new and new != old and (replace or not old):
@@ -245,6 +302,8 @@ def update_fields(book, lookup, groups, replace=False):
             if change.field == 'series':
                 fields['series'] = candidate.series
                 fields['series_index'] = candidate.series_index
+            elif change.field == 'pages':
+                fields['pages'] = candidate.pages
             elif change.field == 'isbn':
                 pass  # with the identifiers, below
             elif change.field == 'description':

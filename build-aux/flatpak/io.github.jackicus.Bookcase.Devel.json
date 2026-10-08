@@ -1,66 +1,80 @@
 {
   "x-comment": [
-    "Development only: GNOME Builder or flatpak-builder run the .Devel build from this tree.",
-    "The GNOME 50 runtime ships WebKitGTK 6.0, PyGObject and pycairo; lxml is built here",
-    "(from git, so Cython first). Poppler's typelib is optional (PDF covers and metadata)",
-    "and not in the runtime: without it PDFs are listed by their file names. Books live",
-    "anywhere in the home folder (the library folder, watched folders, Calibre libraries)",
-    "and e-readers mount under /run/media, hence those two filesystem permissions; the",
-    "network is for Open Library. Written without a GNOME 50 runtime or flatpak-builder to",
-    "test it on: not built yet."
+    "Development: GNOME Builder or flatpak-builder build the .Devel app from this tree.",
+    "io.github.jackicus.Bookcase.json is the release manifest (Flathub's), built from a tag.",
+    "See FLATHUB.md.",
+    "Permissions, and why: docs/decisions.md ('The Flatpak sees the usual places; the file",
+    "chooser grants the rest'). network: Open Library, OPDS catalogues, KOReader sync, Send to",
+    "Kindle (SMTP), Look Up, Library Sharing's server (and Calibre's lock, an abstract socket).",
+    "~/Books: the library folder, made when missing. Documents, ~/Calibre Library: where",
+    "people keep books and Calibre libraries, read in place (written by Keep Calibre in Step,",
+    "trashed by Move to Trash). Downloads, read only: the welcome counts e-books there, which",
+    "are copied in. ~/.config/calibre: Calibre's record of where its library is. stardict:",
+    "offline dictionaries for Look Up. /run/media, /media, gvfs: e-readers on USB and MTP, and",
+    "their eject. speech-dispatcher: Read Aloud through the host's daemon. Avahi: Library",
+    "Sharing advertised on the network. Any other folder (a watched folder, a Calibre library",
+    "elsewhere, another library folder) comes through the file chooser portal, which keeps",
+    "the grant. The keyring is libsecret's Secret portal.",
+    "The GNOME runtime has WebKitGTK 6, PyGObject, pycairo, libsecret, bsdtar (CBR) and",
+    "blueprint-compiler 0.22; Poppler, lxml and speechd's client are built here."
   ],
   "id": "io.github.jackicus.Bookcase.Devel",
   "runtime": "org.gnome.Platform",
-  "runtime-version": "50",
+  "runtime-version": "51",
   "sdk": "org.gnome.Sdk",
   "command": "bookcase",
   "finish-args": [
     "--share=ipc",
-    "--share=network",
     "--socket=fallback-x11",
     "--socket=wayland",
     "--device=dri",
-    "--filesystem=home",
-    "--filesystem=/run/media"
+    "--share=network",
+    "--filesystem=~/Books:create",
+    "--filesystem=xdg-documents",
+    "--filesystem=~/Calibre Library",
+    "--filesystem=xdg-download:ro",
+    "--filesystem=~/.config/calibre:ro",
+    "--filesystem=~/.local/share/stardict:ro",
+    "--filesystem=/run/media",
+    "--filesystem=/media",
+    "--filesystem=xdg-run/gvfs",
+    "--talk-name=org.gtk.vfs.*",
+    "--filesystem=xdg-run/speech-dispatcher:ro",
+    "--system-talk-name=org.freedesktop.Avahi"
   ],
-  "cleanup": ["/include", "/lib/pkgconfig", "/share/pkgconfig", "*.la", "*.a"],
+  "cleanup": [
+    "/include",
+    "/lib/pkgconfig",
+    "/share/pkgconfig",
+    "/share/gir-1.0",
+    "/share/man",
+    "*.la",
+    "*.a"
+  ],
   "modules": [
-    {
-      "name": "blueprint-compiler",
-      "buildsystem": "meson",
-      "cleanup": ["*"],
-      "sources": [
-        {"type": "git", "url": "https://gitlab.gnome.org/GNOME/blueprint-compiler.git",
-         "tag": "v0.22.2"}
-      ]
-    },
-    {
-      "name": "python3-cython",
-      "buildsystem": "simple",
-      "cleanup": ["*"],
-      "build-commands": [
-        "pip3 install --no-index --no-build-isolation --prefix=${FLATPAK_DEST} ."
-      ],
-      "sources": [
-        {"type": "git", "url": "https://github.com/cython/cython.git", "tag": "3.1.4"}
-      ]
-    },
-    {
-      "name": "python3-lxml",
-      "buildsystem": "simple",
-      "build-commands": [
-        "pip3 install --no-index --no-build-isolation --prefix=${FLATPAK_DEST} ."
-      ],
-      "sources": [
-        {"type": "git", "url": "https://github.com/lxml/lxml.git", "tag": "lxml-6.0.2"}
-      ]
-    },
+    "poppler.json",
+    "python3-lxml.json",
+    "python3-speechd.json",
     {
       "name": "bookcase",
       "builddir": true,
       "buildsystem": "meson",
-      "config-opts": ["-Dprofile=development"],
-      "sources": [{"type": "dir", "path": "../.."}]
+      "config-opts": [
+        "-Dprofile=development"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../..",
+          "skip": [
+            "build",
+            "_build",
+            ".flatpak-builder",
+            "repo",
+            ".ruff_cache"
+          ]
+        }
+      ]
     }
   ]
 }

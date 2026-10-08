@@ -50,6 +50,10 @@ where you keep them.
   including those that no longer connect as a drive.
 - **Discover books in online catalogues (OPDS):** Project Gutenberg, ManyBooks and your
   own Calibre-Web, Kavita, Komga or Calibre server; download straight into the library.
+- **Share your library over Wi-Fi:** turn on Sharing and any phone or e-reader on your
+  network browses and downloads your books, in its web browser (scan the QR code) or in
+  KOReader, Readest or Thorium as an OPDS catalogue; EPUBs carry your edits. Read-only,
+  password-protected, off until you turn it on.
 - **Reading sync with KOReader:** your place follows you between Bookcase, a KOReader
   e-reader and apps like Readest, over KOReader's free sync server or your own; "Your Kobo
   is at 62% — Go There".
@@ -113,7 +117,36 @@ elsewhere can be pointed to with *Locate File…*.
 
 ## Getting it
 
-It isn't on Flathub yet. To build and install it yourself you need Python 3.12, PyGObject
+It isn't on Flathub yet (it is being prepared: `build-aux/flatpak/FLATHUB.md`). Until then,
+build the Flatpak yourself, or build and install it from source.
+
+### As a Flatpak
+
+You need `flatpak` with the Flathub remote, and `org.flatpak.Builder` (which brings
+flatpak-builder); the GNOME 51 runtime and SDK are installed for you:
+
+```sh
+flatpak install --user flathub org.flatpak.Builder
+git clone https://github.com/Jackicus/GNOME-Bookcase.git
+cd GNOME-Bookcase
+flatpak run org.flatpak.Builder --user --install --install-deps-from=flathub --force-clean \
+  build/flatpak-app build-aux/flatpak/io.github.jackicus.Bookcase.json
+flatpak run io.github.jackicus.Bookcase
+```
+
+`io.github.jackicus.Bookcase.json` builds the latest release tag;
+`io.github.jackicus.Bookcase.Devel.json` builds the checkout as "Bookcase (Development)",
+beside it (GNOME Builder opens it too). The first build takes a few minutes: it compiles
+Poppler. CI also attaches a development bundle (`bookcase-devel.flatpak`) to every run.
+
+The Flatpak sees `~/Books`, Documents, `~/Calibre Library`, Downloads (read only) and
+e-readers; any other folder (a watched folder, a Calibre library elsewhere) is granted when
+you pick it in the file chooser. Calibre's `ebook-convert` is not reachable from it, so
+Convert… offers only EPUB to Kobo EPUB there. The user guide's *The Flatpak* has the details.
+
+### From source
+
+You need Python 3.12, PyGObject
 3.50, pycairo, GTK 4.20, libadwaita 1.9, WebKitGTK 6.0 (for the reader), python-lxml,
 Meson 1.2 and `blueprint-compiler` 0.22 (Meson downloads its own when the installed one is
 missing or older). Poppler's GObject bindings are optional: with them, PDFs get their covers
@@ -126,8 +159,7 @@ meson setup build --prefix=/usr
 meson install -C build
 ```
 
-On Arch, `build-aux/aur/PKGBUILD` builds a package. `build-aux/flatpak/` holds a manifest
-for a development Flatpak (untested). For a look without installing,
+On Arch, `build-aux/aur/PKGBUILD` builds a package. For a look without installing,
 `scripts/run.sh --demo` runs a development build on the invented library.
 
 ## Reading
@@ -156,6 +188,8 @@ authors or ISBN to Open Library, and to Google Books if you gave it a key), when
 book to your Kindle by e-mail (through the mail server you set up), when you have signed in to a KOReader sync server (it
 gets a fingerprint of the book's file, how far in you are and the computer's name), when you
 open a link from a book, and when you look a word up (Wiktionary or Wikipedia, in your browser).
+With Sharing turned on, it serves your library (read-only, behind a password) to devices on
+your local network.
 Books are shown with their own scripts switched off and the network closed to them.
 
 ## How it works
@@ -181,8 +215,26 @@ display; the window, pages and dialogs sit on top. `CLAUDE.md` has the full map.
 
 `scripts/check.sh` runs the lint, the build and the tests; `CLAUDE.md` describes the code and
 its rules, `docs/decisions.md` the choices and why, and `TODO.md` what is not done yet.
-Translations go in `po/`. Bugs and ideas go in the
-[issue tracker](https://github.com/Jackicus/GNOME-Bookcase/issues).
+Bugs and ideas go in the [issue tracker](https://github.com/Jackicus/GNOME-Bookcase/issues).
+
+### Translating
+
+The strings live in `po/bookcase.pot`: the Python, the Blueprint files, the desktop file, the
+metainfo and the settings, gathered from the files `po/POTFILES.in` lists. To start a
+language (here German):
+
+```sh
+meson setup build                       # once
+meson compile -C build bookcase-pot     # po/bookcase.pot, fresh
+msginit -i po/bookcase.pot -o po/de.po -l de
+```
+
+translate `po/de.po` (GNOME Translation Editor, Poedit or a text editor), add `de` on a line
+of its own to `po/LINGUAS`, and check it with `meson compile -C build bookcase-update-po`
+(which also brings every `.po` up to date with the template) and `LANGUAGE=de
+scripts/run.sh --demo`. Placeholders in braces (`{title}`, `{n}`) stay as they are, though they may
+move; `#. Translators:` comments say what a short string is. A plural has as many forms as
+the language's `Plural-Forms` header asks for.
 
 ## Licence
 

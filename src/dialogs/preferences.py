@@ -9,13 +9,16 @@
 Library: the library folder (library-folder; Change… picks another, for books added from
 now on), the watched folders and the linked Calibre libraries (library.folders(): each row
 reads its folder again or removes it, which leaves its books in the library, with Undo;
+a Calibre library's row expands to Keep Calibre in Step, dialogs/calibre_step.py;
 the + buttons pick a folder and read it through add_books.present_scan or
 present_link_calibre). Reading: the reader's defaults, the same keys its Display popover
 sets (reader-theme, reader-font, reader-custom-font, reader-font-size, reader-line-height,
 reader-margin, reader-max-width, reader-justify, reader-hyphenate, reader-publisher-styles,
-reader-scrolled, reader-two-pages, reader-animate). Devices: send-kepub, and Send to Kindle
+reader-scrolled, reader-two-pages, reader-animate), and Look Up (dialogs/lookup_prefs.py:
+lookup-automatic, lookup-online, the StarDict dictionaries). Devices: send-kepub, and Send to Kindle
 (dialogs/kindle_mail.preferences_group). Sync: a page of its
-own (dialogs/sync_prefs.py). Online: the Google
+own (dialogs/sync_prefs.py). Sharing: a page of its own (dialogs/sharing_prefs.py).
+Online: the Google
 Books API key (google-books-key).
 
 Rows are bound with Gio.Settings.bind (numbers included: GSettings maps a spin row's double
@@ -30,7 +33,7 @@ from gettext import gettext as _
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from ..widgets.util import connect_weak, connect_weak_call
-from . import add_books, watch_dialog
+from . import add_books, calibre_step, watch_dialog
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +54,7 @@ SPINS = (
 )
 # The enum combo rows: (template child, key, the nicks in the row's order).
 COMBOS = (
-    ('theme_row', 'reader-theme', ('auto', 'light', 'sepia', 'dark', 'black')),
+    ('theme_row', 'reader-theme', ('auto', 'light', 'sepia', 'dark', 'black', 'custom')),
     ('font_row', 'reader-font', ('publisher', 'serif', 'sans', 'custom')),
 )
 
@@ -143,10 +146,17 @@ class PreferencesDialog(Adw.PreferencesDialog):
         from .sync_prefs import SyncPage
 
         self.add(SyncPage(app))
+        from .sharing_prefs import SharingPage
+
+        self.add(SharingPage(app))
         from . import kindle_mail
 
         self.kepub_row.get_ancestor(Adw.PreferencesPage).add(
             kindle_mail.preferences_group(app))
+        from . import lookup_prefs
+
+        for group in lookup_prefs.preferences_groups(settings):
+            self.justify_row.get_ancestor(Adw.PreferencesPage).add(group)
 
     def _watch(self, obj, signal, handler):
         self._handlers.append((obj, obj.connect(signal, handler)))
@@ -266,9 +276,12 @@ class PreferencesDialog(Adw.PreferencesDialog):
                     listbox.append(self._folder_row(folder))
 
     def _folder_row(self, folder):
-        row = Adw.ActionRow(title=GLib.markup_escape_text(os.path.basename(folder.path)
-                                                          or folder.path),
-                            subtitle=GLib.markup_escape_text(pretty_path(folder.path)))
+        title = GLib.markup_escape_text(os.path.basename(folder.path) or folder.path)
+        subtitle = GLib.markup_escape_text(pretty_path(folder.path))
+        if folder.kind == 'calibre':  # expands to Keep Calibre in Step
+            row = calibre_step.library_row(self.app, folder, title, subtitle)
+        else:
+            row = Adw.ActionRow(title=title, subtitle=subtitle)
         row.set_subtitle_lines(1)
         row.set_tooltip_text(folder.path)
         if not os.path.isdir(folder.path):
@@ -301,7 +314,8 @@ class PreferencesDialog(Adw.PreferencesDialog):
             return
         self.show_folders()
         name = os.path.basename(folder.path) or folder.path
-        toast = Adw.Toast(title=_('“{}” removed. Its books stay in the library.').format(name),
+        toast = Adw.Toast(title=_('“{name}” removed. Its books stay in the library.').format(
+                              name=name),
                           button_label=_('Undo'), use_markup=False)
         connect_weak_call(toast, 'button-clicked', self._undo)
         self.add_toast(toast)

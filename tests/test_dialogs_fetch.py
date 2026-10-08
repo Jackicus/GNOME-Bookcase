@@ -39,8 +39,10 @@ class TestComparison(unittest.TestCase):
             series='Harbour Books', series_index=2, publisher='Tidewater Press',
             published='2011', language='en', tags=('Sea', 'Tides'),
             identifiers={'isbn': ISBN, 'openlibrary': 'OL1M'},
-            cover_url='https://covers.example/1-L.jpg')
+            cover_url='https://covers.example/1-L.jpg', pages=304)
         fields = {field.key: field for field in comparison(CURRENT, candidate)}
+        self.assertEqual(fields['pages'].found, '304')
+        self.assertTrue(fields['pages'].checked)
         self.assertNotIn('authors', fields)  # the same
         self.assertNotIn('language', fields)
         self.assertNotIn('description', fields)  # none found
@@ -58,6 +60,7 @@ class TestComparison(unittest.TestCase):
         self.assertEqual(values['isbn'], ISBN)
         self.assertEqual(values['cover'], PNG)
         self.assertEqual(values['identifiers'], {'openlibrary': 'OL1M'})
+        self.assertEqual(values['pages'], 304)
 
 
 @requires_gtk

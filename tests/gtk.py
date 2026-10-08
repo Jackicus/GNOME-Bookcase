@@ -177,3 +177,14 @@ def wait_for(predicate, timeout=5.0):
         return True
     finally:
         GLib.source_remove(wake)
+
+
+def close_window(window, settle_ms=200):
+    """Destroy a test window safely: its focus let go and the events for it run first. A
+    window destroyed with a text field focused gets input-method events after it is freed,
+    and the next test's main-loop iteration crashes in GTK's Wayland handling."""
+    if window.get_root() is window:
+        window.set_focus(None)
+    pump(settle_ms)
+    window.destroy()
+    pump(settle_ms)

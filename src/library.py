@@ -63,6 +63,10 @@ keeps their place and highlights, but no list, count, search or group shows them
 
     library.add_opened(info, path, hash=…, size=…)   # its id; no undo step
     library.opened_ids()                    # {book id}
+    library.opened_books(limit=12)          # [Book] of them, most recently read first
+    library.forget_books(book_ids)          # undoable 'Forget Book': the rows of opened
+                                            # books go, with their place, reading sessions
+                                            # and highlights (others are left alone)
     library.keep_book(book_id, source='library', path=None, hash=None, size=None,
                       format=None)          # undoable 'Add to Library'
     library.authors() / series() / tags()   # [Group(id, name, sort, count)], books only
@@ -78,7 +82,8 @@ A to Z).
 Editable fields: title, sort_title, authors (sequence of names, first is the main author),
 author_sort, series (name or ''), series_index (float), tags (sequence), publisher,
 published ('YYYY', 'YYYY-MM' or 'YYYY-MM-DD'), language (ISO 639 code), description (HTML),
-rating (0-10, Calibre's half stars; 0 none), identifiers ({'isbn': …, 'google': …}),
+rating (0-10, Calibre's half stars; 0 none), pages (the page count; 0 unknown),
+identifiers ({'isbn': …, 'google': …}),
 has_cover (set through covers.py), status, source_key, source_modified. A new title gives a
 new sort_title, new authors a new author_sort, unless the same call sets them. Passing
 has_cover at all (True again for a replaced cover) adds one to cover_version; undo puts
@@ -95,6 +100,8 @@ Reading state (not undo steps; `changed('progress')`):
                                             # finished (when: kept while read again,
                                             # cleared by 'unread'), oldest first
     library.page_counts()                   # {book_id: pages} where books.pages is known
+    library.book_state(book_id)             # {} or what the reader keeps for the book (JSON)
+    library.set_book_state(book_id, key, value)   # one key of it; no `changed`
 
 Annotations ('highlight', 'bookmark'; a highlight may carry a note):
 
@@ -147,6 +154,7 @@ So undoing an edit leaves alone what changed since outside undo (reading progres
 
 import contextlib
 import dataclasses
+import json
 import logging
 import os
 import pathlib
@@ -183,7 +191,7 @@ TABLE_KINDS = {
     'books': 'books', 'authors': 'books', 'book_authors': 'books', 'series': 'books',
     'tags': 'books', 'book_tags': 'books', 'identifiers': 'books', 'files': 'files',
     'shelves': 'shelves', 'shelf_books': 'shelves', 'annotations': 'annotations',
-    'sessions': 'progress', 'folders': 'folders',
+    'sessions': 'progress', 'folders': 'folders', 'book_state': 'progress',
 }
 # What keeps undo from deleting a name row (made by the step it puts back) that a book uses.
 NAME_IN_USE = {
@@ -194,14 +202,14 @@ NAME_IN_USE = {
 # Fields update_book() writes straight to a books column.
 COLUMN_FIELDS = ('title', 'sort_title', 'author_sort', 'series_index', 'publisher', 'published',
                  'language', 'description', 'rating', 'status', 'has_cover', 'source_key',
-                 'source_modified', 'source_values')
+                 'source_modified', 'source_values', 'pages')
 EDITABLE = set(COLUMN_FIELDS) | {'authors', 'series', 'tags', 'identifiers'}
 
 BOOK_SELECT = ('SELECT b.id, b.uuid, b.title, b.sort_title, b.author_sort, s.name AS series, '
                'b.series_index, b.publisher, b.published, b.language, b.description, b.rating, '
                'b.added, b.modified, b.status, b.progress, b.location, b.last_read, '
                'b.has_cover, b.cover_version, b.source, b.source_key, b.source_modified, '
-               'b.source_values '
+               'b.source_values, b.pages '
                'FROM books b LEFT JOIN series s ON s.id = b.series_id')
 
 
@@ -269,6 +277,7 @@ class Book:
     source_key: str | None = None  # its key in the source (a Calibre book id)
     source_modified: str = ''  # when the source last changed it, as the source says
     source_values: str = ''  # what the source last said of its details (JSON)
+    pages: int = 0  # the page count, when known (Edit Details, Find Metadata)
 
     @property
     def author(self):
@@ -685,7 +694,7 @@ class Library(GObject.Object):
                 has_cover=bool(row[18]), cover_version=row[19],
                 missing=missing,
                 source=row[20], source_key=row[21], source_modified=row[22],
-                source_values=row[23])
+                source_values=row[23], pages=row[24] or 0)
             books.append(book)
         return books
 
@@ -980,6 +989,8 @@ class Library(GObject.Object):
             values['rating'] = max(0, min(10, int(round(values['rating'] or 0))))
         if 'series_index' in values:
             values['series_index'] = float(values['series_index'] or 0)
+        if 'pages' in values:
+            values['pages'] = max(0, int(values['pages'] or 0))
         if 'source_key' in values and values['source_key'] is not None:
             values['source_key'] = str(values['source_key'])
         if 'has_cover' in values:
@@ -1007,13 +1018,15 @@ class Library(GObject.Object):
 
     def remove_books(self, book_ids):
         book_ids = list(dict.fromkeys(_id(book_id) for book_id in book_ids))
-        if not book_ids:
-            return
-        with self.undoable(ngettext('Remove Book', 'Remove Books', len(book_ids))):
+        if book_ids:
+            self._remove(book_ids, ngettext('Remove Book', 'Remove Books', len(book_ids)))
+
+    def _remove(self, book_ids, label):
+        with self.undoable(label):
             for chunk in _chunks(book_ids):
                 marks = ','.join('?' * len(chunk))
                 for table in ('book_authors', 'book_tags', 'identifiers', 'shelf_books',
-                              'annotations', 'sessions', 'files'):
+                              'annotations', 'sessions', 'files', 'book_state'):
                     self._delete(table, f'book_id IN ({marks})', chunk)
                 self._delete('books', f'id IN ({marks})', chunk)
 
@@ -1031,6 +1044,29 @@ class Library(GObject.Object):
         self._update('books', 'id = ?', [book_id], values, record=False, kind='progress')
         if started:
             self._touch('books')
+
+    def book_state(self, book_id):
+        """What the reader keeps for a book (a PDF's zoom and layout under 'pdf'): a dict,
+        {} when nothing is kept or what is cannot be read."""
+        row = self.db.execute('SELECT state FROM book_state WHERE book_id = ?',
+                              (book_id,)).fetchone()
+        try:
+            state = json.loads(row['state']) if row is not None else {}
+        except ValueError:
+            return {}
+        return state if isinstance(state, dict) else {}
+
+    def set_book_state(self, book_id, key, value):
+        """Keep `value` (JSON-able; None removes it) as the book's `key`. Not an undo step
+        and no `changed`: only the reader reads it."""
+        state = self.book_state(book_id)
+        if value is None:
+            state.pop(key, None)
+        else:
+            state[key] = value
+        self.db.execute('INSERT INTO book_state (book_id, state) VALUES (?, ?) '
+                        'ON CONFLICT (book_id) DO UPDATE SET state = excluded.state',
+                        (book_id, json.dumps(state, sort_keys=True)))
 
     def set_status(self, book_ids, status):
         if status not in STATUSES:
@@ -1313,6 +1349,24 @@ class Library(GObject.Object):
         """The ids of the books opened without adding."""
         return {row[0] for row in self.db.execute('SELECT id FROM books WHERE source = ?',
                                                   (OPENED,))}
+
+    def opened_books(self, limit=12):
+        """The books opened without adding, most recently read first."""
+        rows = self._tuples(f'{BOOK_SELECT} WHERE b.source = ? '
+                            'ORDER BY b.last_read DESC, b.added DESC, b.id DESC LIMIT ?',
+                            (OPENED, -1 if limit is None else limit))
+        return self._books(rows)
+
+    def forget_books(self, book_ids):
+        """Forget books opened without adding (undoable 'Forget Book'): their rows go, with
+        their place, sessions and highlights; the files stay. Books in the library are left
+        alone. The number forgotten."""
+        opened = self.opened_ids()
+        book_ids = [book_id for book_id in dict.fromkeys(_id(each) for each in book_ids)
+                    if book_id in opened]
+        if book_ids:
+            self._remove(book_ids, ngettext('Forget Book', 'Forget Books', len(book_ids)))
+        return len(book_ids)
 
     def keep_book(self, book_id, source='library', path=None, hash=None, size=None,
                   format=None):

@@ -129,6 +129,10 @@ template $BookcaseCatalogEntryDialog: Adw.Dialog {
                   ProgressBar progress_bar {
                     valign: center;
                     width-request: 160;
+
+                    accessibility {
+                      label: _("Download Progress");
+                    }
                   }
 
                   Button cancel_button {

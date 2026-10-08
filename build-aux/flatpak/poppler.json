@@ -1,0 +1,61 @@
+{
+  "name": "poppler",
+  "x-comment": "PDF covers, metadata and the reader's PDF view (Poppler's GLib API and typelib); not in the GNOME runtime. Built as Papers' Flatpak builds it, without the Qt, C++ and command-line parts.",
+  "buildsystem": "cmake-ninja",
+  "config-opts": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DCMAKE_INSTALL_LIBDIR=/app/lib",
+    "-DCMAKE_INSTALL_INCLUDEDIR=/app/include",
+    "-DENABLE_BOOST=OFF",
+    "-DENABLE_CPP=OFF",
+    "-DENABLE_GPGME=OFF",
+    "-DENABLE_NSS3=OFF",
+    "-DENABLE_LIBCURL=OFF",
+    "-DENABLE_QT5=OFF",
+    "-DENABLE_QT6=OFF",
+    "-DENABLE_UTILS=OFF",
+    "-DBUILD_GTK_TESTS=OFF",
+    "-DBUILD_CPP_TESTS=OFF",
+    "-DBUILD_MANUAL_TESTS=OFF",
+    "-DENABLE_GOBJECT_INTROSPECTION=ON"
+  ],
+  "cleanup": [
+    "/bin",
+    "/include",
+    "/lib/pkgconfig",
+    "/share/gir-1.0"
+  ],
+  "sources": [
+    {
+      "type": "archive",
+      "url": "https://poppler.freedesktop.org/poppler-26.10.0.tar.xz",
+      "sha256": "6792cb7c69205007ad87d2e936cecc5b3a31fac29ab54ffc3175fdb6b2a6ce35",
+      "x-checker-data": {
+        "type": "anitya",
+        "project-id": 3686,
+        "stable-only": true,
+        "url-template": "https://poppler.freedesktop.org/poppler-$version.tar.xz"
+      }
+    }
+  ],
+  "modules": [
+    {
+      "name": "poppler-data",
+      "x-comment": "Encodings and CMaps for Chinese, Japanese and Korean PDFs.",
+      "buildsystem": "cmake-ninja",
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://poppler.freedesktop.org/poppler-data-0.4.12.tar.gz",
+          "sha256": "c835b640a40ce357e1b83666aabd95edffa24ddddd49b8daff63adb851cdab74",
+          "x-checker-data": {
+            "type": "anitya",
+            "project-id": 3687,
+            "stable-only": true,
+            "url-template": "https://poppler.freedesktop.org/poppler-data-$version.tar.gz"
+          }
+        }
+      ]
+    }
+  ]
+}

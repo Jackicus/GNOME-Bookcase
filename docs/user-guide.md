@@ -48,6 +48,11 @@ remembers where you were in it and your highlights, so opening the same file aga
 where you left off. A book file you already have opens as that book. Opening a folder from
 Files adds its books instead.
 
+Such books are listed on Home under **Recently Opened** (the five you read last): click one
+to carry on reading, **Add** to add it to your library, or × to **forget** it: Bookcase then
+drops what it remembered of the book (your place, highlights and reading time; the file
+stays where it is), with **Undo**.
+
 ## The window
 
 The sidebar lists:
@@ -69,6 +74,12 @@ Books show as covers or as a list (Ctrl+G, Ctrl+L, or the sort and view menu, wh
 sorts them by title, author, series, date added, date published, last read or rating;
 **Reverse Order** turns any of them round; and a slider sets the size of the covers). A
 cover with a bar under it is a book you have started.
+
+In All Books, **Group Series** (in the same menu; off at first) shows each series of two
+books or more as one stack of covers, where its first book would come, with its name, how
+many books it has and a bar for how far through the series you are. Click a stack for the
+series' books in order; a stack selected acts for all its books (Remove, Add to Shelf…).
+While you search, and in the list, every book shows on its own.
 
 The funnel button opens the **filter bar**: Format (EPUB, PDF, comics, Kindle formats, FB2,
 text), Status, Rating (5 stars, or 4, 3, 2, 1 and up) and Language, each a menu. Filters
@@ -131,7 +142,10 @@ the words around it.
 **Text and layout** (the button with the "Aa"): the typeface (the book's own, serif, sans
 serif, or any font you have), text size, line spacing, margins, the widest a column of text
 gets, justification and hyphenation, and the colours of the page: *Follow System*, Light,
-Sepia, Dark or Black. *Keep the Book's Own Styles* lets the book's own fonts and spacing
+Sepia, Dark or Black (with the system's High Contrast on, *Follow System* is black on
+white or white on black), or your own: **Custom Colours…** under the colour chips picks the
+background, the text and the links, which then apply to every book, PDFs included. With a screen reader, the reader says each new chapter as you
+reach it. *Keep the Book's Own Styles* lets the book's own fonts and spacing
 win; turn it off to make every book look the way you set it. **Two Pages** shows facing
 pages when the window is wide enough; **Scrolled** reads the book as one long page per
 chapter instead of turning pages. These settings are the same for every book.
@@ -162,7 +176,8 @@ goes to about where it was.
 ### Look Up
 
 Double-click a word (or select it) and its definition shows in the popover, under the
-highlight colours; **Wikipedia** beside **Dictionary** switches to the encyclopedia's
+highlight colours (or, with *Look Up Words When Selected* off in Preferences, when you
+choose **Look Up**); **Wikipedia** beside **Dictionary** switches to the encyclopedia's
 summary. For a longer selection, **Look Up** shows Wikipedia's article on it. **Open in
 Browser** opens the whole page; **Search in Book** finds the word in the book. In a narrow
 window, Look Up opens the answer in a sheet at the bottom of the window.
@@ -171,33 +186,59 @@ Definitions come from Wiktionary (the entries in the book's language first) and 
 from the Wikipedia in the book's language, so Look Up sends the word to them; offline it says
 so. If StarDict dictionaries are installed (in `~/.local/share/stardict/dic` or
 `/usr/share/stardict/dic`: the `.ifo`, `.idx` and `.dict` or `.dict.dz` files many
-distributions package), Bookcase looks words up in them first, without going online.
+distributions package), Bookcase looks words up in them first, without going online; an
+English word they do not have is tried as its dictionary form too ("harbours" as
+"harbour", "stopped" as "stop", "happiest" as "happy"). Free dictionaries in StarDict format
+are at [FreeDict](https://freedict.org/downloads/) (Preferences links there).
+
+**Preferences → Reading → Look Up** sets when words are looked up (*Look Up Words When
+Selected*, or only when you choose Look Up), whether **online dictionaries** are used (off:
+words never leave your computer, and Wikipedia is not offered), and which of your StarDict
+dictionaries are used, and in what order.
 
 ### Read Aloud
 
 **Read Aloud** (in the reader's main menu, or **Ctrl+Shift+S**) reads the book from the page
 shown, a sentence at a time: the sentence spoken is highlighted and the pages turn with it.
-The bar under the page pauses, plays again and stops, and **Speed** sets how fast it reads.
+The bar under the page pauses and plays again (on from the word it stopped at, where
+speech-dispatcher's Python module is installed), skips a sentence back or forward
+(**Ctrl+Shift+Left** and **Ctrl+Shift+Right**) and stops; **Speed** sets how fast it reads,
+and the speaker button chooses the **voice**, kept for every book in that language. With
+the Python module, the word being said is underlined too (with voices that report their
+words, such as espeak-ng's). Turn the page or jump elsewhere while it reads and it goes on
+from the new page.
 It needs a speech engine: install **speech-dispatcher** with a voice such as **espeak-ng**
 or **piper** (and, if you like, its Python module, python-speechd). Without one, Read Aloud
-is not in the menu. Books laid out as fixed pages (comics, PDFs) cannot be read aloud.
+is not in the menu. PDFs are read aloud too, from their text (a scanned PDF without text
+has nothing to read); comics and other books laid out as fixed pages cannot be.
 
 ### PDFs, comics and plain text
 
 **PDFs** open in the reader as pages, drawn sharp for your screen. They scroll from page to
 page; in **Zoom and Layout** (the header button) choose **Pages** to see a page at a time,
-or two side by side in a wide window (with **Two Pages**, the first page alone, like a
-cover). The zoom fits the page's width up to 125% by itself; **Fit Width**, **Fit Page**,
+or two side by side in a wide window (with **Two Pages**; **Cover Page Alone** keeps the
+first page by itself, like a book's cover, and **Right to Left** pairs and turns the pages
+from the right, for manga and right-to-left languages: the left arrow then goes forward).
+A PDF that says it reads right to left opens that way. The zoom fits the page's width up to 125% by itself; **Fit Width**, **Fit Page**,
 the − and + buttons, Ctrl+plus and Ctrl+minus, Ctrl and the scroll wheel, or pinching on a
 touchpad change it, and Ctrl+0 goes back to the automatic zoom. The PDF's own contents
 (its outline) are in the sidebar, its links work, and search shows each match with the
-words around it, marked on the page. Drag across text to select it: highlight it, add a
-note, copy it (or press Ctrl+C), look it up. The paper colours apply too: Sepia tints the
+words around it, marked on the page. Drag across text to select it, from one page into the
+next too (the view scrolls when you drag to its edge): highlight it, add a note, copy it
+(or press Ctrl+C), look it up. Zoomed far in, the page stays sharp: it is drawn in tiles as
+you move over it. The paper colours apply too: Sepia tints the
 page, Dark and Black turn it light-on-dark (pictures included, as in other PDF readers'
-night mode). A PDF locked with a password asks for it. Your place is saved by page.
+night mode). A PDF locked with a password asks for it. Your place is saved by page, and
+each PDF remembers its own zoom, pages or scrolling, right to left and cover page; a PDF
+opened for the first time scrolls or not as you last chose. **Print…** in the main menu
+(Ctrl+P) prints the PDF.
 
-Comics (CBZ and CBR) open in the reader like any book, a page or two at a time; the
-contents list their pages, and the header button keeps only the paper colours. A CBR is
+Comics (CBZ and CBR) and other books laid out as fixed pages open in the reader like any
+book, a page or two at a time (two side by side when the window is wider than tall, unless
+**Two Pages** is off); the contents list their pages. **Zoom and Layout** (the header
+button) zooms them: − and +, **Fit Width** and **Fit Page**, or Ctrl+plus, Ctrl+minus, Ctrl
+and the scroll wheel; Ctrl+0 fits the page again. Zoomed in, the wheel, the up and down
+arrows and dragging move around the page. A CBR is
 copied into a CBZ the first time it is opened (this needs `bsdtar`, from libarchive).
 **Plain text** opens in the reader too: it is set as a book, with its paragraphs, and with
 contents made from lines that look like headings ("Chapter 1", "CHAPTER IV", a line in
@@ -222,10 +263,12 @@ files are never changed.
 | Ctrl+G, Ctrl+Shift+G | Next, previous result |
 | Ctrl+D | Bookmark this page |
 | Ctrl+B | Highlights and bookmarks |
-| Ctrl++ Ctrl+− Ctrl+0 | Larger, smaller, reset text size |
-| Ctrl+J | Go to a location (a percentage of the book; a PDF's page number) |
+| Ctrl++ Ctrl+− Ctrl+0 | Larger, smaller, reset text size (a PDF's or a comic's zoom) |
+| Ctrl+J | Go to a location (a percentage of the book; a page number in a PDF, or in an EPUB that carries its printed book's pages) |
 | Ctrl+I | Book details |
+| Ctrl+P | Print (a PDF) |
 | Ctrl+Shift+S | Read aloud, pause, play again |
+| Ctrl+Shift+→, Ctrl+Shift+← | Next, previous sentence, while reading aloud |
 | F11, Escape | Fullscreen, leave fullscreen |
 | Ctrl+W | Close the book |
 
@@ -242,7 +285,7 @@ marked unread or reading again starts over from the beginning.
 
 **Edit Details…** (Ctrl+E, or the pencil on a book's page) edits the title, authors (the
 first is the main one), how the title and author are sorted, the series and the book's number
-in it, publisher, date, language, rating, tags, description and identifiers (ISBN and
+in it, publisher, date, language, page count (0 when not known), rating, tags, description and identifiers (ISBN and
 others), and the cover: the menu on the cover chooses an image file, pastes one, finds one
 online or removes it. The sort forms follow the title and authors until you change them.
 When you opened the book from a list, the arrows in the header save and step to the
@@ -264,8 +307,10 @@ ISBN first; about a book every few seconds, as Open Library asks of apps), and s
 one's state: *Found*, *Check This Match* (a likely but not certain match), *Not Found*.
 **Stop** keeps what has been found; Cancel closes without changing anything. **Review**
 lists what each book would get, old → new, in four groups: details (publisher, date,
-language, series, ISBN), description, cover and tags, each with a check, and a check for the
-book (a likely match starts unchecked). Only empty fields are filled unless you turn on
+language, series, page count, ISBN), description, cover and tags, each with a check, and a
+check for the book (a likely match starts unchecked). When Open Library found more than one
+likely book (up to three), **Match** at the top of the book's list picks between them; the
+review then shows what the one you chose would change. Only empty fields are filled unless you turn on
 **Replace Existing Details**; titles and authors are never changed, and tags are only added.
 **Apply** writes it all as one change, which Ctrl+Z undoes.
 
@@ -317,8 +362,15 @@ value Bookcase cannot understand (`rating:many`) matches no book.
 ## E-readers
 
 Plug an e-reader in with its USB cable (and, on the reader, choose to connect to the
-computer). It appears under **Devices** in the sidebar with its free space, the books on it
-that are in your library, and those that are not, which you can **Add** to the library.
+computer). It appears under **Devices** in the sidebar with its free space (marked *Almost
+full* when little is left), the books on it that are in your library, and those that are
+not, which you can **Add** to the library. Readers that connect over MTP rather than as a
+drive (Kindles from 2024 on, Android readers such as Boox) work the same way; over MTP a
+book on the reader is known by its file name rather than its contents.
+
+**Send Unsent Books on a Shelf** on the reader's page picks a shelf and opens Send to
+Device… with the shelf's books the reader does not have yet. Send to Device… warns before
+sending when the books would not fit in the reader's free space.
 
 **Send to Device…** on a book's menu copies it to the reader, with the details you have
 edited. What is sent depends on the reader:
@@ -326,17 +378,30 @@ edited. What is sent depends on the reader:
 - **Kobo:** books go into a `Bookcase` folder on the reader, one folder per author. An EPUB
   is sent as a **Kobo EPUB** (`.kepub.epub`), which gives page numbers and reading
   statistics on the Kobo; turn *Send EPUBs as Kobo EPUBs* off in the dialog or in
-  Preferences to send plain EPUBs. Bookcase never writes to the Kobo's own database.
-- **Kindle:** books go into `documents/`. A Kindle reads AZW3, MOBI, PDF and text over USB,
-  but not EPUB: an EPUB-only book is converted to AZW3 if Calibre's `ebook-convert` is
-  installed, and otherwise cannot be sent by cable (send it by e-mail instead, below).
+  Preferences to send plain EPUBs. A book the Kobo has opened says how far it is read
+  (*Read 45% on Kobo*, *Finished on Kobo*), and **Bring Reading Progress From Kobo** sets
+  your library's progress, or marks the book Finished (Ctrl+Z puts that back), for the books
+  the Kobo is further on with; the Kobo itself is not changed.
+- **Kobo collections:** **Sync Shelves as Kobo Collections** on a Kobo's page (off until you
+  turn it on, for each Kobo) keeps a collection on the Kobo for each of your shelves, holding
+  the shelf's books that are on the Kobo. Bookcase writes the Kobo's own database for this:
+  it first checks the database is laid out as expected (and leaves it alone if not, or while
+  another program has it open), copies it to `.kobo/KoboReader.sqlite.bookcase-backup` on the
+  Kobo, makes the change in one step and checks the database after. Collections you made on
+  the Kobo, and books you put in them there, are left alone. A book just sent joins its
+  collections once the Kobo has added it: eject the Kobo, let it finish, and plug it in
+  again. To undo a change, copy the backup over `KoboReader.sqlite` with the Kobo plugged in.
+- **Kindle:** books go into `documents/`. A Kindle reads AZW3, MOBI, PDF and text by cable,
+  over USB or MTP, but not EPUB: an EPUB-only book is converted to AZW3 if Calibre's
+  `ebook-convert` is installed, and otherwise cannot be sent by cable (send it by e-mail
+  instead, below).
 - **Other readers** (PocketBook, Tolino, Boox and others that show a `Books`, `eBooks` or
   `Digital Editions` folder): books go into that folder, in a format the reader takes.
 
 To delete books from the reader, press the select button on its page, tick them, and
-**Remove…**; it asks first, and your library is not changed. Eject the reader with the button at the top of its page before you unplug it.
-Readers that connect only over MTP (some Kindles from 2024 on) are not supported yet; send
-to them by e-mail.
+**Remove…**; it asks first, and your library is not changed. Eject the reader with the
+button at the top of its page before you unplug it: the page shows *Ejecting…* until it is
+safe to unplug.
 
 ### Send to Kindle by e-mail
 
@@ -404,7 +469,11 @@ library carries a check mark.
 Click a book for its details: cover, authors, series, what it is about, and its formats.
 **Download** takes the best format Bookcase reads (EPUB first, then Kobo EPUB, AZW3, MOBI,
 FB2, PDF, CBZ); the Formats list lets you pick another. The book is copied into your library
-folder like any book you add, and a notice says "Added “Title”" with **Read**. Books that
+folder like any book you add, and a notice says "Added “Title”" with **Read**. The
+**Downloads** button (the arrow in a catalogue's header bar, once you have downloaded
+something) lists this session's downloads: a bar and Cancel while one runs, **Read** once it
+is in your library, and why one failed; **Clear Finished** empties the list. When a
+catalogue links a book's full record, its details show the longer description. Books that
 are for sale, on loan or protected by DRM are shown with what they are, and cannot be
 downloaded in Bookcase.
 
@@ -423,19 +492,79 @@ Each catalogue's menu (⋮) edits or removes it; removing shows a notice with **
 every catalogue is gone, the page offers to bring the free ones back. Standard Ebooks'
 catalogue is not built in: it asks for a Patrons Circle account (add it with yours).
 
+## Sharing your library over Wi-Fi
+
+Bookcase can serve your library to the devices on your network while it is open, so you can
+put a book on an e-reader or a phone without a cable: **Preferences → Sharing → Share
+Library**. It is off until you turn it on, and stays on (starting with Bookcase) until you
+turn it off. Nothing can be changed, added or deleted from the other devices: they browse,
+search, and download.
+
+The page then shows the **web address** to type (like `http://192.168.1.20:8095/`) with a
+**QR code** for a phone's camera, and the **catalogue address** for reading apps (the same
+address followed by `opds`). A **user name** (`reader` unless you change it) and a
+**password** are asked for; Bookcase makes up a password the first time (three groups of
+four letters and digits, easy to type on an e-reader) and keeps it in your keyring. Change
+either on the same page. The main menu says *Sharing on 192.168.1.20:8095* while it is on.
+
+- **Any browser** (a phone, a tablet, Kobo's or Kindle's web browser): open the web address,
+  sign in, and browse Recently Added, Currently Reading, authors, series, tags and your
+  shelves, or search (the same search as in Bookcase: `author:lark`, `tag:sea`…). Each book
+  has a button per format; tap it to download. An e-reader's browser can open only some
+  formats: a Kobo takes EPUB and Kobo EPUB, a Kindle AZW3, MOBI, PDF and TXT.
+- **KOReader** (Kobo, PocketBook, Kindle, Android): **Search → OPDS catalog → +**, the
+  catalogue address, your user name and password. Browse, search, and tap a book to
+  download it into KOReader's download folder.
+- **Readest, Thorium, Foliate or any app that reads OPDS catalogues:** add the catalogue
+  address with the same user name and password.
+
+An EPUB downloads with the title, authors, series, tags and cover you gave it in Bookcase
+written in (your library's file is never changed); other formats come as they are. Books you
+opened without adding them are never shared.
+
+**Who Can Connect** chooses between **Devices on This Network** and **This Computer Only**.
+Even on the network setting, Bookcase answers only addresses of local networks (home and
+office ranges), never the internet. The address is plain HTTP, as with Calibre's content
+server: the password keeps others on the network out, but is not encrypted on the way, so
+share on networks you trust, such as your home's. After five wrong passwords in a minute a
+device is refused for a minute. Turning **Require Password** off lets anyone on the network
+download your books. If the **port** (8095) is taken by another program, choose another.
+With Avahi running (most distributions), the library is also announced on the network as
+*Bookcase on* your computer's name. Sharing stops when Bookcase quits.
+
 ## Calibre libraries
 
 **Link a Calibre Library…** in the main menu adds the books of a Calibre library (the
 folder holding `metadata.db`) to Bookcase, with Calibre's titles, authors, series, tags,
 ratings, descriptions and covers. The files are read where they are, and `metadata.db` is
-opened read-only: Bookcase never changes a Calibre library, so you can keep using Calibre
-beside it, or stop.
+opened read-only: Bookcase does not change a Calibre library unless you ask it to (below),
+so you can keep using Calibre beside it, or stop.
 
 When Calibre changes a book, Bookcase takes the change the next time it reads the library:
 when it starts, or with *Read Again* in Preferences. Details you edited in Bookcase win: a
 title, a series, tags or a cover you changed here stay as you made them, and only the details
-you left alone follow Calibre. Your edits are not written back to Calibre. Preferences lists linked libraries;
-removing one there stops Bookcase reading it (the Calibre library itself is untouched).
+you left alone follow Calibre. Preferences lists linked libraries; removing one there stops
+Bookcase reading it (the Calibre library itself is untouched).
+
+### Keep Calibre in step
+
+Your edits stay in Bookcase unless you ask otherwise. To have them written to Calibre too,
+open Preferences, expand the library's row and turn on **Keep Calibre in Step** (Bookcase
+asks once, and says how many books you edited earlier will be written too). From then on
+the title, authors, author sort, series, tags, publisher, date, languages, description,
+rating, identifiers and cover you change in Bookcase are written to the library's
+`metadata.db` the way Calibre writes them, a few seconds after the change.
+
+- Bookcase writes only while Calibre (and calibredb or calibre-server) is closed; while
+  Calibre is open the row says how many books' changes are waiting, and they are written once
+  it closes, even after Bookcase restarts. While Bookcase writes, Calibre cannot start.
+- Before the first write of a day, `metadata.db` is copied beside it as
+  `metadata.db.bookcase-backup-YYYYMMDD` (the last three are kept). To go back, quit Calibre
+  and copy one over `metadata.db`.
+- Book files and folders are never renamed: Calibre renames a book's folder itself the next
+  time you change its title or author there. Calibre rewrites each book's `metadata.opf` the
+  next time it runs.
+- A library made by a newer Calibre than Bookcase knows is not written to; the row says so.
 
 ## Removing books
 
@@ -452,6 +581,16 @@ missing. **Locate File…** on its page points Bookcase to where it is now.
 **Export…** copies the selected books to a folder you choose, as `Title - Author.epub`,
 with the details and cover you have edited written into the copy (for EPUBs; other formats
 are copied as they are). The books in your library are not changed.
+
+### Converting a book
+
+**Convert…** in a book's menu adds another format to the book: EPUB, Kobo EPUB, AZW3, MOBI,
+PDF or FB2. Choose one and press *Convert*; a bar shows the progress and *Cancel* stops it.
+The new file goes into your library folder (`Author/Title.azw3`) and becomes one of the
+book's formats; the book's own files are not changed, and Undo removes the format again
+(the file stays in the folder). An EPUB becomes a Kobo EPUB on its own; the other formats are
+made by Calibre's `ebook-convert`, which comes with Calibre: install Calibre (most
+distributions call the package `calibre`) and they become available.
 
 ## Reading goals and statistics
 
@@ -470,9 +609,17 @@ was open on a book:
   week and the hours of the day.
 - **Most read** authors and tags this year, by time (click one for its books).
 
+The year button at the top left (once you have read in an earlier year) shows a past year
+as it ended: its books, hours and pages, reading days, months and favourites. A past year
+also has **Your Year in Review**: the books you finished, the pages in them, the hours you
+read, your longest streak, your favourite author and genre (the most books finished, then
+the most time), the month you read most, and the covers of the year's books. **Save as
+Image…** in its header bar saves the page as a picture to share. The page moves on by
+itself when a new day starts while it is open.
+
 A day runs from 4 in the morning to 4 the next morning, so a chapter after midnight counts
-for the evening it belongs to. Pages are the book's page count when Bookcase knows it, else
-an estimate from its file (about 1,500 characters a page; a PDF's or comic's own pages).
+for the evening it belongs to. Pages are the book's page count when Bookcase knows it (Edit
+Details, or Find Metadata from Open Library), else an estimate from its file (about 1,500 characters a page; a PDF's or comic's own pages).
 
 The pencil in the header bar sets the goals: **books a year** and **minutes a day**, either
 0 for none. They are yours alone: Bookcase shows them and never reminds you of them.
@@ -482,7 +629,7 @@ The pencil in the header bar sets the goals: **books a year** and **minutes a da
 Ctrl+, opens them: the **library folder** added books are copied into; **watched folders**
 and **linked Calibre libraries**, with *Read Again*; the reader's text, layout and colours;
 whether EPUBs go to a Kobo as Kobo EPUBs, and **Send to Kindle** by e-mail; **Sync** with
-KOReader (above); and a **Google Books API key** for Find Metadata (free
+KOReader (above); **Sharing** (above); and a **Google Books API key** for Find Metadata (free
 from the Google Cloud console: create a project, turn on the Books API, and make an API key
 under Credentials).
 
@@ -497,7 +644,30 @@ both the books and that folder.
 Bookcase goes online only when you ask it to: Find Metadata (Open Library, and Google Books
 with a key), Send to Kindle (your mail server), reading sync (the server you signed in to),
 a link out of a book, and Look Up (Wiktionary and Wikipedia; an installed
-StarDict dictionary needs no connection).
+StarDict dictionary needs no connection). With Sharing on, it also answers the devices on
+your network that sign in.
+
+### The Flatpak
+
+The Flatpak keeps its library in `~/.var/app/io.github.jackicus.Bookcase/data/bookcase/`
+instead (a library from a non-Flatpak install is not moved over by itself: copy that folder's
+contents across with Bookcase closed). It runs in a sandbox that sees only some of your
+files:
+
+- **Without asking**: `~/Books` (the library folder, made when missing), Documents and
+  `~/Calibre Library`; Downloads, read only; Calibre's settings (to find your Calibre library)
+  and `~/.local/share/stardict` (dictionaries), read only; e-readers under `/run/media` and
+  `/media`, and MTP readers through GNOME's file system services.
+- **When you pick it**: any other folder, chosen in the file chooser (Add Folder…, a Calibre
+  library, another library folder in Preferences), is opened to Bookcase from then on. Its
+  path shows as the sandbox sees it, under `/run/user/…/doc/`. Files opened from Files or
+  another app come the same way. The welcome finds books only in the places above.
+- **Not there**: Calibre's `ebook-convert` (Convert… offers only EPUB to Kobo EPUB
+  without it, and sending to a device converts nothing else), and KOReader sync's last push just before the computer suspends.
+  Read Aloud needs speech-dispatcher running on your system, as outside the Flatpak.
+
+To give it a folder for good without the file chooser, use Flatseal or
+`flatpak override --user --filesystem=~/Comics io.github.jackicus.Bookcase`.
 
 ## Keyboard shortcuts
 

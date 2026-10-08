@@ -40,7 +40,11 @@ template $BookcaseAddBooksDialog: Adw.Dialog {
             ]
           }
 
-          ProgressBar progress_bar {}
+          ProgressBar progress_bar {
+            accessibility {
+              label: _("Progress");
+            }
+          }
 
           Label file_label {
             xalign: 0;

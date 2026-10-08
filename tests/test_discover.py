@@ -150,6 +150,58 @@ class TestDiscover(unittest.TestCase):
         drm = catalog_entry.CatalogEntryDialog(self.app, catalog, borrowed, opds.Client())
         self.assertEqual(drm.none_label.get_text(), 'Protected by DRM')
 
+    def test_downloads_button(self):
+        from bookcase.pages.catalog import DownloadsButton, downloads
+
+        manager = downloads()
+        button = DownloadsButton()
+        self.assertFalse(button.get_visible())  # nothing downloaded this session
+        book_id = add_book(self.library, 'Winter Orchard')
+        entries = [opds.Entry(title, id=f'urn:{n}') for n, title in
+                   enumerate(('Failed Book', 'Done Book', 'Running Book'))]
+        states = [('failed', 'No answer'), ('done', book_id), ('downloading', 0.5)]
+        for entry, state in zip(entries, states, strict=True):
+            manager._entries[entry.key] = entry
+            manager._states[entry.key] = state
+        manager.emit('started', 'urn:2')
+        self.assertTrue(button.get_visible())
+        self.assertEqual(list(button.rows), ['urn:2', 'urn:1', 'urn:0'])  # newest first
+        running = button.rows['urn:2']
+        self.assertAlmostEqual(running.progress.get_fraction(), 0.5)
+        manager.emit('progress', 'urn:2', 0.75)
+        self.assertAlmostEqual(running.progress.get_fraction(), 0.75)
+        cancelled = []
+        manager.cancel = cancelled.append
+        running.cancel_button.emit('clicked')
+        self.assertEqual(cancelled, ['urn:2'])
+        button.rows['urn:1'].read_button.emit('clicked')
+        self.assertEqual(self.app.opened, [book_id])
+        button.clear_button.emit('clicked')
+        self.assertEqual(list(button.rows), ['urn:2'])
+
+    def test_entry_sheet_fetches_the_full_record(self):
+        from bookcase.dialogs import catalog_entry
+        from tests.gtk import wait_for
+
+        catalog = opds.Catalog('x', 'Harbour Lane', 'https://books.example/opds')
+        lantern = opds.parse(fx.ATOM_BOOKS, BASE).books[0]
+        lantern.detail = 'https://books.example/opds/entry/1'
+
+        class Client(opds.Client):
+            def get(self, url, accept='', limit=0):
+                raise opds.OfflineError('no network in the tests')
+
+            def full_entry(self, entry):
+                full = opds.Entry(entry.title, summary='<p>The whole story of the keeper, '
+                                  'from the first lamp to the last.</p>', categories=['Coast'])
+                return opds.fill_entry(entry, full)
+
+        dialog = catalog_entry.CatalogEntryDialog(self.app, catalog, lantern, Client())
+        self.assertTrue(wait_for(lambda: 'whole story' in dialog.summary_label.get_label()))
+        self.assertIn('Coast', dialog.categories_label.get_text())
+        self.assertEqual(dialog.entry.key, lantern.key)
+        self.assertEqual(dialog.download_button.get_label(), '_Download EPUB')
+
     def test_add_catalog_dialog(self):
         from bookcase.dialogs import add_catalog
 

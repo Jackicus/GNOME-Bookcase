@@ -8,8 +8,8 @@ API key, the google-books-key setting).
                                         # [Candidate], best match first; raises OnlineError
                                         # when every source failed (offline, refused, busy)
     candidate = online.complete(candidate)   # a copy with what search leaves out (Open
-                                        # Library's description, subjects and series, from
-                                        # the work and the edition)
+                                        # Library's description, subjects, series and page
+                                        # count, from the work and the edition)
     data = online.fetch_cover(url)      # the image's bytes; OnlineError when not an image
     task = online.run_async(func, callback, *args, **kwargs)
                                         # func(*args, **kwargs) in a thread; on the main
@@ -472,6 +472,8 @@ def complete(candidate, fetch=None):
                                                else first)
             if edition.get('description') and not found.description:
                 found.description = _description_html(edition.get('description'))
+            # The edition's own count, before the search's median over every edition.
+            found.pages = _int(edition.get('number_of_pages')) or found.pages
             if not found.published and edition.get('publish_date'):
                 found.published = parse_date(edition.get('publish_date'))
             works = edition.get('works')

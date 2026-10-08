@@ -14,7 +14,7 @@ import urllib.parse
 
 from gi.repository import GLib
 
-NAMES = ('kindle-setup', 'send-kindle', 'clippings', 'bulk', 'bulk-progress')
+NAMES = ('kindle-setup', 'send-kindle', 'clippings', 'bulk', 'bulk-progress', 'bulk-choice')
 
 CLIPPINGS = """The Glass Estuary (Imogen Vale)
 - Your Highlight on page 14 | Location 201-204 | Added on Monday, 3 March 2025 10:12:01
@@ -86,13 +86,21 @@ def canned_fetch(app, delay=0.0):
             title, author = query.get('title', ''), query.get('author', '')
             if 'Ferry' in title:
                 return json.dumps({'docs': []}).encode()
+            others = []
             if 'Orchard' in title:
                 title = 'Murder in the Orchard'
+                # Three likely books: the review offers a choice.
+                others = [{'key': '/works/OL2W', 'title': 'The Orchard Murders: A Novel',
+                           'author_name': [author], 'first_publish_year': 2019,
+                           'publisher': ['Lantern House'], 'number_of_pages_median': 288},
+                          {'key': '/works/OL3W', 'title': 'Orchard Murders',
+                           'author_name': ['T. Wren'], 'first_publish_year': 2021}]
             doc = {'key': '/works/OL1W', 'title': title, 'author_name': [author],
                    'first_publish_year': 2014, 'publisher': ['Tidewater Press'],
                    'language': ['eng'], 'cover_i': 7 + len(title) % 5,
+                   'number_of_pages_median': 240 + len(title) * 3,
                    'subject': ['Fiction', 'Coastal towns', 'Families']}
-            return json.dumps({'docs': [doc]}).encode()
+            return json.dumps({'docs': [doc] + others}).encode()
         if parts.path.startswith('/works/'):
             return json.dumps({'description': 'A family, a harbour and the winter that '
                                'changed both. Told across three generations of keepers.'}
@@ -128,7 +136,7 @@ def open_dialog(app, window, name, book_id):
         from bookcase.dialogs import highlights
 
         return highlights.present_import(app, window, CLIPPINGS)
-    if name in ('bulk', 'bulk-progress'):
+    if name in ('bulk', 'bulk-progress', 'bulk-choice'):
         from bookcase.dialogs import bulk_metadata
 
         ids = _ids(app, 'Winter at Aldmoor House', 'The Small Hours Hotel',
@@ -144,7 +152,12 @@ def open_dialog(app, window, name, book_id):
                 dialog.review()
                 # The demo books lack nothing: show what replacing would do.
                 dialog.replace_row.set_active(True)
-                dialog._review_rows[0].set_expanded(True)
+                rows = dialog._review_rows
+                if name == 'bulk-choice':  # the book with three likely matches
+                    rows = [row for row in rows if len(next(
+                        lookup for lookup in dialog.lookups
+                        if lookup.book_id == row.book_id).choices) > 1] or rows
+                rows[0].set_expanded(True)
                 return GLib.SOURCE_REMOVE
             return GLib.SOURCE_CONTINUE
 

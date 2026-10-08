@@ -189,12 +189,100 @@ const applyStyle = () => {
         renderer.setAttribute('max-column-count', style.maxColumns === 2 ? 2 : 1)
         renderer.setStyles?.(bookCSS(style))
     } else {
-        renderer.setAttribute('zoom', 'fit-page')
+        renderer.setAttribute('zoom', String(fxlZoom))
+        // A page zoomed wider or taller than the view scrolls from its edge, not its middle.
+        renderer.style.justifyContent = 'safe center'
+        renderer.style.alignItems = 'safe center'
+        applySpread()
     }
     if (style.animated) renderer.setAttribute('animated', '')
     else renderer.removeAttribute('animated')
     // The highlights' colours follow the theme.
     for (const annotation of annotations.values()) view.addAnnotation(annotationValue(annotation))
+}
+
+// Fixed layouts (comics, picture books): the zoom ('fit-page', 'fit-width' or a scale, 1 the
+// page's own size), panned by the wheel, by dragging and by the arrow keys when zoomed in;
+// two pages side by side (the book's spreads, when the view is wider than tall) unless
+// style.maxColumns is 1.
+const FXL_MAX = 8 // times the fit-page scale
+const FXL_STEP = 1.25
+let fxlZoom = 'fit-page'
+let fxlSpread = null // the spread the renderer was opened with
+let fxlBookSpread       // the book's own
+let fxlDrag = null
+let fxlDragged = false
+
+const fxlFrames = () => (view?.renderer?.getContents?.() ?? [])
+    .map(({ doc }) => doc?.defaultView?.frameElement)
+    .filter(frame => frame && frame.parentElement?.style.display !== 'none')
+
+// The scale the pages are drawn at, and the scales fitting them to the page and the width.
+const fxlScales = () => {
+    const frames = fxlFrames()
+    const { width, height } = view.renderer.getBoundingClientRect()
+    let natural = 0
+    let tallest = 0
+    let scale = 1
+    for (const frame of frames) {
+        const w = parseFloat(frame.style.width) || 0
+        const h = parseFloat(frame.style.height) || 0
+        natural += w
+        tallest = Math.max(tallest, h)
+        if (w) scale = frame.getBoundingClientRect().width / w
+    }
+    if (!natural || !tallest) return { scale: 1, page: 1, width: 1 }
+    return { scale, page: Math.min(width / natural, height / tallest), width: width / natural }
+}
+
+const fxlZoomed = () => view?.isFixedLayout && fxlZoom !== 'fit-page'
+
+const fxlState = () => {
+    const { scale, page } = view?.isFixedLayout ? fxlScales() : { scale: 1, page: 1 }
+    return {
+        fit: fxlZoom === 'fit-page' ? 'page' : fxlZoom === 'fit-width' ? 'width' : null,
+        percent: Math.round(scale / (page || 1) * 100),
+    }
+}
+
+const setZoom = zoom => {
+    fxlZoom = zoom
+    view.renderer.setAttribute('zoom', String(zoom))
+    view.renderer.scrollTo?.(0, 0)
+}
+
+// Pans a zoomed page; false at the edge (nothing moved).
+const fxlPan = (dx, dy) => {
+    const r = view.renderer
+    const left = r.scrollLeft
+    const top = r.scrollTop
+    r.scrollBy(dx, dy)
+    return r.scrollLeft !== left || r.scrollTop !== top
+}
+
+const applySpread = async () => {
+    if (!view?.isFixedLayout || !view.book) return
+    const want = style.maxColumns === 1 ? 'none' : fxlBookSpread
+    if (want === fxlSpread) return
+    const renderer = view.renderer
+    let section = null
+    let before = -1
+    try {
+        section = view.book.sections[renderer.index] ?? null
+        before = section ? renderer.getSpreadOf(section)?.index ?? -1 : -1
+    } catch {
+        section = null // nothing shown yet
+    }
+    fxlSpread = want
+    view.book.rendition = { ...(view.book.rendition ?? {}), spread: want }
+    renderer.open(view.book)
+    if (!section) return
+    const target = renderer.getSpreadOf(section)
+    if (!target) return
+    // The renderer keeps the spread it shows by its number: another first, then this one.
+    if (target.index === before)
+        await renderer.goToSpread(target.index ? target.index - 1 : target.index + 1)
+    await renderer.goToSpread(target.index, target.side, 'navigation')
 }
 
 addEventListener('resize', debounce(() => {
@@ -248,15 +336,39 @@ const fillMarginals = detail => {
     }
 }
 
+// The renderer's reason for a relocation ('page', 'scroll', 'snap', 'navigation',
+// 'selection', 'anchor'), which foliate-js's view leaves out of its own relocate event: read
+// from the renderer's, in the capture phase (before the view's listener).
+let lastReason = ''
+const MOVES = new Set(['page', 'scroll', 'snap', 'navigation', 'selection'])
+
+// Whether the sentence read aloud is on the page shown (its start in the visible range).
+const ttsShown = visible => {
+    if (!ttsRange || !visible) return false
+    try {
+        return visible.startContainer.ownerDocument === ttsRange.startContainer.ownerDocument
+            && visible.comparePoint(ttsRange.startContainer, ttsRange.startOffset) === 0
+    } catch {
+        return false
+    }
+}
+
 const onRelocate = ({ detail }) => {
     lastDetail = detail
+    // Reading aloud, the reader moved (not the page turning to the sentence read, nor a
+    // layout's re-anchoring): Python goes on from the new page.
+    const reason = lastReason
+    lastReason = ''
+    const moved = ttsActive && !ttsTurningNow() && MOVES.has(reason) && !ttsShown(detail.range)
+    if (moved) ttsMoved = true
+    if (fxlZoomed() && reason === 'page') view.renderer.scrollTo?.(0, 0)
     if (selectionShown) clearSelection()
     hideFootnote()
     const renderer = view.renderer
     post('relocated', {
         fraction: detail.fraction ?? 0,
         cfi: detail.cfi ?? '',
-        reason: detail.reason ?? '',
+        reason,
         chapter: detail.tocItem
             ? { label: (detail.tocItem.label ?? '').trim(), href: detail.tocItem.href ?? '' }
             : null,
@@ -271,6 +383,7 @@ const onRelocate = ({ detail }) => {
         jumpedFrom,
         canGoBack: view.history.canGoBack,
         canGoForward: view.history.canGoForward,
+        ttsMoved: moved,
     })
     jumpedFrom = null
     fillMarginals(detail)
@@ -324,6 +437,10 @@ const onClick = (event, doc) => {
         return
     }
     if (event.target?.closest?.('a[href]')) return
+    if (fxlDragged) {
+        fxlDragged = false
+        return
+    }
     clearTimeout(clickTimeout)
     if (event.detail > 1) return
     const frame = doc?.defaultView?.frameElement
@@ -353,6 +470,10 @@ const resetWheel = debounce(() => wheelDelta = 0, 200)
 const onWheel = event => {
     if (event.ctrlKey || !view || !isPaginated()) return
     event.preventDefault()
+    if (fxlZoomed()) {
+        fxlPan(event.deltaX, event.deltaY)
+        return
+    }
     const now = performance.now()
     const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
     resetWheel()
@@ -378,6 +499,24 @@ const onLoad = ({ detail: { doc, index } }) => {
     doc.addEventListener('wheel', onWheel, { passive: false })
     doc.addEventListener('contextmenu', event => event.preventDefault())
     doc.addEventListener('dragstart', event => event.preventDefault())
+    if (view.isFixedLayout) {
+        doc.addEventListener('pointerdown', event => {
+            fxlDragged = false
+            fxlDrag = fxlZoomed() && event.button === 0
+                ? { x: event.screenX, y: event.screenY } : null
+        })
+        doc.addEventListener('pointermove', event => {
+            if (!fxlDrag || !(event.buttons & 1)) return
+            const dx = event.screenX - fxlDrag.x
+            const dy = event.screenY - fxlDrag.y
+            if (!fxlDragged && Math.hypot(dx, dy) < 6) return
+            fxlDragged = true
+            fxlPan(-dx, -dy)
+            fxlDrag = { x: event.screenX, y: event.screenY }
+            doc.getSelection()?.removeAllRanges()
+        })
+        doc.addEventListener('pointerup', () => fxlDrag = null)
+    }
 }
 
 const footnotes = new FootnoteHandler()
@@ -472,10 +611,23 @@ const whenOpen = f => async (...args) => {
 
 // Reading aloud (widgets/read_aloud.py speaks, a sentence at a time): foliate-js's TTS
 // gives a block's SSML with a mark before each sentence; ttsNext() returns the next
-// sentence's text, highlighted and turned to, and goes on into the following sections. The
-// highlight's key starts with foliate-js's search prefix, so a click on it is no annotation's.
+// sentence's text, highlighted and turned to, and goes on into the following sections;
+// ttsPrev() the one before; ttsWord() underlines a word of the sentence being read. The
+// highlights' keys start with foliate-js's search prefix, so a click on one is no
+// annotation's. When the reader moves (a page turned, a jump) while reading, the relocated
+// message says ttsMoved, and the next sentence asked for is the new page's first.
 const TTS_KEY = 'foliate-search:bookcase-tts'
-let ttsQueue = [] // [{ mark, text }]: the rest of the block being read
+const TTS_WORD_KEY = 'foliate-search:bookcase-tts-word'
+let ttsSentences = [] // [{ mark, text }]: the block being read
+let ttsIndex = -1     // the sentence given last, in ttsSentences
+let ttsTruncated = false // ttsSentences starts mid-block (read from the page shown)
+let ttsActive = false
+let ttsMoved = false  // the reader moved since the last sentence was given
+let ttsTurning = 0    // the page is going to a section to read: not the reader moving
+let ttsTurnedAt = -Infinity // when the page last turned to a sentence
+const TTS_TURN_MS = 300
+const ttsTurningNow = () => ttsTurning > 0 || performance.now() - ttsTurnedAt < TTS_TURN_MS
+let ttsRange = null   // the sentence being read
 
 const ssmlSentences = ssml => {
     if (!ssml) return []
@@ -501,31 +653,102 @@ const ssmlSentences = ssml => {
         .filter(({ text }) => text)
 }
 
+const ttsClearWord = () => {
+    for (const { overlayer } of view?.renderer?.getContents?.() ?? [])
+        overlayer?.remove(TTS_WORD_KEY)
+}
+
 const ttsClear = () => {
+    ttsClearWord()
     for (const { overlayer } of view?.renderer?.getContents?.() ?? []) overlayer?.remove(TTS_KEY)
+    ttsRange = null
+}
+
+const overlayerOf = range => {
+    const contents = view.renderer.getContents?.() ?? []
+    return (contents.find(c => c.doc === range.startContainer?.ownerDocument)
+        ?? contents[0] ?? {}).overlayer
 }
 
 const ttsHighlight = range => {
     ttsClear()
-    const contents = view.renderer.getContents?.() ?? []
-    const { overlayer } = contents.find(c => c.doc === range.startContainer?.ownerDocument)
-        ?? contents[0] ?? {}
-    overlayer?.add(TTS_KEY, range, Overlayer.highlight, { color: style.theme.link })
-    view.renderer.scrollToAnchor?.(range)
+    ttsRange = range
+    overlayerOf(range)?.add(TTS_KEY, range, Overlayer.highlight, { color: style.theme.link })
+    // (its promise does not always settle: the turn is the relocations of the next moment)
+    ttsTurnedAt = performance.now()
+    Promise.resolve(view.renderer.scrollToAnchor?.(range)).catch(e => console.error(e))
+}
+
+// The text nodes of a range, with the normalized text the sentence was given as (runs of
+// white space as one space, trimmed): [normalized offset -> (node, offset)].
+const textMap = range => {
+    const root = range.commonAncestorContainer
+    const doc = root.ownerDocument ?? root
+    const walker = doc.createTreeWalker(root.nodeType === Node.TEXT_NODE ? root.parentNode
+        : root, NodeFilter.SHOW_TEXT)
+    const map = []
+    let space = true // leading white space is trimmed
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!range.intersectsNode(node)) continue
+        const start = node === range.startContainer ? range.startOffset : 0
+        const end = node === range.endContainer ? range.endOffset : node.nodeValue.length
+        for (let i = start; i < end; i++) {
+            const white = /\s/.test(node.nodeValue[i])
+            if (white && space) continue
+            map.push({ node, offset: i, white })
+            space = white
+        }
+    }
+    return map
+}
+
+const ttsWordRange = offset => {
+    if (!ttsRange) return null
+    const map = textMap(ttsRange)
+    if (offset < 0 || offset >= map.length || map[offset].white) return null
+    let end = offset
+    while (end + 1 < map.length && !map[end + 1].white) end++
+    const range = ttsRange.startContainer.ownerDocument.createRange()
+    range.setStart(map[offset].node, map[offset].offset)
+    range.setEnd(map[end].node, map[end].offset + 1)
+    return range
+}
+
+const ttsShow = sentence => {
+    if (sentence.mark != null) view.tts.setMark(sentence.mark)
+    ttsMoved = false
+    return sentence.text
 }
 
 // Reading from the page shown (its first sentence) in the section shown.
 const ttsInit = async fromPage => {
-    ttsQueue = []
+    ttsSentences = []
+    ttsIndex = -1
+    ttsMoved = false
     await view.initTTS('sentence', ttsHighlight)
     let ssml
     try {
         ssml = fromPage && lastDetail?.range ? view.tts.from(lastDetail.range) : view.tts.start()
+        ttsTruncated = !!(fromPage && lastDetail?.range)
     } catch (e) {
         console.error(e)
         ssml = view.tts.start()
+        ttsTruncated = false
     }
-    ttsQueue = ssmlSentences(ssml)
+    ttsSentences = ssmlSentences(ssml)
+}
+
+// The block being read, whole (it was read from a mark on the page shown).
+const ttsWholeBlock = () => {
+    const back = view.tts.prev()
+    return ssmlSentences(back ? view.tts.next() : view.tts.start())
+}
+
+const prevLinearSection = index => {
+    const sections = view.book.sections ?? []
+    for (let i = index - 1; i >= 0; i--)
+        if (sections[i].linear !== 'no') return i
+    return null
 }
 
 const nextLinearSection = index => {
@@ -558,12 +781,18 @@ const reader = {
             return false
         }
         const { book } = view
+        fxlZoom = 'fit-page'
+        fxlBookSpread = book.rendition?.spread
+        fxlSpread = fxlBookSpread
         book.transformTarget?.addEventListener('data', ({ detail }) => {
             detail.data = Promise.resolve(detail.data).catch(e => {
                 console.error(new Error(`Failed to load ${detail.name}`, { cause: e }))
                 return ''
             })
         })
+        view.renderer.addEventListener('relocate', ({ detail }) => {
+            lastReason = detail?.reason ?? ''
+        }, { capture: true })
         view.addEventListener('relocate', onRelocate)
         view.addEventListener('load', onLoad)
         view.addEventListener('link', onLink)
@@ -599,6 +828,9 @@ const reader = {
             sectionFractions: view.getSectionFractions(),
             toc: toJSONTOC(book.toc),
             pageList: !!book.pageList?.length,
+            pageItems: (book.pageList ?? []).slice(0, 20000).map(({ label, href }) => ({
+                label: String(label ?? '').trim(), href: href ?? '' })),
+            zoom: view.isFixedLayout ? { fit: 'page', percent: 100 } : null,
         })
         try {
             await view.init({ lastLocation: location || null, showTextStart: !location && !fraction })
@@ -620,7 +852,8 @@ const reader = {
     goLeft: () => view?.goLeft(),
     goRight: () => view?.goRight(),
     // Up and Down: a little in scrolled mode, a page in paginated mode.
-    scroll: ({ direction }) => isPaginated()
+    scroll: ({ direction }) => fxlZoomed() && fxlPan(0, direction * innerHeight / 3) ? true
+        : isPaginated()
         ? (direction > 0 ? view?.next() : view?.prev())
         : (direction > 0 ? view?.next(innerHeight / 8) : view?.prev(innerHeight / 8)),
     start: () => jump(() => view.renderer.firstSection()),
@@ -717,26 +950,27 @@ const reader = {
         return true
     },
     // Reading aloud: ttsStart() from the page shown, then ttsNext() for each sentence (its
-    // text, or null at the end of the book), ttsStop() to clear the highlight.
+    // text, or null at the end of the book), ttsPrev() for the one before, ttsWord() to
+    // underline a word, ttsStop() to clear the highlight.
     async ttsStart() {
         if (!view?.renderer?.getContents?.()?.[0]?.doc || view.isFixedLayout) return false
         await ttsInit(true)
+        ttsActive = true
         return true
     },
     async ttsNext() {
+        ttsActive = true
         for (let guard = 0; guard < 10000; guard++) {
             const contents = view.renderer.getContents()?.[0]
             if (!contents?.doc) return null
-            // The reader went to another section: read from the page shown there.
-            if (!view.tts || view.tts.doc !== contents.doc) await ttsInit(true)
-            const sentence = ttsQueue.shift()
-            if (sentence) {
-                if (sentence.mark != null) view.tts.setMark(sentence.mark)
-                return sentence.text
-            }
+            // The reader went to another section, or moved: read from the page shown.
+            if (!view.tts || view.tts.doc !== contents.doc || ttsMoved) await ttsInit(true)
+            if (ttsIndex + 1 < ttsSentences.length) return ttsShow(ttsSentences[++ttsIndex])
             const ssml = view.tts.next()
             if (ssml) {
-                ttsQueue = ssmlSentences(ssml)
+                ttsSentences = ssmlSentences(ssml)
+                ttsIndex = -1
+                ttsTruncated = false
                 continue
             }
             const next = nextLinearSection(contents.index)
@@ -744,15 +978,96 @@ const reader = {
                 ttsClear()
                 return null
             }
-            await view.renderer.goTo({ index: next })
+            ttsTurning++
+            try {
+                await view.renderer.goTo({ index: next })
+            } finally {
+                ttsTurning--
+            }
             await ttsInit(false)
         }
         return null
     },
+    // The sentence before the one given last (the same one at the start of the book).
+    async ttsPrev() {
+        const contents = view.renderer.getContents()?.[0]
+        if (!contents?.doc) return null
+        if (!view.tts || view.tts.doc !== contents.doc || ttsMoved || ttsIndex < 0)
+            return reader.ttsNext()
+        ttsActive = true
+        if (ttsIndex > 0) return ttsShow(ttsSentences[--ttsIndex])
+        const mark = ttsSentences[ttsIndex]?.mark
+        if (ttsTruncated) {
+            const whole = ttsWholeBlock()
+            const at = whole.findIndex(s => s.mark === mark)
+            ttsSentences = whole
+            ttsTruncated = false
+            ttsIndex = Math.max(0, at)
+            if (at > 0) return ttsShow(ttsSentences[--ttsIndex])
+        }
+        for (let guard = 0; guard < 10000; guard++) {
+            const ssml = view.tts.prev()
+            if (!ssml) break
+            const sentences = ssmlSentences(ssml)
+            if (!sentences.length) continue
+            ttsSentences = sentences
+            ttsIndex = sentences.length - 1
+            return ttsShow(ttsSentences[ttsIndex])
+        }
+        // The section's first block: the last sentence of the section before.
+        const prev = prevLinearSection(contents.index)
+        if (prev == null) {
+            ttsSentences = ssmlSentences(view.tts.start())
+            ttsIndex = 0
+            return ttsSentences[0] ? ttsShow(ttsSentences[0]) : null
+        }
+        ttsTurning++
+        try {
+            await view.renderer.goTo({ index: prev })
+        } finally {
+            ttsTurning--
+        }
+        await ttsInit(false)
+        let last = ttsSentences
+        for (let ssml = view.tts.next(); ssml; ssml = view.tts.next()) {
+            const sentences = ssmlSentences(ssml)
+            if (sentences.length) last = sentences
+        }
+        // the iterator is on the last block now; its marks are the last block's
+        ttsSentences = last
+        ttsIndex = last.length - 1
+        return last.length ? ttsShow(last[ttsIndex]) : reader.ttsNext()
+    },
+    // Underlines the word at `offset` of the sentence being read (its text as given).
+    ttsWord({ offset }) {
+        ttsClearWord()
+        const range = ttsWordRange(offset)
+        if (!range) return false
+        overlayerOf(range)?.add(TTS_WORD_KEY, range, Overlayer.underline,
+            { color: style.theme.link, width: 3 })
+        return true
+    },
     ttsStop() {
-        ttsQueue = []
+        ttsSentences = []
+        ttsIndex = -1
+        ttsActive = false
+        ttsMoved = false
         ttsClear()
         return true
+    },
+    // A fixed layout's zoom: action 'in', 'out', 'fit-page' or 'fit-width'; returns
+    // { fit: 'page', 'width' or null, percent } (100 the page fitted), null for a book that
+    // reflows.
+    zoom({ action }) {
+        if (!view?.isFixedLayout) return null
+        if (action === 'fit-page' || action === 'fit-width') setZoom(action)
+        else if (action === 'in' || action === 'out') {
+            const { scale, page } = fxlScales()
+            const next = action === 'in' ? scale * FXL_STEP : scale / FXL_STEP
+            if (next <= page * 1.001) setZoom('fit-page')
+            else setZoom(Math.min(next, page * FXL_MAX))
+        }
+        return fxlState()
     },
     getTOC: () => toJSONTOC(view?.book?.toc),
     getSectionFractions: () => view?.getSectionFractions() ?? [],

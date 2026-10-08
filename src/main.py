@@ -8,6 +8,8 @@
 
     app.library, app.covers, app.importer, app.devices, app.settings, app.data_dir
     app.sync                            # kosync.Sync: reading positions with KOReader's sync
+    app.calibre                         # calibre_write.CalibreSync: Keep Calibre in Step
+    app.sharing                         # sharing.Sharing: the library served to the network
     app.toast(text, undo=False)         # a toast on the library window (Undo runs app.undo)
     app.report(error, context=None)     # an error, in a sentence, and logged
     app.undo()                          # puts the newest change back; False when none
@@ -32,12 +34,13 @@ where it is, kept out of the library's lists, its place and highlights kept), an
 offers Add to Library (app.keep_book). Files that are not books are toasted. app.* actions:
 add-books (a file chooser of formats.SUFFIXES), open-file (read without adding), add-folder
 (a folder to watch, scanned at once), link-calibre (a folder holding metadata.db),
-preferences, shortcuts, about, undo, quit.
+preferences, sharing (Preferences on its Sharing page), shortcuts, about, undo, quit.
 
     app.open_path(path)                 # read a file from outside, without adding it
     app.keep_book(book_id)              # add a book opened without adding (copied in)
 """
 
+import gc
 import logging
 import os
 import pathlib
@@ -57,6 +60,8 @@ from .library import Library, LibraryError, library_path  # noqa: E402
 from .shortcuts import ACCELS  # noqa: E402
 
 log = logging.getLogger(__name__)
+
+GC_FULL_EVERY = 60  # seconds between full collections (collect_on_main_thread)
 
 RESOURCE_PATH = '/io/github/jackicus/Bookcase'
 RESCAN_DELAY_S = 3
@@ -136,6 +141,8 @@ class Application(Adw.Application):
         self.covers = None
         self.importer = None
         self.devices = None  # devices.DeviceMonitor, when it could start
+        self.calibre = None  # in do_startup: calibre_write.CalibreSync (Keep Calibre in Step)
+        self.sharing = None  # in do_startup: sharing.Sharing (stopped at quit)
         self._rescan_source = None
         self._undo_toast = None  # the Undo toast shown, while it is
         self.add_main_option('demo', 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
@@ -172,6 +179,10 @@ class Application(Adw.Application):
         self.settings.connect('changed::library-folder', self._on_library_folder_changed)
         self._start_devices()
         self._start_sync()
+        from .calibre_write import CalibreSync
+
+        self.calibre = CalibreSync(self.library, self.covers, self.settings)
+        self._start_sharing()
         self._add_actions()
         for name, accels in ACCELS.items():
             self.set_accels_for_action(name, accels)
@@ -185,6 +196,15 @@ class Application(Adw.Application):
 
         self.sync = kosync.Sync(self.settings, self.data_dir / 'sync.json',
                                 keyring=kosync.MemoryKeyring() if self.demo else None)
+
+    def _start_sharing(self):
+        """app.sharing (it starts serving now when the sharing-enabled setting says so);
+        under --demo its password lives in memory only."""
+        from . import passwords, sharing
+
+        self.sharing = sharing.Sharing(
+            self.settings, self.library, self.covers,
+            keyring=passwords.MemoryKeyring() if self.demo else None)
 
     def library_folder(self):
         """The folder added books are copied into: build/demo/Books under --demo (never the
@@ -355,6 +375,16 @@ class Application(Adw.Application):
                 self.sync.shutdown()
             except Exception:
                 log.exception('stopping sync')
+        if getattr(self, 'sharing', None) is not None:
+            try:
+                self.sharing.shutdown()
+            except Exception:
+                log.exception('stopping sharing')
+        if getattr(self, 'calibre', None) is not None:
+            try:
+                self.calibre.shutdown()
+            except Exception:
+                log.exception('stopping the Calibre writes')
         if self.library is not None:
             try:
                 self.library.close()
@@ -411,6 +441,7 @@ class Application(Adw.Application):
                 ('add-folder', self.on_add_folder),
                 ('link-calibre', self.on_link_calibre), ('undo', self.on_undo),
                 ('preferences', self.on_preferences), ('shortcuts', self.on_shortcuts),
+                ('sharing', self.on_sharing),
                 ('about', self.on_about), ('quit', self.on_quit)):
             action = Gio.SimpleAction.new(name, None)
             action.connect('activate', callback)
@@ -548,6 +579,12 @@ class Application(Adw.Application):
 
         preferences.present(self, self.get_active_window())
 
+    def on_sharing(self, *_args):
+        """Preferences, on its Sharing page (the main menu's sharing status)."""
+        from .dialogs import preferences
+
+        preferences.present(self, self.get_active_window()).set_visible_page_name('sharing')
+
     def on_shortcuts(self, *_args):
         from .dialogs import shortcuts
 
@@ -657,8 +694,30 @@ def _demo_dir():
     return None
 
 
+def collect_on_main_thread():
+    """Run Python's cycle collector on the main thread only. Left automatic, it runs in
+    whichever thread allocates next: a worker (importing, thumbnails, sharing, sync) could
+    then free a closed dialog's widgets off the GTK thread, which GTK aborts on. Instead it
+    is off, and an idle check each second does what it would have done (generation 0 when
+    the allocations call for it, a full collection every minute)."""
+    gc.disable()
+    ticks = 0
+
+    def collect():
+        nonlocal ticks
+        ticks += 1
+        if ticks % GC_FULL_EVERY == 0:
+            gc.collect()
+        elif gc.get_count()[0] >= gc.get_threshold()[0]:
+            gc.collect(0)
+        return GLib.SOURCE_CONTINUE
+
+    GLib.timeout_add_seconds(1, collect)
+
+
 def main(version, app_id, base_id, profile):
     logging.basicConfig(level=logging.INFO, format='%(name)s: %(message)s', stream=sys.stderr)
     logging.getLogger('bookcase').setLevel(logging.INFO)
+    collect_on_main_thread()
     app = Application(version, app_id, base_id, profile)
     return app.run(sys.argv)

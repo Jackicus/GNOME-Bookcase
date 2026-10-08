@@ -1,0 +1,6560 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the bookcase package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: bookcase\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-08 09:33+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: data/io.github.jackicus.Bookcase.desktop.in:2
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:7
+msgid "Bookcase@NAME_SUFFIX@"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.desktop.in:3
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:8
+msgid "Keep your e-books in order and read them"
+msgstr ""
+
+#. Translators: Search terms to find this application. Do NOT translate or localize the semicolons.
+#: data/io.github.jackicus.Bookcase.desktop.in:10
+msgid ""
+"ebook;e-book;epub;mobi;azw3;kindle;kobo;calibre;library;reader;books;comics;"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:10
+msgid ""
+"Bookcase keeps your e-books in one place and lets you read them. Add the "
+"books you have, and it shows them as a shelf of covers, sorted into authors, "
+"series and genres, with the book you are reading always one click away."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:15
+msgid ""
+"Your files stay where you keep them: Bookcase reads a folder or a Calibre "
+"library in place and never renames, moves or rewrites a book. Edits to "
+"titles, series and covers live in its own library, and go with a copy when "
+"you send a book to your e-reader."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:21
+msgid "EPUB, Kobo EPUB, MOBI, AZW3, FB2, CBZ comics, PDF and plain text"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:22
+msgid ""
+"A reader with pages side by side, your choice of type and paper, highlights, "
+"notes and bookmarks"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:24
+msgid ""
+"Series in order, shelves of your own, and smart shelves that fill themselves"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:25
+msgid "Fix titles, authors and covers by hand or from Open Library"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:26
+msgid "Send books to a Kobo, Kindle or other e-reader over USB"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:27
+msgid "Open a Calibre library as it is, without changing it"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:28
+msgid "Undo anything, from an edit to a removed shelf"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:74
+msgid "Home: the books you are reading, and what was added lately"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:78
+msgid "Reading a novel, two pages side by side"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:82
+msgid "A book's details: its series, progress and highlights"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:86
+msgid "The whole library as covers, in the dark style"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:90
+msgid "Reading at night"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:94
+msgid "A Kobo plugged in: what is on it, and what to send"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:98
+msgid ""
+"Reading goals and statistics: the year's goal, the books finished, the streak"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:102
+msgid "Discover: free books from online catalogues, and from your own server"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:110
+msgid "Bookcase reads everything it keeps, and finds more."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:112
+msgid ""
+"PDFs open in the reader, with zoom, spreads, contents, search and "
+"highlights; so do text files and CBR comics"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:113
+msgid ""
+"Statistics: a yearly reading goal, streaks and a year of reading at a glance"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:114
+msgid ""
+"Look up a word or a name without leaving the book, and have it read aloud"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:115
+msgid ""
+"Discover free books in online catalogues, or your own Calibre-Web, Kavita or "
+"Komga"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:116
+msgid "Reading positions synced with KOReader devices"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:117
+msgid ""
+"Send to Kindle by e-mail, Kindle highlights in, highlights out as Markdown"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:118
+msgid "Find details for many books at once, find and merge duplicates"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:119
+msgid ""
+"A welcome that finds your Calibre library and folders of books, and books "
+"read without adding them"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:125
+msgid "The first release."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:127
+msgid ""
+"A library of covers with authors, series, tags, shelves and smart shelves"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:128
+msgid ""
+"A reader for EPUB, MOBI, AZW3, FB2 and comics, with highlights and notes"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:129
+msgid "Metadata and covers by hand or from Open Library"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:130
+msgid "Calibre libraries and watched folders read in place"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.metainfo.xml.in:131
+msgid "Sending to Kobo, Kindle and other e-readers over USB"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:20
+msgid "Window width"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:24
+msgid "Window height"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:28
+msgid "Whether the window is maximized"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:32
+msgid "Last page shown"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:33
+msgid ""
+"The sidebar item selected when the window closed: \"home\", \"all\", "
+"\"authors\", \"series\", \"tags\", \"status:reading\", \"shelf:ID\"…"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:37
+msgid "Library folder"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:38
+msgid ""
+"The folder books added to Bookcase are copied into, as Author/Title files. "
+"Empty means ~/Books."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:42
+msgid "Calibre libraries kept in step"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:43
+msgid ""
+"The linked Calibre libraries (their folders) that edits made in Bookcase are "
+"written to (Keep Calibre in Step). Others are only read."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:51
+msgid "Show books as covers or as a list"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:64
+msgid "How book lists are sorted"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:69
+msgid "Width of the covers in the grid, in pixels"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:73
+msgid "Show each series as one stack in All Books"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:74
+msgid ""
+"The covers of All Books show the books of a series as one stacked tile, "
+"which opens the series' books."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:78
+msgid "Reverse the order of book lists"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:79
+msgid ""
+"Each sort has its own direction (newest, latest and best first; titles and "
+"names A to Z); this turns it round."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:83
+msgid "Whether the sidebar is hidden in a wide window"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:87
+msgid "Whether the tip after the first books were added has been seen"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:91
+msgid "Reader window width"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:95
+msgid "Reader window height"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:99
+msgid "Colours of the page"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:100
+msgid ""
+"\"auto\" follows the system's light or dark style; \"custom\" is reader-"
+"custom-theme's colours."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:104
+msgid "The custom paper's colours"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:105
+msgid "JSON: {\"bg\": background, \"fg\": text, \"link\": links}, as #rrggbb."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:109
+msgid "Typeface of the text"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:113
+msgid "The font family used when the typeface is \"custom\""
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:118
+msgid "Text size, in pixels"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:123
+msgid "Line spacing"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:128
+msgid "Side margins, in percent of the page"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:133
+msgid "Widest a column of text gets, in pixels"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:137
+msgid "Justify text"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:141
+msgid "Hyphenate words"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:145
+msgid "Keep the book's own styles"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:146
+msgid "When off, Bookcase's typeface, size and spacing override the book's."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:150
+msgid "Scroll instead of turning pages"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:154
+msgid "Scroll through PDFs instead of turning pages"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:155
+msgid ""
+"PDFs scroll from page to page unless this is off; then they show a page (or "
+"two, with reader-two-pages) at a time."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:159
+msgid "Show two pages side by side when the window is wide"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:163
+msgid "Slide when turning pages"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:173
+msgid "What the reader's progress label shows"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:178
+msgid "The speed of Read Aloud"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:179
+msgid "Speech Dispatcher's rate: 0 is the voice's normal speed."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:183
+msgid "The Read Aloud voice of each language"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:184
+msgid ""
+"A language (\"en\", \"fr\") to the name of a Speech Dispatcher synthesis "
+"voice; a language not listed uses the default voice."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:188
+msgid "Look up a word when it is selected"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:189
+msgid "When off, nothing is looked up until Look Up is chosen."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:193
+msgid "Look up words online"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:194
+msgid ""
+"When off, words go to the StarDict dictionaries installed only, never to "
+"Wiktionary or Wikipedia."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:198
+msgid "The order of the StarDict dictionaries"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:199
+msgid ""
+"Their .ifo files' paths, first asked first; dictionaries not listed come "
+"after, by name."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:203
+msgid "StarDict dictionaries not to use"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:204
+msgid "Their .ifo files' paths."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:208
+msgid "Send EPUBs to a Kobo as Kobo EPUBs"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:209
+msgid ""
+"A Kobo shows reading statistics and page numbers only for its own variant of "
+"EPUB (.kepub.epub)."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:213
+msgid "Kobos whose collections follow the shelves"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:214
+msgid ""
+"The Kobos (by serial number, as “kobo:SERIAL”) on which Bookcase keeps a "
+"collection for each shelf, writing the reader’s database (with a backup "
+"beside it)."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:218
+msgid "Google Books API key"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:219
+msgid ""
+"When set, Find Metadata also asks Google Books. Open Library needs no key."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:224
+msgid "Books to finish this year"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:225
+msgid "The yearly reading goal on the Statistics page; 0 means none."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:230
+msgid "Minutes to read a day"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:231
+msgid "The daily reading goal on the Statistics page; 0 means none."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:235
+msgid "Send to Kindle address"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:236
+msgid "The Kindle's own e-mail address (name@kindle.com) books are mailed to."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:248
+msgid "The mail provider Send to Kindle's settings came from"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:252
+msgid "The address books are mailed from"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:253
+msgid ""
+"It must be on the Approved Personal Document E-mail List of the Amazon "
+"account."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:257
+msgid "Outgoing mail (SMTP) server"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:262
+msgid "Outgoing mail server port"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:271
+msgid "How the connection to the mail server is encrypted"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:275
+msgid "Outgoing mail server user name"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:276
+msgid "Empty means the sending address. The password is kept in the keyring."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:280
+msgid "Whether Amazon's approved sender list has been explained"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:284
+msgid "KOReader sync server"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:285
+msgid ""
+"The progress sync server reading positions are kept on: KOReader's public "
+"server or one of your own."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:289
+msgid "Sync user name"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:290
+msgid "Empty when signed out. The password's key is kept in the keyring."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:298
+msgid "How books are matched with other devices"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:299
+msgid ""
+"By the file's content (KOReader's default, “Binary”) or by its file name."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:303
+msgid "This computer's name for sync"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:304
+msgid "Shown on other devices. Empty: the computer's name."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:308
+msgid "This computer's sync id"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:309
+msgid "Made once, at random, so other devices tell this one apart."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:313
+msgid "Online catalogues"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:314
+msgid ""
+"The OPDS catalogues on the Discover page, as JSON: [{\"id\", \"title\", "
+"\"url\", \"username\"}]. Empty means the free catalogues Bookcase comes "
+"with. Passwords are kept in the keyring, not here."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:318
+msgid "Share the library"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:319
+msgid ""
+"Serve the library to other devices (a catalogue and a web page) while "
+"Bookcase runs."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:327
+msgid "Who can connect to the shared library"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:328
+msgid "“network”: devices on the local network; “local”: this computer only."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:333
+msgid "Sharing port"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:337
+msgid "Ask for a user name and password"
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:338
+msgid "The password is kept in the keyring."
+msgstr ""
+
+#: data/io.github.jackicus.Bookcase.gschema.xml:342
+msgid "Sharing user name"
+msgstr ""
+
+#: src/shortcuts.py:94
+msgid "General"
+msgstr ""
+
+#: src/shortcuts.py:95 src/main.py:482 src/window.blp:38
+msgid "Add Books"
+msgstr ""
+
+#: src/shortcuts.py:96 src/main.py:510
+msgid "Add a Folder"
+msgstr ""
+
+#: src/shortcuts.py:97
+msgid "Read a File Without Adding It"
+msgstr ""
+
+#: src/shortcuts.py:98 src/dialogs/shelf.blp:73 src/pages/home.blp:28
+#: src/pages/books.blp:44 src/reader_window.blp:143 src/sharing.py:341
+#: src/sharing.py:477 src/sharing.py:479 src/sharing.py:624 src/sharing.py:625
+msgid "Search"
+msgstr ""
+
+#: src/shortcuts.py:99
+msgid "Go to a Book, Author, Series or Shelf"
+msgstr ""
+
+#: src/shortcuts.py:100 src/window.blp:89 src/sidebar.py:76
+#: src/pages/home.blp:11
+msgid "Home"
+msgstr ""
+
+#: src/shortcuts.py:101 src/sidebar.py:77 src/pages/books.py:104
+#: src/pages/books.blp:10 src/pages/books.blp:24 src/sharing.py:304
+#: src/sharing.py:337
+msgid "All Books"
+msgstr ""
+
+#: src/shortcuts.py:102 src/dialogs/edit_metadata.blp:170
+#: src/dialogs/edit_metadata.blp:346 src/dialogs/fetch_metadata.py:57
+#: src/sidebar.py:80 src/pages/groups.py:35 src/pages/stats.py:476
+#: src/pages/stats.blp:395 src/sharing.py:305 src/sharing.py:346
+msgid "Authors"
+msgstr ""
+
+#: src/shortcuts.py:103 src/dialogs/edit_metadata.blp:186
+#: src/dialogs/edit_metadata.blp:350 src/dialogs/fetch_metadata.py:57
+#: src/sidebar.py:81 src/pages/books.blp:186 src/pages/groups.py:37
+#: src/dialogs/quick_open.py:51 src/bulk_metadata.py:85 src/sharing.py:307
+#: src/sharing.py:350
+msgid "Series"
+msgstr ""
+
+#: src/shortcuts.py:104 src/sidebar.py:91 src/pages/stats.blp:13
+msgid "Statistics"
+msgstr ""
+
+#: src/shortcuts.py:105
+msgid "Show as Covers"
+msgstr ""
+
+#: src/shortcuts.py:106
+msgid "Show as a List"
+msgstr ""
+
+#: src/shortcuts.py:107 src/dialogs/preferences.py:319 src/main.py:643
+#: src/reader_window.py:1800 src/pages/discover.py:196
+msgid "Undo"
+msgstr ""
+
+#: src/shortcuts.py:108
+msgid "Show or Hide the Sidebar"
+msgstr ""
+
+#: src/shortcuts.py:109
+msgid "Go Back"
+msgstr ""
+
+#: src/shortcuts.py:110
+msgid "Preferences"
+msgstr ""
+
+#: src/shortcuts.py:111 src/reader_window.blp:574
+msgid "Keyboard Shortcuts"
+msgstr ""
+
+#: src/shortcuts.py:112
+msgid "Close the Window"
+msgstr ""
+
+#: src/shortcuts.py:113
+msgid "Quit"
+msgstr ""
+
+#: src/shortcuts.py:115 src/dialogs/shelf.blp:69 src/pages/books.py:117
+#: src/dialogs/highlights.py:134
+msgid "Books"
+msgstr ""
+
+#: src/shortcuts.py:116 src/pages/year_review.py:92 src/pages/catalog.py:141
+msgid "Read"
+msgstr ""
+
+#: src/shortcuts.py:117 src/dialogs/edit_metadata.blp:206
+#: src/pages/book.blp:269 src/bulk_metadata.py:91
+msgid "Details"
+msgstr ""
+
+#: src/shortcuts.py:118 src/pages/book.blp:53
+msgid "Edit Details"
+msgstr ""
+
+#: src/shortcuts.py:119
+msgid "Remove from Library"
+msgstr ""
+
+#: src/shortcuts.py:120
+msgid "Select All"
+msgstr ""
+
+#: src/shortcuts.py:121
+msgid "Select None"
+msgstr ""
+
+#: src/shortcuts.py:123 src/dialogs/edit_metadata.py:765
+#: src/dialogs/preferences.blp:112 src/sidebar.py:84 src/pages/books.py:79
+#: src/pages/book.blp:273
+msgid "Reading"
+msgstr ""
+
+#. The arrows turn left and right: in a right-to-left book, left is forward.
+#: src/shortcuts.py:124 src/reader_window.py:766 src/reader_window.py:767
+#: src/reader_window.blp:373 src/reader_pdf.py:188 src/reader_pdf.py:189
+msgid "Next Page"
+msgstr ""
+
+#: src/shortcuts.py:125 src/reader_window.py:766 src/reader_window.py:767
+#: src/reader_window.blp:330 src/reader_pdf.py:188 src/reader_pdf.py:189
+msgid "Previous Page"
+msgstr ""
+
+#: src/shortcuts.py:126
+msgid "Next Chapter"
+msgstr ""
+
+#: src/shortcuts.py:127
+msgid "Previous Chapter"
+msgstr ""
+
+#: src/shortcuts.py:128
+msgid "Start of the Book"
+msgstr ""
+
+#: src/shortcuts.py:129
+msgid "End of the Book"
+msgstr ""
+
+#: src/shortcuts.py:130
+msgid "Back to Where You Were"
+msgstr ""
+
+#: src/shortcuts.py:131
+msgid "Forward Again"
+msgstr ""
+
+#: src/shortcuts.py:132 src/reader_window.blp:51
+msgid "Contents"
+msgstr ""
+
+#: src/shortcuts.py:133 src/reader_window.py:1280 src/reader_window.blp:165
+msgid "Search the Book"
+msgstr ""
+
+#: src/shortcuts.py:134
+msgid "Next Result"
+msgstr ""
+
+#: src/shortcuts.py:135
+msgid "Previous Result"
+msgstr ""
+
+#: src/shortcuts.py:136
+msgid "Add a Bookmark"
+msgstr ""
+
+#: src/shortcuts.py:137
+msgid "Copy the Selected Text"
+msgstr ""
+
+#: src/shortcuts.py:138 src/pages/book.py:358 src/reader_window.blp:89
+msgid "Highlights and Bookmarks"
+msgstr ""
+
+#: src/shortcuts.py:139
+msgid "Larger Text (Zoom In, for a PDF or a Comic)"
+msgstr ""
+
+#: src/shortcuts.py:140
+msgid "Smaller Text (Zoom Out)"
+msgstr ""
+
+#: src/shortcuts.py:141
+msgid "Reset Text Size (Zoom)"
+msgstr ""
+
+#: src/shortcuts.py:142
+msgid "Go to a Location"
+msgstr ""
+
+#: src/shortcuts.py:143 src/reader_window.blp:562
+msgid "Book Details"
+msgstr ""
+
+#: src/shortcuts.py:144
+msgid "Print (a PDF)"
+msgstr ""
+
+#: src/shortcuts.py:145 src/reader_window.py:1243 src/widgets/read_aloud.py:325
+msgid "Read Aloud"
+msgstr ""
+
+#: src/shortcuts.py:146
+msgid "Next Sentence, Reading Aloud"
+msgstr ""
+
+#: src/shortcuts.py:147
+msgid "Previous Sentence, Reading Aloud"
+msgstr ""
+
+#: src/shortcuts.py:148 src/reader_window.blp:552
+msgid "Fullscreen"
+msgstr ""
+
+#: src/dialogs/about.py:64
+msgid ""
+"Keep your e-books in order and read them. Bookcase reads Calibre libraries "
+"and folders where they are, and never changes your files."
+msgstr ""
+
+#. Translators: your names, one per line (with an address if you like), for the About
+#. dialog's credits.
+#: src/dialogs/about.py:69
+msgid "translator-credits"
+msgstr ""
+
+#. Translators: a shortcut's alternative keys, as a screen reader hears them:
+#. {keys} is the list but the last ("Menu"), {key} the last ("Shift+F10").
+#: src/dialogs/shortcuts.py:35
+#, python-brace-format
+msgid "{keys} or {key}"
+msgstr ""
+
+#. Translators: a shortcut's row as a screen reader hears it: {title} is what the
+#. shortcut does ("Quit"), {keys} its key or keys ("Ctrl+Q").
+#: src/dialogs/shortcuts.py:38
+#, python-brace-format
+msgid "{title}: {keys}"
+msgstr ""
+
+#: src/devices.py:185 src/library.py:291
+#, python-brace-format
+msgid "{first} and {second}"
+msgstr ""
+
+#: src/devices.py:188 src/library.py:294
+#, python-brace-format
+msgid "{first} and {count} other"
+msgid_plural "{first} and {count} others"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/devices.py:474
+msgid "E-Reader"
+msgstr ""
+
+#: src/devices.py:504 src/devices.py:762 src/dialogs/edit_metadata.py:543
+msgid "Unknown"
+msgstr ""
+
+#: src/devices.py:595
+#, python-brace-format
+msgid "That file is not on {device}"
+msgstr ""
+
+#: src/devices.py:615
+msgid "EPUB → Kobo EPUB"
+msgstr ""
+
+#: src/devices.py:622
+msgid "EPUB → AZW3, with Calibre"
+msgstr ""
+
+#: src/devices.py:629
+msgid ""
+"This Kindle takes AZW3, MOBI and PDF by cable, not EPUB. Install Calibre to "
+"convert it, or e-mail it with Send to Kindle."
+msgstr ""
+
+#: src/devices.py:631
+msgid ""
+"A Kindle cannot open EPUB books sent by cable. Install Calibre to convert "
+"them, or use Amazon’s Send to Kindle."
+msgstr ""
+
+#: src/devices.py:633
+msgid "No format this reader can open"
+msgstr ""
+
+#: src/devices.py:777 src/exporting.py:84 src/mail.py:443 src/converting.py:484
+msgid "The book is no longer in the library"
+msgstr ""
+
+#: src/devices.py:818
+#, python-brace-format
+msgid "Not enough space on {device}"
+msgstr ""
+
+#: src/devices.py:898 src/converting.py:389
+msgid "Calibre’s ebook-convert is not installed"
+msgstr ""
+
+#: src/devices.py:903
+msgid "Calibre could not convert the book"
+msgstr ""
+
+#: src/kobo.py:138 src/kobo.py:173 src/kobo.py:195 src/kobo.py:260
+#, python-brace-format
+msgid "Could not read the Kobo’s database: {error}"
+msgstr ""
+
+#: src/kobo.py:156
+msgid ""
+"The Kobo’s database is not laid out as Bookcase expects, so it was left alone"
+msgstr ""
+
+#: src/kobo.py:178
+msgid "This Kobo’s software is too old for collections from Bookcase"
+msgstr ""
+
+#: src/kobo.py:267
+msgid ""
+"The Kobo’s database is in use by another program; try again once it is closed"
+msgstr ""
+
+#: src/kobo.py:360
+msgid ""
+"The Kobo’s database failed its check after the change; it was put back as it "
+"was"
+msgstr ""
+
+#: src/kobo.py:366
+#, python-brace-format
+msgid "Could not write the Kobo’s database: {error}"
+msgstr ""
+
+#: src/pages/device.py:85
+msgid "Free space unknown"
+msgstr ""
+
+#: src/pages/device.py:87
+#, python-brace-format
+msgid "Almost full: {free} free of {total}"
+msgstr ""
+
+#: src/pages/device.py:89
+#, python-brace-format
+msgid "{free} free of {total}"
+msgstr ""
+
+#: src/pages/device.py:98
+msgid "Finished on Kobo"
+msgstr ""
+
+#. Translators: how far a book is read on a Kobo e-reader.
+#: src/pages/device.py:100
+#, python-brace-format
+msgid "Read {percent}% on Kobo"
+msgstr ""
+
+#: src/pages/device.py:256 src/dialogs/highlights.py:60
+msgid "Could not read the highlights"
+msgstr ""
+
+#: src/pages/device.py:340
+msgid "E-reader"
+msgstr ""
+
+#: src/pages/device.py:341 src/sharing.py:294
+#, python-brace-format
+msgid "{count} book"
+msgid_plural "{count} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:343 src/pages/device.py:589 src/pages/device.py:590
+msgid "Ejecting…"
+msgstr ""
+
+#: src/pages/device.py:375 src/pages/device.blp:26
+msgid "Select"
+msgstr ""
+
+#: src/pages/device.py:393
+msgid "Add"
+msgstr ""
+
+#: src/pages/device.py:394 src/library.py:1380 src/pages/home.py:421
+msgid "Add to Library"
+msgstr ""
+
+#: src/pages/device.py:447
+#, python-brace-format
+msgid "{count} selected"
+msgid_plural "{count} selected"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:448
+msgid "Select books to remove"
+msgstr ""
+
+#: src/pages/device.py:485
+#, python-brace-format
+msgid "Could not copy {count} of the books from {device}: {error}"
+msgstr ""
+
+#: src/pages/device.py:514
+#, python-brace-format
+msgid "Remove {count} Book From {device}?"
+msgid_plural "Remove {count} Books From {device}?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:519
+msgid "They are deleted from the e-reader. Your library is not changed."
+msgstr ""
+
+#: src/pages/device.py:520 src/dialogs/send.py:82
+#: src/dialogs/edit_metadata.py:900 src/dialogs/edit_metadata.blp:36
+#: src/dialogs/add_books.blp:60 src/dialogs/shelf.blp:23 src/window.py:245
+#: src/pages/actions.py:414 src/dialogs/goals.py:36
+#: src/dialogs/kindle_mail.py:134 src/dialogs/highlights.py:124
+#: src/dialogs/bulk_metadata.py:120 src/dialogs/add_catalog.blp:22
+#: src/dialogs/calibre_step.py:108 src/dialogs/convert.py:132
+msgid "_Cancel"
+msgstr ""
+
+#: src/pages/device.py:521 src/sidebar.py:331 src/pages/discover.py:79
+msgid "_Remove"
+msgstr ""
+
+#: src/pages/device.py:561
+#, python-brace-format
+msgid "Could not remove {count} of the books: {error}"
+msgstr ""
+
+#: src/pages/device.py:564
+#, python-brace-format
+msgid "Removed {count} book from {device}"
+msgid_plural "Removed {count} books from {device}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:606 src/pages/device.blp:20
+msgid "Eject"
+msgstr ""
+
+#: src/pages/device.py:616
+#, python-brace-format
+msgid "Could not eject {device}: {error}"
+msgstr ""
+
+#: src/pages/device.py:619
+#, python-brace-format
+msgid "{device} can be unplugged"
+msgstr ""
+
+#: src/pages/device.py:633 src/pages/device.blp:170
+msgid "Writes the Kobo’s database, with a backup beside it"
+msgstr ""
+
+#: src/pages/device.py:637
+#, python-brace-format
+msgid "{count} book is further along on the Kobo"
+msgid_plural "{count} books are further along on the Kobo"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:672
+#, python-brace-format
+msgid "Brought reading progress for {count} book from {device}"
+msgid_plural "Brought reading progress for {count} books from {device}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:742
+#, python-brace-format
+msgid "Could not update the collections on {device}: {error}"
+msgstr ""
+
+#: src/pages/device.py:745
+#, python-brace-format
+msgid "Updated the collections on {device}"
+msgstr ""
+
+#: src/pages/device.py:759
+#, python-brace-format
+msgid ""
+"{count} book joins its collections once the Kobo has added it: eject the "
+"Kobo, let it finish, and connect it again"
+msgid_plural ""
+"{count} books join their collections once the Kobo has added them: eject the "
+"Kobo, let it finish, and connect it again"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/device.py:764
+msgid "Each shelf is a collection on this Kobo"
+msgstr ""
+
+#. Translators: a shelf's name and how many of its books are not on the device.
+#: src/pages/device.py:789
+#, python-brace-format
+msgid "{shelf} ({count})"
+msgstr ""
+
+#: src/pages/device.py:797
+msgid "Copies the books of a shelf that are not on this device"
+msgstr ""
+
+#: src/pages/device.py:798
+msgid "Every shelved book is on this device"
+msgstr ""
+
+#: src/pages/device.blp:12 src/dialogs/send.py:105 src/dialogs/send.py:107
+#: src/dialogs/send.py:200 src/dialogs/send.py:224
+msgid "Device"
+msgstr ""
+
+#: src/pages/device.blp:50
+msgid "Device Disconnected"
+msgstr ""
+
+#: src/pages/device.blp:136
+msgid "No Books on This Device"
+msgstr ""
+
+#: src/pages/device.blp:137
+msgid "Send books to it with Send to Device… in a book’s menu"
+msgstr ""
+
+#: src/pages/device.blp:149
+msgid "Import _Highlights…"
+msgstr ""
+
+#: src/pages/device.blp:150
+msgid "From this Kindle’s My Clippings.txt"
+msgstr ""
+
+#: src/pages/device.blp:166 src/dialogs/preferences.blp:253
+msgid "Kobo"
+msgstr ""
+
+#: src/pages/device.blp:169
+msgid "Sync Shelves as Kobo Collections"
+msgstr ""
+
+#: src/pages/device.blp:176
+msgid "Bring Reading Progress From Kobo"
+msgstr ""
+
+#: src/pages/device.blp:181
+msgid "_Bring"
+msgstr ""
+
+#: src/pages/device.blp:193
+msgid "Send Unsent Books on a Shelf"
+msgstr ""
+
+#: src/pages/device.blp:198
+msgid "_Shelf"
+msgstr ""
+
+#: src/pages/device.blp:202
+msgid "Choose a Shelf"
+msgstr ""
+
+#: src/pages/device.blp:208
+msgid "Not in Your Library"
+msgstr ""
+
+#: src/pages/device.blp:209
+msgid "Add a copy to keep it in Bookcase"
+msgstr ""
+
+#: src/pages/device.blp:212
+msgid "_Add All"
+msgstr ""
+
+#: src/pages/device.blp:231
+msgid "In Your Library"
+msgstr ""
+
+#: src/pages/device.blp:258
+msgid "_Remove…"
+msgstr ""
+
+#: src/dialogs/send.py:60
+msgid "Send to Device"
+msgstr ""
+
+#: src/dialogs/send.py:85 src/dialogs/send.py:280
+msgid "_Send"
+msgstr ""
+
+#: src/dialogs/send.py:93
+msgid "No E-Reader Connected"
+msgstr ""
+
+#: src/dialogs/send.py:94
+msgid "Connect your e-reader with a USB cable, or e-mail books to a Kindle"
+msgstr ""
+
+#: src/dialogs/send.py:96
+msgid "Set _Up Send to Kindle…"
+msgstr ""
+
+#: src/dialogs/send.py:110 src/dialogs/convert.py:31
+msgid "Kobo EPUB"
+msgstr ""
+
+#: src/dialogs/send.py:111
+msgid "Page numbers and reading statistics on a Kobo"
+msgstr ""
+
+#: src/dialogs/send.py:119 src/dialogs/kindle_mail.py:434
+msgid "Set Up Send to Kindle…"
+msgstr ""
+
+#: src/dialogs/send.py:120
+msgid "E-mail books to a Kindle, with or without a cable"
+msgstr ""
+
+#: src/dialogs/send.py:124
+msgid "Not Enough Space"
+msgstr ""
+
+#: src/dialogs/send.py:146
+msgid "Sending"
+msgstr ""
+
+#: src/dialogs/send.py:167
+#, python-brace-format
+msgid "{device} was disconnected"
+msgstr ""
+
+#: src/dialogs/send.py:200 src/dialogs/send.py:224
+msgid "Send To"
+msgstr ""
+
+#: src/dialogs/send.py:221
+#, python-brace-format
+msgid "{size} free"
+msgstr ""
+
+#: src/dialogs/send.py:271
+msgid "Cannot be sent"
+msgstr ""
+
+#: src/dialogs/send.py:276
+#, python-brace-format
+msgid "{count} Book"
+msgid_plural "{count} Books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/send.py:281
+#, python-brace-format
+msgid "_Send {count}"
+msgid_plural "_Send {count}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/send.py:308
+#, python-brace-format
+msgid "These books need about {needed}; {device} has {free} free"
+msgstr ""
+
+#: src/dialogs/send.py:327
+#, python-brace-format
+msgid "Sending to {device}…"
+msgstr ""
+
+#. Translators: sending books: the book's title, then how far along the list.
+#: src/dialogs/send.py:430
+#, python-brace-format
+msgid "“{title}” ({number} of {total})"
+msgstr ""
+
+#: src/dialogs/send.py:454 src/dialogs/add_books.py:99
+#: src/dialogs/bulk_metadata.py:256 src/dialogs/convert.py:143
+msgid "Stopping…"
+msgstr ""
+
+#: src/dialogs/send.py:467
+#, python-brace-format
+msgid "{device} was disconnected before a book was sent"
+msgstr ""
+
+#: src/dialogs/send.py:469
+#, python-brace-format
+msgid "{device} was disconnected after {count} book was sent"
+msgid_plural "{device} was disconnected after {count} books were sent"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/send.py:479
+#, python-brace-format
+msgid "Stopped after sending {count} book"
+msgid_plural "Stopped after sending {count} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/send.py:484
+#, python-brace-format
+msgid "Could not send “{title}”: {reason}"
+msgstr ""
+
+#: src/dialogs/send.py:485
+#, python-brace-format
+msgid "Could not send the books: {reason}"
+msgstr ""
+
+#: src/dialogs/send.py:486
+#, python-brace-format
+msgid "Sent {count} of {total} book to {device}. “{title}”: {reason}"
+msgid_plural "Sent {count} of {total} books to {device}. “{title}”: {reason}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/send.py:491
+#, python-brace-format
+msgid "Sent “{title}” to {device}"
+msgstr ""
+
+#: src/dialogs/send.py:492
+#, python-brace-format
+msgid "Sent {count} book to {device}"
+msgid_plural "Sent {count} books to {device}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:117 src/library.py:287 src/pages/book.py:122
+msgid "Unknown Author"
+msgstr ""
+
+#: src/importing.py:118 src/exporting.py:55 src/widgets/cover.py:309
+#: src/reader_window.py:785 src/reader_window.py:1467 src/opds.py:486
+#: src/opds.py:762
+msgid "Untitled"
+msgstr ""
+
+#: src/importing.py:144 src/dialogs/add_books.py:198
+#, python-brace-format
+msgid "{n} book added"
+msgid_plural "{n} books added"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:147
+#, python-brace-format
+msgid "{n} format added"
+msgid_plural "{n} formats added"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:150 src/dialogs/add_books.py:207
+#, python-brace-format
+msgid "{n} book updated"
+msgid_plural "{n} books updated"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:153 src/dialogs/add_books.py:221
+#, python-brace-format
+msgid "{n} already in the library"
+msgid_plural "{n} already in the library"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:156
+#, python-brace-format
+msgid "{n} could not be read"
+msgid_plural "{n} could not be read"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:159
+#, python-brace-format
+msgid "{n} file missing"
+msgid_plural "{n} files missing"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/importing.py:162
+msgid "No new books"
+msgstr ""
+
+#: src/importing.py:255 src/importing.py:356
+msgid "Not a book Bookcase can read"
+msgstr ""
+
+#: src/importing.py:335 src/exporting.py:89 src/main.py:315
+#: src/pages/actions.py:320 src/pages/book.py:253 src/widgets/book_tile.py:146
+#: src/converting.py:490 src/sharing.py:691
+msgid "The book’s file cannot be found"
+msgstr ""
+
+#: src/importing.py:503
+msgid "No book file Bookcase can read"
+msgstr ""
+
+#: src/covers.py:96
+msgid "Set Cover"
+msgstr ""
+
+#: src/covers.py:128
+msgid "Remove Cover"
+msgstr ""
+
+#: src/exporting.py:104
+msgid "The copy would replace the book’s own file"
+msgstr ""
+
+#: src/exporting.py:121
+#, python-brace-format
+msgid "The book could not be copied: {error}"
+msgstr ""
+
+#. A cover address from an answer is never a file on this computer.
+#: src/online.py:138 src/online.py:147
+msgid "Not found"
+msgstr ""
+
+#: src/online.py:149
+#, python-brace-format
+msgid "{host} is busy. Try again in a minute."
+msgstr ""
+
+#: src/online.py:152
+msgid "Google Books refused the request. Check the API key in Preferences."
+msgstr ""
+
+#: src/online.py:154 src/lookup.py:197
+#, python-brace-format
+msgid "{host} answered with an error ({code})."
+msgstr ""
+
+#: src/online.py:157 src/lookup.py:202
+#, python-brace-format
+msgid "Could not reach {host}. Check your internet connection."
+msgstr ""
+
+#: src/online.py:160 src/lookup.py:205
+#, python-brace-format
+msgid "The answer from {host} is too large."
+msgstr ""
+
+#: src/online.py:169 src/lookup.py:209
+msgid "The answer from the server could not be read."
+msgstr ""
+
+#: src/online.py:675 src/dialogs/fetch_metadata.py:416
+msgid "No cover found"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:59 src/dialogs/catalog_entry.py:289
+msgid "English"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:59 src/dialogs/catalog_entry.py:289
+msgid "German"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:59 src/dialogs/catalog_entry.py:289
+msgid "French"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:59 src/dialogs/catalog_entry.py:289
+msgid "Spanish"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:60 src/dialogs/catalog_entry.py:290
+msgid "Italian"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:60 src/dialogs/catalog_entry.py:290
+msgid "Portuguese"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:60 src/dialogs/catalog_entry.py:290
+msgid "Dutch"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:60 src/dialogs/catalog_entry.py:291
+msgid "Swedish"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:61
+msgid "Norwegian"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:61
+msgid "Danish"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:61 src/dialogs/catalog_entry.py:291
+msgid "Finnish"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:61 src/dialogs/catalog_entry.py:290
+msgid "Polish"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:62
+msgid "Czech"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:62 src/dialogs/catalog_entry.py:291
+msgid "Russian"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:62
+msgid "Ukrainian"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:62 src/dialogs/catalog_entry.py:292
+msgid "Greek"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:63
+msgid "Turkish"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:63
+msgid "Arabic"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:63
+msgid "Hebrew"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:63
+msgid "Hindi"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:64 src/dialogs/catalog_entry.py:292
+msgid "Chinese"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:64 src/dialogs/catalog_entry.py:292
+msgid "Japanese"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:64
+msgid "Korean"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:64 src/dialogs/catalog_entry.py:291
+msgid "Latin"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:295
+msgid "Edit Metadata"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:540 src/dialogs/edit_metadata.py:762
+#: src/dialogs/edit_metadata.py:765
+msgid "Leave Unchanged"
+msgstr ""
+
+#. Translators: a button removing a tag from the book; {} is the tag.
+#: src/dialogs/edit_metadata.py:574
+#, python-brace-format
+msgid "Remove “{tag}”"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:643
+msgid "Remove Identifier"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:688
+#, python-brace-format
+msgid "Cover of {title}"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:700
+msgid "The image could not be read"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:708
+msgid "Images"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:712
+msgid "Choose Cover"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:727
+msgid "Could not read the image"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:741
+msgid "No image to paste"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:759
+#, python-brace-format
+msgid "Edit {n} Book"
+msgid_plural "Edit {n} Books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/edit_metadata.py:762
+msgid "No Rating"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:763
+#, python-brace-format
+msgid "{n} Star"
+msgid_plural "{n} Stars"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/edit_metadata.py:765 src/sidebar.py:87 src/pages/books.py:78
+#: src/pages/books.py:108
+msgid "Unread"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:765 src/sidebar.py:89 src/pages/books.py:80
+#: src/pages/books.py:110 src/pages/book.py:133 src/widgets/book_tile.py:55
+#: src/widgets/book_tile.py:151 src/widgets/series_stack.py:131
+msgid "Finished"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:820
+msgid "Could not save the changes"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:832 src/library.py:964
+msgid "Edit Book"
+msgid_plural "Edit Books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/edit_metadata.py:843
+#, python-brace-format
+msgid "Saved “{title}”"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:853
+msgid "Edit Books"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:861
+#, python-brace-format
+msgid "Saved {n} book"
+msgid_plural "Saved {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/edit_metadata.py:898
+msgid "Save Changes?"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:899
+msgid "The edits are lost unless they are saved."
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:901
+msgid "_Discard"
+msgstr ""
+
+#: src/dialogs/edit_metadata.py:902 src/dialogs/edit_metadata.blp:43
+#: src/dialogs/shelf.py:59 src/dialogs/goals.py:37
+#: src/dialogs/kindle_mail.py:137 src/dialogs/add_catalog.py:51
+msgid "_Save"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:59
+msgid "Save and Edit Previous Book"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:65
+msgid "Save and Edit Next Book"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:98
+msgid "Change Cover"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:166 src/dialogs/fetch_metadata.py:57
+#: src/dialogs/fetch_metadata.blp:71 src/pages/books.blp:174
+msgid "Title"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:174
+msgid "Sort As"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:177
+msgid "Title Sort"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:181
+msgid "Author Sort"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:190
+msgid "Number in Series"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:210
+msgid "_Find Metadata…"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:221 src/dialogs/edit_metadata.blp:374
+#: src/dialogs/fetch_metadata.py:58 src/pages/book.py:303
+#: src/bulk_metadata.py:84
+msgid "Publisher"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:225 src/dialogs/fetch_metadata.py:58
+#: src/pages/book.py:305 src/bulk_metadata.py:84
+msgid "Published"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:230
+msgid "Choose Date"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:244 src/dialogs/edit_metadata.blp:378
+#: src/dialogs/fetch_metadata.py:59 src/pages/books.py:91
+#: src/pages/books.blp:116 src/pages/book.py:307 src/bulk_metadata.py:85
+msgid "Language"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:249 src/dialogs/fetch_metadata.py:58
+#: src/dialogs/preferences.blp:116 src/reader_window.blp:509
+#: src/bulk_metadata.py:85
+msgid "Pages"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:250
+msgid "0 when not known: Statistics then estimate it"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:262 src/dialogs/edit_metadata.blp:383
+#: src/pages/books.py:82 src/pages/books.blp:106 src/pages/books.blp:198
+msgid "Rating"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:268 src/dialogs/edit_metadata.blp:393
+#: src/dialogs/fetch_metadata.py:60 src/sidebar.py:82 src/pages/groups.py:39
+#: src/pages/stats.py:477 src/pages/stats.blp:409 src/bulk_metadata.py:87
+#: src/bulk_metadata.py:92 src/sharing.py:309 src/sharing.py:354
+msgid "Tags"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:285
+msgid "Add Tag"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:307
+msgid "Identifiers"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:310 src/dialogs/fetch_metadata.py:60
+#: src/dialogs/fetch_metadata.blp:79 src/bulk_metadata.py:86
+msgid "ISBN"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:317 src/dialogs/edit_metadata.blp:334
+#: src/dialogs/fetch_metadata.py:60 src/pages/book.blp:232
+#: src/bulk_metadata.py:87 src/bulk_metadata.py:91
+msgid "Description"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:343
+msgid "Empty fields and “Leave Unchanged” keep each book’s own value"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:354
+msgid "Number Automatically"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:355
+msgid "In the order the books are listed"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:360
+msgid "Start At"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:387 src/pages/books.py:78
+#: src/pages/books.blp:96
+msgid "Status"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:396
+msgid "Add Tags"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:400
+msgid "Remove Tags"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:412
+msgid "_Choose Image…"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:417
+msgid "_Paste Image"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:422
+msgid "_Find Cover Online…"
+msgstr ""
+
+#: src/dialogs/edit_metadata.blp:429
+msgid "_Remove Cover"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:61 src/widgets/cover.py:117
+#: src/bulk_metadata.py:87 src/bulk_metadata.py:91
+msgid "Cover"
+msgstr ""
+
+#. Translators: a series and the book's number in it: "The Harbour Books #2".
+#: src/dialogs/fetch_metadata.py:70
+#, python-brace-format
+msgid "{series} #{number}"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:208 src/dialogs/fetch_metadata.py:209
+msgid "Find Cover"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:212
+msgid "No Covers Found"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:214 src/dialogs/fetch_metadata.blp:20
+#: src/bulk_metadata.py:333 src/dialogs/bulk_metadata.py:96
+#: src/dialogs/bulk_metadata.py:154
+msgid "Find Metadata"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:272
+msgid "Asking Open Library and Google Books"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:272 src/dialogs/fetch_metadata.blp:35
+msgid "Asking Open Library"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:290 src/widgets/lookup_popover.py:239
+#: src/pages/catalog.py:595
+msgid "No Connection"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:292
+msgid ""
+"Bookcase could not reach Open Library. Check your internet connection and "
+"try again."
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:296 src/dialogs/fetch_metadata.blp:150
+#: src/dialogs/bulk_metadata.py:56
+msgid "Could Not Search"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:298
+msgid "Something went wrong while searching."
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:321
+msgid "From Open Library and Google Books"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:323
+msgid ""
+"From Open Library. With a Google Books API key (in Preferences) Google Books "
+"is searched too."
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:451
+msgid "This match has nothing the book does not have."
+msgstr ""
+
+#. Translators: on the comparison page; {source} is "Open Library".
+#: src/dialogs/fetch_metadata.py:454
+#, python-brace-format
+msgid ""
+"Checked fields are filled in from {source}. Nothing is saved until you save "
+"the book."
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:479 src/dialogs/bulk_metadata.py:455
+msgid "The cover found"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:489
+msgid "The current cover"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:494
+msgid "Now"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:500
+msgid "Now none"
+msgstr ""
+
+#. Translators: under a found value, the book's current one.
+#: src/dialogs/fetch_metadata.py:517
+#, python-brace-format
+msgid "Now: {value}"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:520
+msgid "Now empty"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.py:571
+msgid "The cover could not be downloaded"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:34 src/reader_window.py:1462
+#: src/dialogs/bulk_metadata.py:54
+msgid "Searching…"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:68
+msgid "Search For"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:75 src/pages/books.blp:180
+#: src/dialogs/quick_open.py:50
+msgid "Author"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:84
+msgid "_Search Again"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:129
+msgid "No Matches"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:130
+msgid "Try fewer words, or only the title"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:133
+msgid "_Change Search"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:153 src/pages/catalog.py:596
+#: src/pages/catalog.py:599
+msgid "_Try Again"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:170
+msgid "Choose Fields"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:215 src/dialogs/bulk_metadata.py:159
+#: src/dialogs/bulk_metadata.py:492
+msgid "_Apply"
+msgstr ""
+
+#: src/dialogs/fetch_metadata.blp:226
+msgid "Select _All"
+msgstr ""
+
+#: src/dialogs/add_books.py:68
+msgid "Adding Books"
+msgstr ""
+
+#: src/dialogs/add_books.py:68
+msgid "Reading Folder"
+msgstr ""
+
+#: src/dialogs/add_books.py:69
+msgid "Linking Calibre Library"
+msgstr ""
+
+#: src/dialogs/add_books.py:70
+msgid "Looking for books…"
+msgstr ""
+
+#. Translators: progress of adding books: "3 of 12".
+#: src/dialogs/add_books.py:118 src/dialogs/bulk_metadata.py:282
+#, python-brace-format
+msgid "{done} of {total}"
+msgstr ""
+
+#: src/dialogs/add_books.py:144 src/pages/catalog.py:138
+#: src/dialogs/add_catalog.py:165
+#, python-brace-format
+msgid "Added “{title}”"
+msgstr ""
+
+#: src/dialogs/add_books.py:145
+msgid "Book added"
+msgstr ""
+
+#: src/dialogs/add_books.py:147
+msgid "Show"
+msgstr ""
+
+#: src/dialogs/add_books.py:170 src/dialogs/bulk_metadata.py:293
+msgid "Stopped"
+msgstr ""
+
+#: src/dialogs/add_books.py:173
+msgid "No Books Added"
+msgstr ""
+
+#: src/dialogs/add_books.py:176
+#, python-brace-format
+msgid "{n} Book Added"
+msgid_plural "{n} Books Added"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/add_books.py:179
+msgid "Folder Read"
+msgstr ""
+
+#: src/dialogs/add_books.py:181
+msgid "Calibre Library Linked"
+msgstr ""
+
+#: src/dialogs/add_books.py:188
+msgid ""
+"Its books are read in place. Calibre stays usable; Bookcase never writes to "
+"its library."
+msgstr ""
+
+#: src/dialogs/add_books.py:192
+msgid "Books in the folder are read where they are."
+msgstr ""
+
+#: src/dialogs/add_books.py:199 src/dialogs/add_books.py:264
+msgid "_Show"
+msgstr ""
+
+#: src/dialogs/add_books.py:203
+#, python-brace-format
+msgid "{n} format added to a book already there"
+msgid_plural "{n} formats added to books already there"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/add_books.py:211
+#, python-brace-format
+msgid "{n} moved file found again"
+msgid_plural "{n} moved files found again"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/add_books.py:216
+#, python-brace-format
+msgid "{n} file is missing"
+msgid_plural "{n} files are missing"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/add_books.py:230
+#, python-brace-format
+msgid "{n} file could not be added"
+msgid_plural "{n} files could not be added"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/add_books.blp:45 src/pages/books.blp:209
+#: src/dialogs/bulk_metadata.py:134
+msgid "Progress"
+msgstr ""
+
+#: src/dialogs/add_books.blp:123
+msgid "_Done"
+msgstr ""
+
+#: src/dialogs/shelf.py:58
+msgid "Edit Smart Shelf"
+msgstr ""
+
+#: src/dialogs/shelf.py:58
+msgid "Rename Shelf"
+msgstr ""
+
+#: src/dialogs/shelf.py:63
+msgid "New Smart Shelf"
+msgstr ""
+
+#: src/dialogs/shelf.py:63 src/dialogs/shelf.py:176
+msgid "New Shelf"
+msgstr ""
+
+#: src/dialogs/shelf.py:64
+msgid "C_reate"
+msgstr ""
+
+#: src/dialogs/shelf.py:70
+#, python-brace-format
+msgid "Add “{example}” to the search"
+msgstr ""
+
+#: src/dialogs/shelf.py:99
+#, python-brace-format
+msgid "A shelf called “{name}” already exists"
+msgstr ""
+
+#: src/dialogs/shelf.py:144 src/pages/home.py:307 src/pages/books.py:121
+#: src/pages/stats.py:90 src/widgets/series_stack.py:200
+#, python-brace-format
+msgid "{n} book"
+msgid_plural "{n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/shelf.py:166
+#, python-brace-format
+msgid "Shelf “{name}” saved"
+msgstr ""
+
+#: src/dialogs/shelf.py:182
+#, python-brace-format
+msgid "Added {count} book to “{name}”"
+msgid_plural "Added {count} books to “{name}”"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/shelf.py:186
+#, python-brace-format
+msgid "Shelf “{name}” created"
+msgstr ""
+
+#: src/dialogs/shelf.blp:51
+msgid "Name"
+msgstr ""
+
+#: src/dialogs/shelf.blp:70
+msgid "A smart shelf holds the books its search finds, as the library changes"
+msgstr ""
+
+#: src/dialogs/shelf.blp:96
+msgid "Add to the search"
+msgstr ""
+
+#: src/dialogs/shelf.blp:111
+msgid ""
+"Words match the title, authors, series, tags and publisher. Put a minus "
+"before a search to leave its books out, and “or” between two to find either."
+msgstr ""
+
+#: src/dialogs/preferences.py:233
+msgid "Choose Library Folder"
+msgstr ""
+
+#: src/dialogs/preferences.py:244
+msgid "Choose Folder to Watch"
+msgstr ""
+
+#: src/dialogs/preferences.py:250
+msgid "Choose Calibre Library"
+msgstr ""
+
+#: src/dialogs/preferences.py:254
+msgid "This folder is not a Calibre library: it has no metadata.db"
+msgstr ""
+
+#: src/dialogs/preferences.py:289
+#, python-brace-format
+msgid "Not found: {path}"
+msgstr ""
+
+#: src/dialogs/preferences.py:292
+msgid "Read Again"
+msgstr ""
+
+#: src/dialogs/preferences.py:297 src/reader_window.py:1112
+msgid "Remove"
+msgstr ""
+
+#: src/dialogs/preferences.py:313
+msgid "Could not remove the folder"
+msgstr ""
+
+#: src/dialogs/preferences.py:317
+#, python-brace-format
+msgid "“{name}” removed. Its books stay in the library."
+msgstr ""
+
+#: src/dialogs/preferences.blp:15 src/sharing.py:316 src/sharing.py:476
+msgid "Library"
+msgstr ""
+
+#: src/dialogs/preferences.blp:19
+msgid "Library Folder"
+msgstr ""
+
+#: src/dialogs/preferences.blp:20
+msgid ""
+"Books you add are copied here, into a folder per author. The files you add "
+"them from are left as they are."
+msgstr ""
+
+#: src/dialogs/preferences.blp:23
+msgid "Folder"
+msgstr ""
+
+#: src/dialogs/preferences.blp:32
+msgid "_Change…"
+msgstr ""
+
+#: src/dialogs/preferences.blp:40
+msgid "Watched Folders"
+msgstr ""
+
+#: src/dialogs/preferences.blp:41
+msgid ""
+"Books in these folders are read where they are, never copied or moved. New "
+"books appear when the folder is read again."
+msgstr ""
+
+#: src/dialogs/preferences.blp:46 src/library.py:1281
+msgid "Add Folder"
+msgstr ""
+
+#: src/dialogs/preferences.blp:63
+msgid "No watched folders"
+msgstr ""
+
+#: src/dialogs/preferences.blp:75
+msgid "Calibre Libraries"
+msgstr ""
+
+#: src/dialogs/preferences.blp:76
+msgid ""
+"A linked Calibre library is read in place: Calibre stays usable. Edits made "
+"in Bookcase stay in Bookcase, unless you choose to keep Calibre in step."
+msgstr ""
+
+#: src/dialogs/preferences.blp:81
+msgid "Link Calibre Library"
+msgstr ""
+
+#: src/dialogs/preferences.blp:98
+msgid "No linked Calibre libraries"
+msgstr ""
+
+#: src/dialogs/preferences.blp:117
+msgid "How books open. The reader’s Display menu changes these too."
+msgstr ""
+
+#: src/dialogs/preferences.blp:120
+msgid "Colours"
+msgstr ""
+
+#: src/dialogs/preferences.blp:124
+msgid "Follow System"
+msgstr ""
+
+#: src/dialogs/preferences.blp:125 src/reader_window.py:99
+msgid "Light"
+msgstr ""
+
+#: src/dialogs/preferences.blp:126 src/reader_window.py:99
+msgid "Sepia"
+msgstr ""
+
+#: src/dialogs/preferences.blp:127 src/reader_window.py:100
+msgid "Dark"
+msgstr ""
+
+#: src/dialogs/preferences.blp:128 src/reader_window.py:100
+msgid "Black"
+msgstr ""
+
+#: src/dialogs/preferences.blp:129 src/reader_window.py:100
+msgid "Custom"
+msgstr ""
+
+#: src/dialogs/preferences.blp:135
+msgid "Scroll Instead of Turning Pages"
+msgstr ""
+
+#: src/dialogs/preferences.blp:139
+msgid "Two Pages Side by Side"
+msgstr ""
+
+#: src/dialogs/preferences.blp:140
+msgid "When the window is wide enough"
+msgstr ""
+
+#: src/dialogs/preferences.blp:144
+msgid "Slide When Turning Pages"
+msgstr ""
+
+#: src/dialogs/preferences.blp:149 src/pages/books.py:76
+#: src/widgets/reader_theme.py:80
+msgid "Text"
+msgstr ""
+
+#: src/dialogs/preferences.blp:152
+msgid "Keep the Book’s Own Styles"
+msgstr ""
+
+#: src/dialogs/preferences.blp:153
+msgid "When off, the settings below override the book’s"
+msgstr ""
+
+#: src/dialogs/preferences.blp:157
+msgid "Typeface"
+msgstr ""
+
+#: src/dialogs/preferences.blp:161
+msgid "The Book’s Own"
+msgstr ""
+
+#: src/dialogs/preferences.blp:162 src/reader_window.blp:420
+msgid "Serif"
+msgstr ""
+
+#: src/dialogs/preferences.blp:163
+msgid "Sans Serif"
+msgstr ""
+
+#: src/dialogs/preferences.blp:164
+msgid "Other…"
+msgstr ""
+
+#: src/dialogs/preferences.blp:170
+msgid "Font"
+msgstr ""
+
+#: src/dialogs/preferences.blp:180
+msgid "Choose Font"
+msgstr ""
+
+#: src/dialogs/preferences.blp:186
+msgid "Text Size"
+msgstr ""
+
+#: src/dialogs/preferences.blp:187 src/dialogs/preferences.blp:226
+msgid "In pixels"
+msgstr ""
+
+#: src/dialogs/preferences.blp:199 src/reader_window.blp:470
+msgid "Line Spacing"
+msgstr ""
+
+#: src/dialogs/preferences.blp:212 src/reader_window.blp:482
+msgid "Margins"
+msgstr ""
+
+#: src/dialogs/preferences.blp:213
+msgid "Percent of the page’s width"
+msgstr ""
+
+#: src/dialogs/preferences.blp:225
+msgid "Widest Column"
+msgstr ""
+
+#: src/dialogs/preferences.blp:238
+msgid "Justify Text"
+msgstr ""
+
+#: src/dialogs/preferences.blp:242
+msgid "Hyphenate Words"
+msgstr ""
+
+#: src/dialogs/preferences.blp:249 src/sidebar.py:114
+msgid "Devices"
+msgstr ""
+
+#: src/dialogs/preferences.blp:256
+msgid "Send EPUBs as Kobo EPUBs"
+msgstr ""
+
+#: src/dialogs/preferences.blp:257
+msgid ""
+"A Kobo shows reading statistics and page numbers only for its own kind of "
+"EPUB. The book in the library is not changed."
+msgstr ""
+
+#: src/dialogs/preferences.blp:264
+msgid "Online"
+msgstr ""
+
+#: src/dialogs/preferences.blp:268
+msgid "Finding Metadata"
+msgstr ""
+
+#: src/dialogs/preferences.blp:269
+msgid ""
+"Find Metadata searches Open Library, which needs no account. With a Google "
+"Books API key it searches Google Books too."
+msgstr ""
+
+#: src/dialogs/preferences.blp:272
+msgid "Google Books API Key"
+msgstr ""
+
+#: src/dialogs/preferences.blp:278
+msgid ""
+"A key is free from the Google Cloud console: create a project, turn on the "
+"Books API and make an API key under Credentials. Only the book’s title, "
+"author or ISBN is sent."
+msgstr ""
+
+#: src/library.py:845
+msgid "Add Book"
+msgstr ""
+
+#: src/library.py:868 src/library.py:1322 src/library.py:1385
+msgid "This file is already in the library"
+msgstr ""
+
+#: src/library.py:875
+msgid "Add Format"
+msgstr ""
+
+#: src/library.py:1022
+msgid "Remove Book"
+msgid_plural "Remove Books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/library.py:1075
+msgid "Mark as Unread"
+msgstr ""
+
+#: src/library.py:1075
+msgid "Mark as Reading"
+msgstr ""
+
+#: src/library.py:1076
+msgid "Mark as Finished"
+msgstr ""
+
+#: src/library.py:1148
+msgid "Add Highlight"
+msgstr ""
+
+#: src/library.py:1148
+msgid "Add Bookmark"
+msgstr ""
+
+#: src/library.py:1168
+msgid "Edit Note"
+msgstr ""
+
+#: src/library.py:1168
+msgid "Change Colour"
+msgstr ""
+
+#: src/library.py:1176 src/reader_window.py:1281
+msgid "Remove Highlight"
+msgstr ""
+
+#: src/library.py:1176 src/reader_window.py:1198
+msgid "Remove Bookmark"
+msgstr ""
+
+#: src/library.py:1211
+msgid "Add Shelf"
+msgstr ""
+
+#: src/library.py:1222
+msgid "Edit Shelf"
+msgstr ""
+
+#: src/library.py:1233
+msgid "Move Shelf"
+msgstr ""
+
+#: src/library.py:1239
+msgid "Remove Shelf"
+msgstr ""
+
+#: src/library.py:1248
+msgid "Add to Shelf"
+msgstr ""
+
+#: src/library.py:1256
+msgid "Remove from Shelf"
+msgstr ""
+
+#: src/library.py:1292
+msgid "Remove Folder"
+msgstr ""
+
+#: src/library.py:1368
+msgid "Forget Book"
+msgid_plural "Forget Books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/library.py:1461 src/pages/duplicates.py:157 src/pages/duplicates.py:178
+msgid "Merge Books"
+msgstr ""
+
+#: src/annotations.py:53 src/reader_window.py:94
+msgid "Yellow"
+msgstr ""
+
+#: src/annotations.py:53 src/reader_window.py:94
+msgid "Green"
+msgstr ""
+
+#: src/annotations.py:53 src/reader_window.py:94
+msgid "Blue"
+msgstr ""
+
+#: src/annotations.py:53 src/reader_window.py:94
+msgid "Pink"
+msgstr ""
+
+#: src/annotations.py:54 src/reader_window.py:95
+msgid "Purple"
+msgstr ""
+
+#: src/annotations.py:70 src/pages/book.py:340
+msgid "Highlights"
+msgstr ""
+
+#: src/annotations.py:79
+msgid "Bookmarks"
+msgstr ""
+
+#: src/annotations.py:334
+msgid "Import Highlights"
+msgstr ""
+
+#: src/main.py:146
+msgid "Show an invented library (build/demo), not yours"
+msgstr ""
+
+#: src/main.py:148
+msgid "Log what the app does"
+msgstr ""
+
+#: src/main.py:150
+msgid "Print the version and exit"
+msgstr ""
+
+#: src/main.py:220
+msgid ""
+"--demo needs a demo library: run scripts/demo_library.py or set "
+"BOOKCASE_DATA_DIR"
+msgstr ""
+
+#: src/main.py:253 src/main.py:500
+#, python-brace-format
+msgid "“{name}” is not a book Bookcase can open"
+msgstr ""
+
+#: src/main.py:295
+#, python-brace-format
+msgid "Could not open “{name}”: {error}"
+msgstr ""
+
+#: src/main.py:336 src/main.py:345
+#, python-brace-format
+msgid "Could not add “{title}”: {error}"
+msgstr ""
+
+#: src/main.py:348
+#, python-brace-format
+msgid "“{title}” was added to your library"
+msgstr ""
+
+#: src/main.py:456
+msgid "E-books"
+msgstr ""
+
+#: src/main.py:459 src/pages/book.py:556
+msgid "All Files"
+msgstr ""
+
+#: src/main.py:468
+msgid "Open File"
+msgstr ""
+
+#: src/main.py:468
+msgid "_Open"
+msgstr ""
+
+#: src/main.py:482 src/pages/home.py:326 src/pages/home.py:336
+#: src/pages/home.py:420 src/dialogs/add_catalog.py:51
+msgid "_Add"
+msgstr ""
+
+#: src/main.py:503 src/pages/catalog.py:498
+msgid "No books found"
+msgstr ""
+
+#: src/main.py:510
+msgid "_Add Folder"
+msgstr ""
+
+#: src/main.py:532
+msgid "Link a Calibre Library"
+msgstr ""
+
+#: src/main.py:533
+msgid "_Link Library"
+msgstr ""
+
+#: src/main.py:549
+msgid "That folder is not a Calibre library: it has no metadata.db"
+msgstr ""
+
+#. Translators: a toast after Ctrl+Z; {action} is what was undone ("Edit Book").
+#: src/main.py:571
+#, python-brace-format
+msgid "Undone: {action}"
+msgstr ""
+
+#: src/main.py:616 src/main.py:623
+msgid "Could not open the book"
+msgstr ""
+
+#: src/main.py:670 src/opds.py:1462
+#, python-brace-format
+msgid "Something went wrong: {error}"
+msgstr ""
+
+#: src/window.py:235
+#, python-brace-format
+msgid "Removed the shelf “{name}”"
+msgstr ""
+
+#: src/window.py:241
+#, python-brace-format
+msgid "Remove “{name}”?"
+msgstr ""
+
+#: src/window.py:242
+#, python-brace-format
+msgid "Its {n} book stays in the library."
+msgid_plural "Its {n} books stay in the library."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/window.py:246
+msgid "_Remove Shelf"
+msgstr ""
+
+#: src/window.py:316 src/window.blp:8 src/window.blp:28
+#: src/reader_window.py:940 src/reader_window.blp:10
+msgid "Bookcase"
+msgstr ""
+
+#: src/window.blp:45 src/reader_window.blp:242
+msgid "Main Menu"
+msgstr ""
+
+#: src/window.blp:76
+msgid "New Shelf…"
+msgstr ""
+
+#: src/window.blp:100 src/pages/home.blp:124 src/pages/books.blp:224
+msgid "_Add Books…"
+msgstr ""
+
+#: src/window.blp:105 src/pages/home.blp:135
+msgid "Add a _Folder…"
+msgstr ""
+
+#: src/window.blp:110 src/pages/home.blp:145
+msgid "_Link a Calibre Library…"
+msgstr ""
+
+#: src/window.blp:115
+msgid "_Read a File Without Adding…"
+msgstr ""
+
+#: src/window.blp:122
+msgid "Find _Duplicates"
+msgstr ""
+
+#: src/window.blp:129
+msgid "Import _Kindle Highlights…"
+msgstr ""
+
+#: src/window.blp:134
+msgid "_Export All Highlights…"
+msgstr ""
+
+#: src/window.blp:141
+msgid "_Undo"
+msgstr ""
+
+#: src/window.blp:148
+msgid "_Preferences"
+msgstr ""
+
+#: src/window.blp:153
+msgid "_Keyboard Shortcuts"
+msgstr ""
+
+#: src/window.blp:158
+msgid "_About Bookcase"
+msgstr ""
+
+#: src/sidebar.py:79
+msgid "Browse"
+msgstr ""
+
+#: src/sidebar.py:85 src/pages/books.py:106 src/sharing.py:303
+#: src/sharing.py:334
+msgid "Currently Reading"
+msgstr ""
+
+#: src/sidebar.py:96 src/pages/books.py:112
+msgid "Missing Files"
+msgstr ""
+
+#: src/sidebar.py:97
+msgid "Books whose files cannot be found"
+msgstr ""
+
+#: src/sidebar.py:99 src/pages/discover.blp:10
+msgid "Discover"
+msgstr ""
+
+#: src/sidebar.py:100
+msgid "Books from online catalogues"
+msgstr ""
+
+#: src/sidebar.py:106
+#, python-brace-format
+msgid "Smart shelf: {query}"
+msgstr ""
+
+#: src/sidebar.py:109 src/pages/book.py:324 src/sharing.py:314
+#: src/sharing.py:358
+msgid "Shelves"
+msgstr ""
+
+#: src/sidebar.py:330 src/pages/discover.py:77
+msgid "_Edit…"
+msgstr ""
+
+#: src/pages/actions.py:49 src/pages/book.py:250 src/pages/book.blp:206
+#: src/pages/catalog.py:237 src/dialogs/catalog_entry.blp:158
+msgid "_Read"
+msgstr ""
+
+#: src/pages/actions.py:51
+msgid "_Details"
+msgstr ""
+
+#: src/pages/actions.py:55
+msgid "_Edit Details…"
+msgstr ""
+
+#: src/pages/actions.py:56
+msgid "Find _Metadata…"
+msgstr ""
+
+#: src/pages/actions.py:64
+msgid "_New Shelf…"
+msgstr ""
+
+#: src/pages/actions.py:66
+msgid "Add to _Shelf"
+msgstr ""
+
+#: src/pages/actions.py:68
+msgid "Remove from S_helf"
+msgstr ""
+
+#: src/pages/actions.py:71
+msgid "Mark as _Reading"
+msgstr ""
+
+#: src/pages/actions.py:72 src/pages/book.py:255
+msgid "Mark as _Finished"
+msgstr ""
+
+#: src/pages/actions.py:73 src/pages/book.py:254
+msgid "Mark as _Unread"
+msgstr ""
+
+#: src/pages/actions.py:76
+msgid "Send to _Device…"
+msgstr ""
+
+#: src/pages/actions.py:77
+msgid "E_xport…"
+msgstr ""
+
+#: src/pages/actions.py:78
+msgid "_Convert…"
+msgstr ""
+
+#: src/pages/actions.py:79
+msgid "Show in _Files"
+msgstr ""
+
+#: src/pages/actions.py:82
+msgid "Re_move from Library"
+msgstr ""
+
+#: src/pages/actions.py:83
+msgid "Move to _Trash…"
+msgstr ""
+
+#: src/pages/actions.py:216
+#, python-brace-format
+msgid "Removed “{title}” from {shelf}"
+msgstr ""
+
+#: src/pages/actions.py:218
+#, python-brace-format
+msgid "Removed {n} book from {shelf}"
+msgid_plural "Removed {n} books from {shelf}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:252
+#, python-brace-format
+msgid "Removed “{title}” from the library"
+msgstr ""
+
+#: src/pages/actions.py:254
+#, python-brace-format
+msgid "Removed {n} book from the library"
+msgid_plural "Removed {n} books from the library"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:287
+#, python-brace-format
+msgid "Added “{title}” to {shelf}"
+msgstr ""
+
+#: src/pages/actions.py:289
+#, python-brace-format
+msgid "Added {n} book to {shelf}"
+msgid_plural "Added {n} books to {shelf}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:300
+#, python-brace-format
+msgid "“{title}” marked as reading"
+msgstr ""
+
+#: src/pages/actions.py:301
+#, python-brace-format
+msgid "“{title}” marked as finished"
+msgstr ""
+
+#: src/pages/actions.py:302
+#, python-brace-format
+msgid "“{title}” marked as unread"
+msgstr ""
+
+#: src/pages/actions.py:304
+#, python-brace-format
+msgid "{n} book marked as reading"
+msgid_plural "{n} books marked as reading"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:306
+#, python-brace-format
+msgid "{n} book marked as finished"
+msgid_plural "{n} books marked as finished"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:308
+#, python-brace-format
+msgid "{n} book marked as unread"
+msgid_plural "{n} books marked as unread"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:329
+msgid "Could not show the file"
+msgstr ""
+
+#: src/pages/actions.py:337
+msgid "Export To"
+msgstr ""
+
+#: src/pages/actions.py:337 src/dialogs/highlights.py:351
+#: src/dialogs/highlights.py:396
+msgid "_Export"
+msgstr ""
+
+#: src/pages/actions.py:374
+msgid "Could not export"
+msgstr ""
+
+#: src/pages/actions.py:376
+#, python-brace-format
+msgid "Exported {n} book; {failed} could not be exported"
+msgid_plural "Exported {n} books; {failed} could not be exported"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:380
+#, python-brace-format
+msgid "Exported {n} book"
+msgid_plural "Exported {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:399
+msgid ""
+"Books from a Calibre library cannot be moved to the trash: their files are "
+"Calibre’s. Remove them from the library instead."
+msgstr ""
+
+#: src/pages/actions.py:404
+#, python-brace-format
+msgid "Move “{title}” to the Trash?"
+msgstr ""
+
+#: src/pages/actions.py:406
+#, python-brace-format
+msgid "Move {n} Book to the Trash?"
+msgid_plural "Move {n} Books to the Trash?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:410
+msgid ""
+"Its files are moved to the trash, where they can be restored from, and it "
+"leaves the library."
+msgid_plural ""
+"Their files are moved to the trash, where they can be restored from, and "
+"they leave the library."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:415
+msgid "_Move to Trash"
+msgstr ""
+
+#: src/pages/actions.py:455
+#, python-brace-format
+msgid "{n} book could not be moved to the trash"
+msgid_plural "{n} books could not be moved to the trash"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/actions.py:458
+#, python-brace-format
+msgid "Moved {n} book to the trash"
+msgid_plural "Moved {n} books to the trash"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/home.py:82
+msgid "Show All"
+msgstr ""
+
+#: src/pages/home.py:203
+msgid "Continue Reading"
+msgstr ""
+
+#: src/pages/home.py:209 src/pages/home.py:404
+msgid "Recently Opened"
+msgstr ""
+
+#: src/pages/home.py:213 src/sharing.py:302 src/sharing.py:332
+msgid "Recently Added"
+msgstr ""
+
+#: src/pages/home.py:305
+#, python-brace-format
+msgid "{n} e-book"
+msgid_plural "{n} e-books"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: a place books were found: "12 books · ~/Books".
+#: src/pages/home.py:309
+#, python-brace-format
+msgid "{count} · {path}"
+msgstr ""
+
+#: src/pages/home.py:313
+msgid "Calibre Library"
+msgstr ""
+
+#: src/pages/home.py:315
+#, python-brace-format
+msgid "Calibre Library “{name}”"
+msgstr ""
+
+#: src/pages/home.py:317
+msgid "_Link"
+msgstr ""
+
+#: src/pages/home.py:318
+msgid "Read the Calibre library where it is"
+msgstr ""
+
+#: src/pages/home.py:323
+msgid "_Copy into Library Folder"
+msgstr ""
+
+#: src/pages/home.py:327
+msgid "More Ways to Add"
+msgstr ""
+
+#: src/pages/home.py:328
+msgid "Read the books where they are, and the new ones the folder gets"
+msgstr ""
+
+#: src/pages/home.py:337
+msgid "Copy these e-books into your library folder"
+msgstr ""
+
+#: src/pages/home.py:397
+msgid "Books you read without adding them to the library"
+msgstr ""
+
+#. Translators: a book's author and how far into it the reader is ("Ada Lark · 45%").
+#: src/pages/home.py:414
+#, python-brace-format
+msgid "{author} · {progress}"
+msgstr ""
+
+#: src/pages/home.py:426
+msgid "Forget"
+msgstr ""
+
+#: src/pages/home.py:499
+#, python-brace-format
+msgid "Forgot “{title}”"
+msgstr ""
+
+#: src/pages/home.blp:35
+msgid ""
+"Tip: save a search as a smart shelf, or plug in an e-reader to send it books"
+msgstr ""
+
+#: src/pages/home.blp:36
+msgid "_Got It"
+msgstr ""
+
+#: src/pages/home.blp:67
+msgid "Welcome to Bookcase"
+msgstr ""
+
+#: src/pages/home.blp:68
+msgid ""
+"Bring in the books you have. Bookcase never moves or changes your files: a "
+"Calibre library and watched folders are read where they are."
+msgstr ""
+
+#: src/pages/home.blp:83
+msgid "Found on This Computer"
+msgstr ""
+
+#: src/pages/home.blp:110
+msgid "Looking for books on this computer…"
+msgstr ""
+
+#: src/pages/books.py:73
+msgid "Any Format"
+msgstr ""
+
+#: src/pages/books.py:73 src/pages/books.blp:86 src/pages/books.blp:203
+#: src/dialogs/convert.py:64
+msgid "Format"
+msgstr ""
+
+#: src/pages/books.py:74
+msgid "Comics (CBZ, CBR)"
+msgstr ""
+
+#: src/pages/books.py:74
+msgid "Comics"
+msgstr ""
+
+#: src/pages/books.py:75
+msgid "Kindle (MOBI, AZW3)"
+msgstr ""
+
+#: src/pages/books.py:75
+msgid "Kindle"
+msgstr ""
+
+#: src/pages/books.py:76
+msgid "Plain Text"
+msgstr ""
+
+#: src/pages/books.py:78
+msgid "Any Status"
+msgstr ""
+
+#: src/pages/books.py:82
+msgid "Any Rating"
+msgstr ""
+
+#: src/pages/books.py:82
+msgid "5 Stars"
+msgstr ""
+
+#: src/pages/books.py:84
+#, python-brace-format
+msgid "{n} Star and Up"
+msgid_plural "{n} Stars and Up"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: a filter chip: books rated at least {n} stars ("4+ Stars").
+#: src/pages/books.py:86
+#, python-brace-format
+msgid "{n}+ Star"
+msgid_plural "{n}+ Stars"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/books.py:91
+msgid "Any Language"
+msgstr ""
+
+#: src/pages/books.py:127
+msgid "Nothing in Progress"
+msgstr ""
+
+#: src/pages/books.py:128
+msgid "Books you start reading appear here"
+msgstr ""
+
+#: src/pages/books.py:130
+msgid "No Unread Books"
+msgstr ""
+
+#: src/pages/books.py:131
+msgid "Every book in the library has been started"
+msgstr ""
+
+#: src/pages/books.py:133
+msgid "No Finished Books"
+msgstr ""
+
+#: src/pages/books.py:134
+msgid "Books you finish, or mark as finished, appear here"
+msgstr ""
+
+#: src/pages/books.py:136
+msgid "No Missing Files"
+msgstr ""
+
+#: src/pages/books.py:137
+msgid "Every book’s file is where Bookcase last saw it"
+msgstr ""
+
+#: src/pages/books.py:139
+msgid "No Matching Books"
+msgstr ""
+
+#: src/pages/books.py:140
+msgid "No book matches this shelf’s search"
+msgstr ""
+
+#: src/pages/books.py:142
+msgid "This Shelf Is Empty"
+msgstr ""
+
+#: src/pages/books.py:143
+msgid "Add books to it from their menu, or drag them onto it"
+msgstr ""
+
+#: src/pages/books.py:145
+msgid "No Books"
+msgstr ""
+
+#: src/pages/books.py:145
+msgid "These books have left the library"
+msgstr ""
+
+#: src/pages/books.py:146 src/pages/books.blp:221
+msgid "No Books Yet"
+msgstr ""
+
+#: src/pages/books.py:147
+msgid "Add books, or a folder of books, to fill the library"
+msgstr ""
+
+#. Translators: a date in the list's Added column (strftime): "8 Oct 2026".
+#: src/pages/books.py:155
+msgid "%-d %b %Y"
+msgstr ""
+
+#: src/pages/books.py:250
+#, python-brace-format
+msgid "{series}, a series of {n} book"
+msgid_plural "{series}, a series of {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/books.py:297
+msgid "_Group Series"
+msgstr ""
+
+#: src/pages/books.py:413 src/pages/books.blp:312
+msgid "Cover Size"
+msgstr ""
+
+#: src/pages/books.py:598 src/pages/groups.py:260 src/dialogs/quick_open.py:126
+msgid "No Results Found"
+msgstr ""
+
+#: src/pages/books.py:599
+msgid "Try a different search or filter"
+msgstr ""
+
+#: src/pages/books.py:613
+#, python-brace-format
+msgid "{n} selected"
+msgid_plural "{n} selected"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/books.blp:30
+msgid "Sort and View"
+msgstr ""
+
+#: src/pages/books.blp:37 src/pages/groups.blp:18 src/opds.py:465
+#: src/opds.py:727
+msgid "Filter"
+msgstr ""
+
+#: src/pages/books.blp:57
+msgid "Search title, author, series, tags…"
+msgstr ""
+
+#: src/pages/books.blp:88
+msgid "Filter by Format"
+msgstr ""
+
+#: src/pages/books.blp:98
+msgid "Filter by Reading Status"
+msgstr ""
+
+#: src/pages/books.blp:108
+msgid "Filter by Rating"
+msgstr ""
+
+#: src/pages/books.blp:118
+msgid "Filter by Language"
+msgstr ""
+
+#: src/pages/books.blp:126
+msgid "_Clear"
+msgstr ""
+
+#: src/pages/books.blp:129
+msgid "Clear the Filters"
+msgstr ""
+
+#. Translators: when a book was added (strftime): "8 October 2026".
+#: src/pages/books.blp:192 src/pages/book.py:321
+msgid "Added"
+msgstr ""
+
+#: src/pages/books.blp:243
+msgid "Sort By"
+msgstr ""
+
+#: src/pages/books.blp:246
+msgid "_Date Added"
+msgstr ""
+
+#: src/pages/books.blp:252
+msgid "_Title"
+msgstr ""
+
+#: src/pages/books.blp:258
+msgid "_Author"
+msgstr ""
+
+#: src/pages/books.blp:264
+msgid "_Series"
+msgstr ""
+
+#: src/pages/books.blp:270
+msgid "_Published"
+msgstr ""
+
+#: src/pages/books.blp:276
+msgid "_Last Read"
+msgstr ""
+
+#: src/pages/books.blp:282
+msgid "_Rating"
+msgstr ""
+
+#: src/pages/books.blp:290
+msgid "Re_verse Order"
+msgstr ""
+
+#: src/pages/books.blp:296
+msgid "Show As"
+msgstr ""
+
+#: src/pages/books.blp:299
+msgid "_Covers"
+msgstr ""
+
+#: src/pages/books.blp:305
+msgid "L_ist"
+msgstr ""
+
+#: src/pages/duplicates.py:84
+#, python-brace-format
+msgid "{n} group"
+msgid_plural "{n} groups"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/duplicates.py:93
+#, python-brace-format
+msgid "{n} copy"
+msgid_plural "{n} copies"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/duplicates.py:95
+msgid "_Merge"
+msgstr ""
+
+#: src/pages/duplicates.py:98
+#, python-brace-format
+msgid "Merge the copies of “{title}”"
+msgstr ""
+
+#: src/pages/duplicates.py:111 src/pages/duplicates.py:112
+msgid "Keep This One"
+msgstr ""
+
+#: src/pages/duplicates.py:137
+msgid "No Files"
+msgstr ""
+
+#: src/pages/duplicates.py:145 src/pages/book.py:386
+#, python-brace-format
+msgid "Missing: {path}"
+msgstr ""
+
+#: src/pages/duplicates.py:169
+#, python-brace-format
+msgid "Merged {n} copy into “{title}”"
+msgid_plural "Merged {n} copies into “{title}”"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/duplicates.py:182
+#, python-brace-format
+msgid "Merged {n} copy"
+msgid_plural "Merged {n} copies"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/duplicates.blp:10 src/pages/duplicates.blp:16
+msgid "Duplicates"
+msgstr ""
+
+#: src/pages/duplicates.blp:21
+msgid "Merge _All"
+msgstr ""
+
+#: src/pages/duplicates.blp:23
+msgid "Merge Every Group Into the Book Chosen to Keep"
+msgstr ""
+
+#: src/pages/duplicates.blp:49
+msgid ""
+"These books have the same title and an author in common. Merging keeps one "
+"book with every file, highlight, bookmark and shelf of the others, and the "
+"details it lacks. The files stay where they are, and Undo puts the books "
+"back."
+msgstr ""
+
+#: src/pages/duplicates.blp:67
+msgid "No Duplicates"
+msgstr ""
+
+#: src/pages/duplicates.blp:68
+msgid "No two books in the library look like the same book"
+msgstr ""
+
+#: src/pages/groups.py:35
+msgid "No Authors"
+msgstr ""
+
+#: src/pages/groups.py:36
+msgid "Filter authors…"
+msgstr ""
+
+#: src/pages/groups.py:37
+msgid "No Series"
+msgstr ""
+
+#: src/pages/groups.py:38
+msgid "Filter series…"
+msgstr ""
+
+#: src/pages/groups.py:39
+msgid "No Tags"
+msgstr ""
+
+#: src/pages/groups.py:40
+msgid "Filter tags…"
+msgstr ""
+
+#: src/pages/groups.py:61
+#, python-brace-format
+msgid "{n} author"
+msgid_plural "{n} authors"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/groups.py:63
+#, python-brace-format
+msgid "{n} series"
+msgid_plural "{n} series"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/groups.py:65
+#, python-brace-format
+msgid "{n} tag"
+msgid_plural "{n} tags"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/groups.py:71
+msgid "Authors appear here once the library has books"
+msgstr ""
+
+#: src/pages/groups.py:73
+msgid "Books that belong to a series are grouped here"
+msgstr ""
+
+#: src/pages/groups.py:74
+msgid "Give books tags in their details to group them here"
+msgstr ""
+
+#: src/pages/groups.py:180
+#, python-brace-format
+msgid "{name}, {n} book"
+msgid_plural "{name}, {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/groups.py:261
+msgid "Try a different search"
+msgstr ""
+
+#: src/pages/book.py:88 src/pages/book.py:321 src/pages/book.py:367
+msgid "%-d %B %Y"
+msgstr ""
+
+#. Translators: a publication month (strftime): "March 2019".
+#: src/pages/book.py:91
+msgid "%B %Y"
+msgstr ""
+
+#. Translators: a book's place in its series; {series} is the series' name (a link).
+#: src/pages/book.py:115
+#, python-brace-format
+msgid "Book {index} of {series}"
+msgstr ""
+
+#. Translators: a book's series, when it has no number in it; {series} is a link.
+#: src/pages/book.py:117
+#, python-brace-format
+msgid "Part of {series}"
+msgstr ""
+
+#. Translators: the list of a book's authors: "Ada Lark, Ben Ross and Cy Moor".
+#: src/pages/book.py:128
+#, python-brace-format
+msgid "{names} and {last}"
+msgstr ""
+
+#: src/pages/book.py:136
+#, python-brace-format
+msgid "{percent}% read"
+msgstr ""
+
+#. Translators: progress and time left to read: "45% · 2 h left".
+#: src/pages/book.py:138 src/widgets/book_tile.py:63
+#, python-brace-format
+msgid "{progress} · {time} left"
+msgstr ""
+
+#: src/pages/book.py:141
+msgid "Not started"
+msgstr ""
+
+#: src/pages/book.py:149 src/dialogs/highlights.py:100
+#, python-brace-format
+msgid "{n} highlight"
+msgid_plural "{n} highlights"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/book.py:152
+#, python-brace-format
+msgid "{n} bookmark"
+msgid_plural "{n} bookmarks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/book.py:153
+msgid "None yet"
+msgstr ""
+
+#: src/pages/book.py:249
+msgid "_Continue Reading"
+msgstr ""
+
+#: src/pages/book.py:250
+msgid "_Read Again"
+msgstr ""
+
+#: src/pages/book.py:284
+#, python-brace-format
+msgid "Books tagged “{tag}”"
+msgstr ""
+
+#: src/pages/book.py:316 src/dialogs/kindle_mail.py:190
+msgid "Open in the browser"
+msgstr ""
+
+#: src/pages/book.py:336 src/reader_window.blp:590
+msgid "_Export Highlights…"
+msgstr ""
+
+#: src/pages/book.py:337 src/reader_window.blp:595
+msgid "_Copy as Markdown"
+msgstr ""
+
+#: src/pages/book.py:353 src/reader_window.py:1149
+msgid "Highlights copied as Markdown"
+msgstr ""
+
+#. Translators: when a book was last read (strftime): "8 October 2026".
+#: src/pages/book.py:367
+msgid "Last Read"
+msgstr ""
+
+#: src/pages/book.py:373
+msgid "Time Spent Reading"
+msgstr ""
+
+#: src/pages/book.py:388
+msgid "This file cannot be found"
+msgstr ""
+
+#: src/pages/book.py:391
+msgid "_Locate…"
+msgstr ""
+
+#: src/pages/book.py:393
+msgid "Show Bookcase where the file is now"
+msgstr ""
+
+#: src/pages/book.py:399
+msgid "Show in Files"
+msgstr ""
+
+#: src/pages/book.py:406
+msgid "_Open With…"
+msgstr ""
+
+#: src/pages/book.py:407
+msgid "Open in the _Default App"
+msgstr ""
+
+#: src/pages/book.py:408
+msgid "_Copy Path"
+msgstr ""
+
+#: src/pages/book.py:414
+msgid "More for This File"
+msgstr ""
+
+#: src/pages/book.py:417
+#, python-brace-format
+msgid "More for the {format} file"
+msgstr ""
+
+#: src/pages/book.py:440
+#, python-brace-format
+msgid "Previous in the series: {title}"
+msgstr ""
+
+#: src/pages/book.py:442
+#, python-brace-format
+msgid "Next in the series: {title}"
+msgstr ""
+
+#: src/pages/book.py:462
+#, python-brace-format
+msgid "More in {series}"
+msgstr ""
+
+#: src/pages/book.py:473
+#, python-brace-format
+msgid "More by {author}"
+msgstr ""
+
+#: src/pages/book.py:530
+msgid "Could not open the file"
+msgstr ""
+
+#: src/pages/book.py:542
+msgid "Path copied"
+msgstr ""
+
+#: src/pages/book.py:551
+msgid "Locate the File"
+msgstr ""
+
+#: src/pages/book.py:551
+msgid "_Locate"
+msgstr ""
+
+#: src/pages/book.py:580
+#, python-brace-format
+msgid "Found the file of “{title}”"
+msgstr ""
+
+#: src/pages/book.py:592
+#, python-brace-format
+msgid "Rating changed to {rating}"
+msgstr ""
+
+#: src/pages/book.blp:11
+msgid "Book"
+msgstr ""
+
+#: src/pages/book.blp:47 src/reader_window.py:1114 src/pages/catalog.blp:26
+msgid "More"
+msgstr ""
+
+#: src/pages/book.blp:196 src/widgets/book_tile.py:85
+msgid "Reading Progress"
+msgstr ""
+
+#: src/pages/book.blp:277
+msgid "Files"
+msgstr ""
+
+#. Translators: a cover as a screen reader names it: the title, then the author.
+#: src/widgets/cover.py:170
+#, python-brace-format
+msgid "{title}, by {author}"
+msgstr ""
+
+#. Translators: time left to read, in minutes ("5 min").
+#. Translators: a reading time in minutes ("45 min").
+#: src/widgets/book_tile.py:42 src/pages/stats.py:63 src/pages/stats.py:381
+#: src/pages/stats.py:385
+#, python-brace-format
+msgid "{m} min"
+msgstr ""
+
+#. Translators: time left to read, in hours ("2 h").
+#. Translators: a reading time in hours, with one decimal ("3.5 h").
+#: src/widgets/book_tile.py:46 src/pages/stats.py:67 src/pages/stats.py:68
+#, python-brace-format
+msgid "{h} h"
+msgstr ""
+
+#. Translators: time left to read ("2 h 30 min").
+#: src/widgets/book_tile.py:49
+#, python-brace-format
+msgid "{h} h {m} min"
+msgstr ""
+
+#: src/widgets/book_tile.py:57
+msgid "New"
+msgstr ""
+
+#. Translators: a percentage ("45%").
+#: src/widgets/book_tile.py:60 src/reader_window.py:715
+#: src/reader_window.py:722 src/reading.py:197 src/dialogs/catalog_entry.py:228
+#, python-brace-format
+msgid "{percent}%"
+msgstr ""
+
+#. Translators: a book's title, then its author on the next line.
+#: src/widgets/book_tile.py:159 src/widgets/remote_cover.py:188
+#, python-brace-format
+msgid ""
+"{title}\n"
+"{author}"
+msgstr ""
+
+#: src/widgets/rating.py:43
+msgid "No rating"
+msgstr ""
+
+#. Translators: a rating with a half star; {stars} is "3.5".
+#: src/widgets/rating.py:48
+#, python-brace-format
+msgid "{stars} stars"
+msgstr ""
+
+#: src/widgets/rating.py:49
+#, python-brace-format
+msgid "{stars} star"
+msgid_plural "{stars} stars"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/widgets/rating.py:97
+#, python-brace-format
+msgid "Rating: {rating}"
+msgstr ""
+
+#: src/reader_window.py:99
+msgid "Follow System Style"
+msgstr ""
+
+#: src/reader_window.py:314
+msgid "Book Not Found"
+msgstr ""
+
+#: src/reader_window.py:315
+msgid "This book is no longer in the library"
+msgstr ""
+
+#: src/reader_window.py:325
+msgid "File Not Found"
+msgstr ""
+
+#: src/reader_window.py:326
+#, python-brace-format
+msgid "The book was at {path}. Locate it to keep reading."
+msgstr ""
+
+#: src/reader_window.py:328
+msgid "Locate File…"
+msgstr ""
+
+#: src/reader_window.py:330
+msgid "No File to Read"
+msgstr ""
+
+#: src/reader_window.py:331
+msgid "Only the details of this book are in the library"
+msgstr ""
+
+#: src/reader_window.py:336
+msgid "Reading PDFs Needs Poppler"
+msgstr ""
+
+#: src/reader_window.py:337
+msgid "Install Poppler and its GObject bindings to read PDFs in Bookcase"
+msgstr ""
+
+#: src/reader_window.py:339 src/reader_window.py:348 src/reader_window.py:353
+#: src/reader_window.py:426 src/reader_window.blp:567
+msgid "Open With…"
+msgstr ""
+
+#: src/reader_window.py:346
+msgid "Format Not Supported"
+msgstr ""
+
+#: src/reader_window.py:347
+#, python-brace-format
+msgid "Bookcase cannot show {format} books"
+msgstr ""
+
+#: src/reader_window.py:351
+msgid "Reading Needs WebKitGTK"
+msgstr ""
+
+#: src/reader_window.py:352
+msgid "Install WebKitGTK 6.0 to read books in Bookcase"
+msgstr ""
+
+#: src/reader_window.py:422
+msgid "Reading CBR Comics Needs bsdtar"
+msgstr ""
+
+#. no reading session in a book that did not open
+#: src/reader_window.py:423 src/reader_window.py:838
+msgid "This Book Cannot Be Opened"
+msgstr ""
+
+#: src/reader_window.py:424
+msgid "Install libarchive (bsdtar) to read CBR comics in Bookcase"
+msgstr ""
+
+#: src/reader_window.py:425 src/reader_window.py:839
+msgid "The file may be damaged, or in a format Bookcase cannot read"
+msgstr ""
+
+#: src/reader_window.py:451
+msgid "Locate File"
+msgstr ""
+
+#: src/reader_window.py:571
+msgid "Custom Colours…"
+msgstr ""
+
+#: src/reader_window.py:628 src/reader_window.py:662
+msgid "Zoom and Layout"
+msgstr ""
+
+#: src/reader_window.py:633
+msgid "Side by side when the window is wide, the first page alone"
+msgstr ""
+
+#: src/reader_window.py:643
+msgid "Zoom Out"
+msgstr ""
+
+#: src/reader_window.py:644
+msgid "Zoom In"
+msgstr ""
+
+#: src/reader_window.py:649
+msgid "Zoom"
+msgstr ""
+
+#: src/reader_window.py:651
+msgid "Fit Width"
+msgstr ""
+
+#: src/reader_window.py:651
+msgid "Fit Page"
+msgstr ""
+
+#: src/reader_window.py:668
+msgid "Side by side when the window is wider than tall"
+msgstr ""
+
+#: src/reader_window.py:727
+#, python-brace-format
+msgid "{size} px"
+msgstr ""
+
+#. A comic's contents are its pictures' file names ("012.jpg"): pages read better.
+#. a PDF's page, without "of 300"
+#: src/reader_window.py:779 src/reader_window.py:959 src/reader_window.py:1094
+#: src/reading.py:179 src/widgets/pdf_view.py:662 src/widgets/pdf_view.py:2096
+#, python-brace-format
+msgid "Page {page}"
+msgstr ""
+
+#: src/reader_window.py:840
+msgid "Open in Another App"
+msgstr ""
+
+#: src/reader_window.py:888
+msgid "Marked as finished"
+msgstr ""
+
+#: src/reader_window.py:963
+#, python-brace-format
+msgid "Back to {place}"
+msgstr ""
+
+#: src/reader_window.py:1045
+msgid "This book is not in your library"
+msgstr ""
+
+#: src/reader_window.py:1045
+msgid "_Add to Library"
+msgstr ""
+
+#: src/reader_window.py:1079
+msgid "Highlight"
+msgstr ""
+
+#: src/reader_window.py:1084
+msgid "Bookmark"
+msgstr ""
+
+#: src/reader_window.py:1106 src/reader_window.py:1304
+msgid "Edit Note…"
+msgstr ""
+
+#: src/reader_window.py:1106 src/reader_window.py:1277
+#: src/reader_window.py:1304
+msgid "Add Note…"
+msgstr ""
+
+#: src/reader_window.py:1111
+msgid "Colour"
+msgstr ""
+
+#: src/reader_window.py:1192
+msgid "Highlight removed"
+msgstr ""
+
+#: src/reader_window.py:1193
+msgid "Bookmark removed"
+msgstr ""
+
+#: src/reader_window.py:1199 src/reader_window.blp:257
+msgid "Bookmark This Page"
+msgstr ""
+
+#: src/reader_window.py:1264
+#, python-brace-format
+msgid "Highlight in {color}"
+msgstr ""
+
+#: src/reader_window.py:1278
+msgid "Copy"
+msgstr ""
+
+#: src/reader_window.py:1279 src/widgets/lookup_popover.py:275
+#: src/dialogs/lookup_prefs.py:45
+msgid "Look Up"
+msgstr ""
+
+#: src/reader_window.py:1382 src/reader_window.py:1568
+msgid "Copied"
+msgstr ""
+
+#: src/reader_window.py:1485
+#, python-brace-format
+msgid "{n} result so far"
+msgid_plural "{n} results so far"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/reader_window.py:1497
+#, python-brace-format
+msgid "{n} result"
+msgid_plural "{n} results"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/reader_window.py:1713
+#, python-brace-format
+msgid "A page number, from 1 to {pages}"
+msgstr ""
+
+#: src/reader_window.py:1717
+#, python-brace-format
+msgid ""
+"A page number of the printed book, from {first} to {last}, or a percentage "
+"(50%)"
+msgstr ""
+
+#: src/reader_window.py:1722
+msgid "A percentage of the book, from 0 to 100"
+msgstr ""
+
+#: src/reader_window.py:1724
+msgid "Go to Page"
+msgstr ""
+
+#: src/reader_window.py:1724
+msgid "Go to Location"
+msgstr ""
+
+#: src/reader_window.py:1729 src/widgets/pdf_view.py:593 src/dialogs/note.py:25
+msgid "Cancel"
+msgstr ""
+
+#: src/reader_window.py:1730
+msgid "Go"
+msgstr ""
+
+#: src/reader_window.py:1766
+#, python-brace-format
+msgid "This book has no page {page}"
+msgstr ""
+
+#: src/reader_window.blp:76
+msgid "No Contents"
+msgstr ""
+
+#: src/reader_window.blp:77
+msgid "This book has no table of contents"
+msgstr ""
+
+#: src/reader_window.blp:116
+msgid "E_xport"
+msgstr ""
+
+#: src/reader_window.blp:130
+msgid "No Highlights or Bookmarks"
+msgstr ""
+
+#: src/reader_window.blp:131
+msgid "Select text to highlight it, or bookmark a page with Ctrl+D"
+msgstr ""
+
+#: src/reader_window.blp:150
+msgid "Search the book"
+msgstr ""
+
+#: src/reader_window.blp:166
+msgid "Find every place a word or phrase appears"
+msgstr ""
+
+#: src/reader_window.blp:195
+msgid "No Results"
+msgstr ""
+
+#: src/reader_window.blp:196
+msgid "Try another word or phrase"
+msgstr ""
+
+#: src/reader_window.blp:233
+msgid "Contents, Highlights and Search"
+msgstr ""
+
+#: src/reader_window.blp:250
+msgid "Text and Layout"
+msgstr ""
+
+#: src/reader_window.blp:304
+msgid "Go back to where you were reading"
+msgstr ""
+
+#: src/reader_window.blp:308
+msgid "Back"
+msgstr ""
+
+#: src/reader_window.blp:342
+msgid "Position in the book"
+msgstr ""
+
+#: src/reader_window.blp:353
+msgid "Show Page, Percentage or Time Left"
+msgstr ""
+
+#: src/reader_window.blp:414
+msgid "Original"
+msgstr ""
+
+#: src/reader_window.blp:415
+msgid "The book's own typeface"
+msgstr ""
+
+#: src/reader_window.blp:425
+msgid "Sans"
+msgstr ""
+
+#: src/reader_window.blp:433 src/reader_window.blp:452
+msgid "A"
+msgstr ""
+
+#: src/reader_window.blp:434
+msgid "Smaller Text"
+msgstr ""
+
+#: src/reader_window.blp:453
+msgid "Bigger Text"
+msgstr ""
+
+#: src/reader_window.blp:483
+msgid "Percent of the page"
+msgstr ""
+
+#: src/reader_window.blp:494
+msgid "Text Width"
+msgstr ""
+
+#: src/reader_window.blp:495
+msgid "Widest a column gets, in pixels"
+msgstr ""
+
+#: src/reader_window.blp:515
+msgid "Scrolled"
+msgstr ""
+
+#: src/reader_window.blp:528
+msgid "Two Pages"
+msgstr ""
+
+#: src/reader_window.blp:529 src/reader_pdf.py:136
+msgid "Side by side when the window is wide"
+msgstr ""
+
+#: src/reader_window.blp:533
+msgid "Justify"
+msgstr ""
+
+#: src/reader_window.blp:537
+msgid "Hyphenate"
+msgstr ""
+
+#: src/reader_window.blp:541
+msgid "Publisher Styles"
+msgstr ""
+
+#: src/reader_window.blp:542
+msgid "The book's own spacing and sizes"
+msgstr ""
+
+#: src/reader_window.blp:557
+msgid "Go to Location…"
+msgstr ""
+
+#: src/reader_window.blp:581
+msgid "Close"
+msgstr ""
+
+#: src/reading.py:158
+msgid "less than a minute"
+msgstr ""
+
+#: src/reading.py:160
+#, python-brace-format
+msgid "{n} min"
+msgid_plural "{n} min"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: hours, abbreviated ("2 h").
+#: src/reading.py:164
+#, python-brace-format
+msgid "{n} h"
+msgid_plural "{n} h"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/reading.py:165
+#, python-brace-format
+msgid "{hours} h {minutes} min"
+msgstr ""
+
+#. a PDF
+#. Translators: under a long list; {page} and {pages} are numbers.
+#: src/reading.py:177 src/sharing.py:651
+#, python-brace-format
+msgid "Page {page} of {pages}"
+msgstr ""
+
+#: src/reading.py:184
+#, python-brace-format
+msgid "Location {current} of {total}"
+msgstr ""
+
+#: src/reading.py:191
+#, python-brace-format
+msgid "{time} left in chapter"
+msgstr ""
+
+#: src/reading.py:195
+#, python-brace-format
+msgid "{time} left in book"
+msgstr ""
+
+#: src/widgets/pdf_view.py:587
+msgid "Password Needed"
+msgstr ""
+
+#: src/widgets/pdf_view.py:588
+msgid "The password was not right. Try again."
+msgstr ""
+
+#: src/widgets/pdf_view.py:589 src/widgets/pdf_view.py:608
+msgid "This PDF is locked with a password"
+msgstr ""
+
+#: src/widgets/pdf_view.py:591 src/dialogs/sync_prefs.py:55
+#: src/dialogs/kindle_mail.py:161 src/dialogs/kindle_mail.py:293
+#: src/dialogs/add_catalog.blp:60 src/dialogs/sharing_prefs.py:120
+msgid "Password"
+msgstr ""
+
+#: src/widgets/pdf_view.py:594
+msgid "Unlock"
+msgstr ""
+
+#: src/widgets/pdf_view.py:1270
+#, python-brace-format
+msgid "{page} of {total}"
+msgstr ""
+
+#: src/dialogs/note.py:22 src/dialogs/note.py:45
+msgid "Note"
+msgstr ""
+
+#: src/dialogs/note.py:28
+msgid "Save"
+msgstr ""
+
+#: src/dialogs/quick_open.py:52
+msgid "Tag"
+msgstr ""
+
+#: src/dialogs/quick_open.py:59
+msgid "Smart Shelf"
+msgstr ""
+
+#: src/dialogs/quick_open.py:59
+msgid "Shelf"
+msgstr ""
+
+#: src/dialogs/quick_open.py:71 src/dialogs/quick_open.py:77
+#: src/dialogs/quick_open.py:86 src/dialogs/quick_open.py:126
+msgid "Go To"
+msgstr ""
+
+#: src/dialogs/quick_open.py:76
+msgid "Books, authors, series, shelves…"
+msgstr ""
+
+#: src/dialogs/quick_open.py:81
+msgid "Results"
+msgstr ""
+
+#: src/dialogs/quick_open.py:87
+msgid "Type the name of a book, an author, a series, a tag or a shelf"
+msgstr ""
+
+#: src/lookup.py:196
+msgid "Nothing found"
+msgstr ""
+
+#: src/lookup.py:285
+msgid "Meaning"
+msgstr ""
+
+#: src/lookup.py:603
+#, python-brace-format
+msgid "“{word}” is in none of your dictionaries"
+msgstr ""
+
+#: src/lookup.py:643
+#, python-brace-format
+msgid "No definition of “{word}” was found"
+msgstr ""
+
+#: src/lookup.py:655 src/widgets/lookup_popover.py:237
+msgid "Online look-ups are turned off in Preferences"
+msgstr ""
+
+#: src/lookup.py:676
+#, python-brace-format
+msgid "Wikipedia has no article on “{text}”"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:83
+msgid "Dictionary"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:83
+msgid "Wikipedia"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:119 src/dialogs/sharing_prefs.py:236
+msgid "Open in Browser"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:123
+msgid "Search in Book"
+msgstr ""
+
+#. Translators: a dictionary entry's part of speech and language ("noun · English").
+#: src/widgets/lookup_popover.py:204
+#, python-brace-format
+msgid "{part_of_speech} · {language}"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:218
+msgid "From Wiktionary, CC BY-SA"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:220
+#, python-brace-format
+msgid "From {dictionary}"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:230
+msgid "From Wikipedia, CC BY-SA"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:235
+msgid "Not in Your Dictionaries"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:240
+msgid ""
+"Looking up needs the internet, or a StarDict dictionary installed for "
+"offline use"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:243
+msgid "Nothing Found"
+msgstr ""
+
+#: src/widgets/lookup_popover.py:245
+msgid "Lookup Failed"
+msgstr ""
+
+#: src/widgets/read_aloud.py:142 src/widgets/read_aloud.py:325
+msgid "Pause"
+msgstr ""
+
+#: src/widgets/read_aloud.py:147
+msgid "Previous Sentence"
+msgstr ""
+
+#: src/widgets/read_aloud.py:153
+msgid "Next Sentence"
+msgstr ""
+
+#: src/widgets/read_aloud.py:158
+msgid "Stop Reading Aloud"
+msgstr ""
+
+#: src/widgets/read_aloud.py:162 src/widgets/read_aloud.py:326
+msgid "Reading Aloud"
+msgstr ""
+
+#: src/widgets/read_aloud.py:171 src/widgets/read_aloud.py:180
+#: src/widgets/read_aloud.py:184
+msgid "Speed"
+msgstr ""
+
+#: src/widgets/read_aloud.py:177
+msgid "Slower"
+msgstr ""
+
+#: src/widgets/read_aloud.py:178
+msgid "Normal"
+msgstr ""
+
+#: src/widgets/read_aloud.py:179
+msgid "Faster"
+msgstr ""
+
+#: src/widgets/read_aloud.py:198 src/widgets/read_aloud.py:218
+msgid "Voice"
+msgstr ""
+
+#: src/widgets/read_aloud.py:202
+msgid "Finding voices…"
+msgstr ""
+
+#: src/widgets/read_aloud.py:246
+msgid "No voice is installed for this book’s language"
+msgstr ""
+
+#: src/widgets/read_aloud.py:247
+msgid "The speech engine lists no voices"
+msgstr ""
+
+#: src/widgets/read_aloud.py:253
+msgid "Default"
+msgstr ""
+
+#: src/widgets/read_aloud.py:326
+msgid "Paused"
+msgstr ""
+
+#: src/widgets/reader_theme.py:58
+msgid "Custom Colours"
+msgstr ""
+
+#: src/widgets/reader_theme.py:66
+msgid "The lamps along the harbour wall were lit one by one."
+msgstr ""
+
+#: src/widgets/reader_theme.py:69
+msgid "A link in the book"
+msgstr ""
+
+#: src/widgets/reader_theme.py:74
+msgid "Preview"
+msgstr ""
+
+#: src/widgets/reader_theme.py:80
+msgid "Background"
+msgstr ""
+
+#: src/widgets/reader_theme.py:80
+msgid "Links"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:47
+msgid "Look Up Words When Selected"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:48
+msgid "When off, words are looked up only when you choose Look Up"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:51
+msgid "Use Online Dictionaries"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:52
+msgid ""
+"Wiktionary and Wikipedia. When off, words are looked up only in the "
+"dictionaries on this computer and never leave it"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:67
+msgid "Dictionaries"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:68
+#, python-brace-format
+msgid ""
+"StarDict dictionaries on this computer, asked from the top. Add them to "
+"{folder}."
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:88
+msgid "No Dictionaries Installed"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:89
+msgid "Without one, words are looked up online"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:96
+#, python-brace-format
+msgid "{n} word"
+msgid_plural "{n} words"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/lookup_prefs.py:101
+msgid "Move Up"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:102
+msgid "Move Down"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:109
+msgid "Get Free Dictionaries"
+msgstr ""
+
+#: src/dialogs/lookup_prefs.py:110
+msgid "FreeDict’s dictionaries, in StarDict format"
+msgstr ""
+
+#: src/pages/stats.py:77
+#, python-brace-format
+msgid "Goal reached, and {n} more book"
+msgid_plural "Goal reached, and {n} more books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:79
+msgid "Goal reached"
+msgstr ""
+
+#: src/pages/stats.py:81
+#, python-brace-format
+msgid "{n} book ahead of schedule"
+msgid_plural "{n} books ahead of schedule"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:84
+msgid "Right on schedule"
+msgstr ""
+
+#. Translators: a yearly goal still to reach: "{books} to go in {weeks}" makes "3 books
+#. to go in 12 weeks".
+#: src/pages/stats.py:89
+#, python-brace-format
+msgid "{books} to go in {weeks}"
+msgstr ""
+
+#: src/pages/stats.py:91
+#, python-brace-format
+msgid "{n} week"
+msgid_plural "{n} weeks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:95 src/pages/year_review.py:117
+#, python-brace-format
+msgid "{n} day"
+msgid_plural "{n} days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:173 src/pages/stats.py:385
+msgid "Today"
+msgstr ""
+
+#: src/pages/stats.py:174
+msgid "Day Streak"
+msgstr ""
+
+#: src/pages/stats.py:176
+msgid "Pages Read"
+msgstr ""
+
+#: src/pages/stats.py:304
+#, python-brace-format
+msgid "Your {year} in Review"
+msgstr ""
+
+#: src/pages/stats.py:319
+msgid "book"
+msgid_plural "books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:321
+#, python-brace-format
+msgid "{n} book finished in {year}"
+msgid_plural "{n} books finished in {year}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:324
+#, python-brace-format
+msgid "Your reading in {year}"
+msgstr ""
+
+#: src/pages/stats.py:325
+msgid "Set a goal to see how the year is going."
+msgstr ""
+
+#: src/pages/stats.py:331
+#, python-brace-format
+msgid "of {n} book"
+msgid_plural "of {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: the yearly goal: "13 of 24 books".
+#: src/pages/stats.py:334
+#, python-brace-format
+msgid "{done} of {n} book"
+msgid_plural "{done} of {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:337
+#, python-brace-format
+msgid "Your reading goal for {year}"
+msgstr ""
+
+#: src/pages/stats.py:365
+#, python-brace-format
+msgid "Finished in {year}"
+msgstr ""
+
+#: src/pages/stats.py:371 src/pages/year_review.py:94
+msgid "Longest streak"
+msgstr ""
+
+#: src/pages/stats.py:376
+msgid "Today: daily goal met"
+msgstr ""
+
+#: src/pages/stats.py:378
+#, python-brace-format
+msgid "Today, of {n} minute"
+msgid_plural "Today, of {n} minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:388
+#, python-brace-format
+msgid "Day streak · best {days}"
+msgstr ""
+
+#: src/pages/stats.py:390
+msgid "Day streak"
+msgstr ""
+
+#: src/pages/stats.py:394
+#, python-brace-format
+msgid "Read in {year}"
+msgstr ""
+
+#. Translators: pages read this year (estimated), and the pace.
+#: src/pages/stats.py:397
+#, python-brace-format
+msgid "Pages read · {n} an hour"
+msgstr ""
+
+#: src/pages/stats.py:400
+msgid "Pages read"
+msgstr ""
+
+#: src/pages/stats.py:410
+#, python-brace-format
+msgid "Read on {n} day in {year}"
+msgid_plural "Read on {n} days in {year}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:413
+#, python-brace-format
+msgid "Read on {n} day in the last year"
+msgid_plural "Read on {n} days in the last year"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/stats.py:416
+#, python-brace-format
+msgid "longest streak {days}"
+msgstr ""
+
+#: src/pages/stats.py:419
+#, python-brace-format
+msgid ""
+"A calendar of the last year, each day shaded by the time read. {caption}"
+msgstr ""
+
+#: src/pages/stats.py:433
+#, python-brace-format
+msgid "Most in {month}: {time}"
+msgstr ""
+
+#: src/pages/stats.py:436
+msgid "Nothing read in the last twelve months"
+msgstr ""
+
+#: src/pages/stats.py:439
+#, python-brace-format
+msgid "Hours read in each of the last twelve months: {list}"
+msgstr ""
+
+#: src/pages/stats.py:450
+#, python-brace-format
+msgid "Hours read on each day of the week: {list}"
+msgstr ""
+
+#: src/pages/stats.py:458
+#, python-brace-format
+msgid "Hours read by the hour of the day: {list}"
+msgstr ""
+
+#: src/pages/stats.py:463
+msgid "Nothing read in the last year"
+msgstr ""
+
+#. Translators: "You read most on Sunday and in the evening" (over the last year).
+#: src/pages/stats.py:468
+#, python-brace-format
+msgid "You read most on {day} and {part}"
+msgstr ""
+
+#: src/pages/stats.py:473
+#, python-brace-format
+msgid "Most Read in {year}"
+msgstr ""
+
+#: src/pages/stats.py:519
+msgid "in the early hours"
+msgstr ""
+
+#: src/pages/stats.py:519
+msgid "in the morning"
+msgstr ""
+
+#: src/pages/stats.py:520
+msgid "in the afternoon"
+msgstr ""
+
+#: src/pages/stats.py:520
+msgid "in the evening"
+msgstr ""
+
+#: src/pages/stats.py:521
+msgid "late at night"
+msgstr ""
+
+#: src/pages/stats.blp:36 src/pages/stats.blp:39
+msgid "Year"
+msgstr ""
+
+#: src/pages/stats.blp:46
+msgid "Edit Reading Goals"
+msgstr ""
+
+#: src/pages/stats.blp:110
+msgid "Your books, pages, hours and favourites, in one page to keep or share"
+msgstr ""
+
+#: src/pages/stats.blp:176
+msgid "Set a Goal…"
+msgstr ""
+
+#: src/pages/stats.blp:221
+msgid "Reading Days"
+msgstr ""
+
+#: src/pages/stats.blp:266
+msgid "Hours per Month"
+msgstr ""
+
+#: src/pages/stats.blp:304
+msgid "When You Read"
+msgstr ""
+
+#: src/pages/stats.blp:327
+msgid "Days of the Week"
+msgstr ""
+
+#: src/pages/stats.blp:348
+msgid "Time of Day"
+msgstr ""
+
+#: src/pages/stats.blp:428
+msgid "Your Reading Will Show Up Here"
+msgstr ""
+
+#: src/pages/stats.blp:429
+msgid ""
+"Open a book to begin: the time you read, your streaks and the books you "
+"finish gather on this page."
+msgstr ""
+
+#: src/pages/stats.blp:432
+msgid "Set a Reading _Goal…"
+msgstr ""
+
+#: src/pages/year_review.py:47
+#, python-brace-format
+msgid "{year} in Review"
+msgstr ""
+
+#: src/pages/year_review.py:54
+msgid "Save as Image…"
+msgstr ""
+
+#. Translators: the heading of a year's review, under the year ("2025").
+#: src/pages/year_review.py:81
+msgid "A Year in Books"
+msgstr ""
+
+#: src/pages/year_review.py:88
+msgid "Book finished"
+msgid_plural "Books finished"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/year_review.py:90
+msgid "Pages in them"
+msgstr ""
+
+#: src/pages/year_review.py:105
+msgid "Favourite Author"
+msgstr ""
+
+#: src/pages/year_review.py:108
+msgid "Favourite Genre"
+msgstr ""
+
+#: src/pages/year_review.py:111
+msgid "The Month You Read Most"
+msgstr ""
+
+#. Translators: a month and the time read in it ("March · 12 h").
+#: src/pages/year_review.py:113
+#, python-brace-format
+msgid "{month} · {time}"
+msgstr ""
+
+#: src/pages/year_review.py:116
+msgid "Days You Read"
+msgstr ""
+
+#: src/pages/year_review.py:122
+msgid "Books Finished Each Month"
+msgstr ""
+
+#: src/pages/year_review.py:132
+#, python-brace-format
+msgid "Books finished in each month of {year}: {list}"
+msgstr ""
+
+#: src/pages/year_review.py:142
+#, python-brace-format
+msgid "Your Books of {year}"
+msgstr ""
+
+#: src/pages/year_review.py:162
+#, python-brace-format
+msgid "and {n} more"
+msgid_plural "and {n} more"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/pages/year_review.py:167
+msgid "No books finished this year"
+msgstr ""
+
+#: src/pages/year_review.py:221
+msgid "Save Year in Review"
+msgstr ""
+
+#. Translators: the file name of a saved Year in Review.
+#: src/pages/year_review.py:223
+#, python-brace-format
+msgid "{year} in Books.png"
+msgstr ""
+
+#: src/pages/year_review.py:225
+msgid "PNG Images"
+msgstr ""
+
+#: src/pages/year_review.py:245
+#, python-brace-format
+msgid "Saved “{name}”"
+msgstr ""
+
+#: src/pages/year_review.py:247
+msgid "Could not save the image"
+msgstr ""
+
+#. Translators: a series' stack in the grid: "The Saltmarsh Chronicles · 5 books".
+#: src/widgets/series_stack.py:208
+#, python-brace-format
+msgid "{series} · {count}"
+msgstr ""
+
+#: src/dialogs/goals.py:22
+msgid "Reading Goals"
+msgstr ""
+
+#: src/dialogs/goals.py:23
+msgid ""
+"Goals are for you alone: progress shows on the Statistics page, and nothing "
+"reminds you of them. Set a goal to 0 to turn it off."
+msgstr ""
+
+#: src/dialogs/goals.py:26
+msgid "Books a Year"
+msgstr ""
+
+#: src/dialogs/goals.py:29
+msgid "Minutes a Day"
+msgstr ""
+
+#: src/widgets/charts.py:344
+#, python-brace-format
+msgid "Nothing read on {date}"
+msgstr ""
+
+#: src/widgets/charts.py:346
+#, python-brace-format
+msgid "{n} minute read on {date}"
+msgid_plural "{n} minutes read on {date}"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: the yearly goal on the home page: "12 of 24 books this year".
+#: src/widgets/goal_card.py:41
+#, python-brace-format
+msgid "{done} of {n} book this year"
+msgid_plural "{done} of {n} books this year"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/widgets/goal_card.py:44
+#, python-brace-format
+msgid "{n} book finished this year"
+msgid_plural "{n} books finished this year"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: days read in a row, on the home page ("3-day streak").
+#: src/widgets/goal_card.py:49
+#, python-brace-format
+msgid "{n}-day streak"
+msgid_plural "{n}-day streak"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/widgets/goal_card.py:63
+msgid "Reading statistics"
+msgstr ""
+
+#: src/kosync.py:234
+msgid "Waiting for a connection"
+msgstr ""
+
+#: src/kosync.py:236
+msgid "Not synced yet"
+msgstr ""
+
+#: src/kosync.py:239
+msgid "Synced just now"
+msgstr ""
+
+#: src/kosync.py:242
+#, python-brace-format
+msgid "Synced {n} min ago"
+msgid_plural "Synced {n} min ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/kosync.py:245
+#, python-brace-format
+msgid "Synced {n} hour ago"
+msgid_plural "Synced {n} hours ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/kosync.py:247
+#, python-brace-format
+msgid "Synced {n} day ago"
+msgid_plural "Synced {n} days ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#. a URL urllib cannot take
+#: src/kosync.py:324
+msgid "The server address is not valid"
+msgstr ""
+
+#: src/kosync.py:329
+msgid "The sync server did not answer in time"
+msgstr ""
+
+#: src/kosync.py:331
+msgid "Could not reach the sync server. Check the address and the connection."
+msgstr ""
+
+#: src/kosync.py:341
+msgid "The server did not answer like a KOReader sync server"
+msgstr ""
+
+#: src/kosync.py:353 src/kosync.py:640 src/dialogs/sync_prefs.py:185
+msgid "Enter a user name and a password"
+msgstr ""
+
+#: src/kosync.py:362
+msgid "Sign in to sync"
+msgstr ""
+
+#: src/kosync.py:405
+msgid "The user name or password is wrong"
+msgstr ""
+
+#: src/kosync.py:408
+msgid "That user name is taken. Sign in instead, or choose another."
+msgstr ""
+
+#: src/kosync.py:411
+msgid "This server does not take new accounts"
+msgstr ""
+
+#: src/kosync.py:414
+msgid "The sync server refused the request"
+msgstr ""
+
+#: src/kosync.py:416
+msgid "No KOReader sync server answers at this address"
+msgstr ""
+
+#: src/kosync.py:418
+#, python-brace-format
+msgid "The sync server had a problem (error {status})"
+msgstr ""
+
+#: src/kosync.py:606
+#, python-brace-format
+msgid "Bookcase reading sync: {account}"
+msgstr ""
+
+#: src/kosync.py:628
+msgid "Sign in again in Preferences to sync"
+msgstr ""
+
+#: src/kosync.py:743
+msgid "The book’s file cannot be read"
+msgstr ""
+
+#: src/kosync.py:834
+#, python-brace-format
+msgid "Sync failed: {error}"
+msgstr ""
+
+#: src/reader_pdf.py:137
+msgid "Right to Left"
+msgstr ""
+
+#: src/reader_pdf.py:138
+msgid "Pages turn and pair from the right"
+msgstr ""
+
+#: src/reader_pdf.py:139
+msgid "Cover Page Alone"
+msgstr ""
+
+#: src/reader_pdf.py:140
+msgid "The first page by itself, beside no other"
+msgstr ""
+
+#: src/reader_pdf.py:200
+msgid "Print…"
+msgstr ""
+
+#: src/reader_pdf.py:213
+msgid "The PDF cannot be printed"
+msgstr ""
+
+#: src/reader_sync.py:48
+msgid "_Go There"
+msgstr ""
+
+#. Translators: a sync banner: another device's name and its place in the book.
+#: src/reader_sync.py:110
+#, python-brace-format
+msgid "{device} is at {percent}"
+msgstr ""
+
+#: src/reader_sync.py:113
+#, python-brace-format
+msgid "Another device is at {percent}"
+msgstr ""
+
+#: src/reader_sync.py:182
+msgid "Up to date"
+msgstr ""
+
+#: src/reader_sync.py:224
+msgid "Sync Now"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:34
+msgid "Sync"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:43
+msgid "Reading Position"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:44
+msgid ""
+"Pick up where you left off on a KOReader e-reader, another computer, or any "
+"app that speaks KOReader’s progress sync. Only the place is sent: a "
+"fingerprint of the book’s file, how far in you are, and this computer’s name."
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:52
+msgid "Server"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:53 src/dialogs/add_catalog.blp:56
+#: src/dialogs/sharing_prefs.py:116
+msgid "User Name"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:64
+msgid "_Sign In"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:68
+msgid "_Create Account"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:85
+msgid "Sign _Out"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:90
+msgid "Connection"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:93
+msgid "_Test"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:100
+msgid "Options"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:102
+msgid "Match Books By"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:103
+msgid "The same as KOReader’s setting; content is its default"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:104
+msgid "Content"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:104
+msgid "File Name"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:107
+msgid "This Computer’s Name"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:115
+#, python-brace-format
+msgid ""
+"Set up the same account on your e-reader in KOReader: Tools → Progress sync. "
+"<a href=\"{url}\">KOReader’s guide</a>"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:154
+#, python-brace-format
+msgid "Signed in as {user}"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:199 src/dialogs/sync_prefs.py:223
+msgid "Connected"
+msgstr ""
+
+#: src/dialogs/sync_prefs.py:216
+msgid "Checking…"
+msgstr ""
+
+#: src/mail.py:87
+msgid ""
+"Gmail needs an app password, made in your Google Account’s security settings "
+"(2-Step Verification must be on)."
+msgstr ""
+
+#: src/mail.py:90
+msgid ""
+"Use your Microsoft account password, or an app password when two-step "
+"verification is on."
+msgstr ""
+
+#: src/mail.py:93
+msgid ""
+"Fastmail needs an app password with SMTP access, made in Settings → Privacy "
+"& Security."
+msgstr ""
+
+#: src/mail.py:96
+msgid "iCloud needs an app-specific password, made at account.apple.com."
+msgstr ""
+
+#: src/mail.py:99
+msgid ""
+"Proton Mail Bridge must be running; use the user name and password Bridge "
+"shows, not your Proton password."
+msgstr ""
+
+#: src/mail.py:101
+msgid "Other"
+msgstr ""
+
+#: src/mail.py:102
+msgid "Your provider’s outgoing (SMTP) server, as it documents it."
+msgstr ""
+
+#: src/mail.py:228
+msgid "Larger than the 50 MB Amazon takes by e-mail"
+msgstr ""
+
+#: src/mail.py:230
+msgid ""
+"Amazon no longer takes MOBI or AZW3 books by e-mail, only EPUB, PDF and TXT"
+msgstr ""
+
+#: src/mail.py:232
+msgid "No format Amazon takes by e-mail (EPUB, PDF or TXT)"
+msgstr ""
+
+#: src/mail.py:243
+msgid "Kindle by E-mail"
+msgstr ""
+
+#: src/mail.py:283
+msgid "Sent from Bookcase."
+msgstr ""
+
+#: src/mail.py:294
+msgid "Bookcase: Send to Kindle works"
+msgstr ""
+
+#: src/mail.py:296
+#, python-brace-format
+msgid ""
+"This is a test from Bookcase. Your mail server accepted the message, so "
+"books can be sent from {sender} to {kindle}.\n"
+"\n"
+"Amazon only delivers books from addresses on the Approved Personal Document "
+"E-mail List of your Amazon account:\n"
+"{url}\n"
+msgstr ""
+
+#: src/mail.py:329
+#, python-brace-format
+msgid "{host} refused the user name or password."
+msgstr ""
+
+#: src/mail.py:334
+#, python-brace-format
+msgid ""
+"{host} does not offer an encrypted connection here. Try the other security "
+"setting or port."
+msgstr ""
+
+#: src/mail.py:338 src/mail.py:346
+#, python-brace-format
+msgid "The mail is larger than {host} accepts"
+msgstr ""
+
+#: src/mail.py:339
+#, python-brace-format
+msgid "{host} will not send mail from {sender}"
+msgstr ""
+
+#: src/mail.py:342
+#, python-brace-format
+msgid "{host} refused the address {address}"
+msgstr ""
+
+#: src/mail.py:348
+#, python-brace-format
+msgid "{host} refused the mail: {reason}"
+msgstr ""
+
+#: src/mail.py:351
+#, python-brace-format
+msgid "{host} closed the connection"
+msgstr ""
+
+#: src/mail.py:353
+#, python-brace-format
+msgid "The certificate of {host} is not valid"
+msgstr ""
+
+#: src/mail.py:356
+#, python-brace-format
+msgid ""
+"Could not make an encrypted connection to {host}. Check the port and "
+"security setting."
+msgstr ""
+
+#: src/mail.py:359
+#, python-brace-format
+msgid ""
+"Could not find the server {host}. Check its name and your internet "
+"connection."
+msgstr ""
+
+#: src/mail.py:362 src/opds.py:1103
+#, python-brace-format
+msgid "{host} did not answer in time"
+msgstr ""
+
+#: src/mail.py:364
+#, python-brace-format
+msgid "{host} refused the connection on port {port}"
+msgstr ""
+
+#: src/mail.py:367
+#, python-brace-format
+msgid "{host} answered with an error: {error}"
+msgstr ""
+
+#: src/mail.py:370
+#, python-brace-format
+msgid "Could not reach {host}: {error}"
+msgstr ""
+
+#: src/mail.py:399
+msgid "Send to Kindle is not set up"
+msgstr ""
+
+#: src/mail.py:409
+msgid ""
+"Bookcase sends a password only over an encrypted connection. Choose STARTTLS "
+"or SSL/TLS."
+msgstr ""
+
+#: src/mail.py:430
+msgid "Not connected to the mail server"
+msgstr ""
+
+#: src/passwords.py:54
+msgid "The keyring cannot be used: libsecret is not installed"
+msgstr ""
+
+#: src/passwords.py:69
+msgid "The password could not be saved in the keyring"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:40
+msgid "None"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:92
+msgid "One More Step at Amazon"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:93
+#, python-brace-format
+msgid ""
+"Amazon delivers books only from addresses on your account’s Approved "
+"Personal Document E-mail List, and drops other mail without a word. Add "
+"{sender} to it under Manage Your Content and Devices → Preferences → "
+"Personal Document Settings."
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:96
+msgid "your address"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:97
+msgid "_Later"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:98
+msgid "_Open Amazon’s Help"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:116 src/dialogs/kindle_mail.py:422
+msgid "Send to Kindle"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:145
+msgid "Your Kindle"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:146
+msgid ""
+"Its own e-mail address is in your Amazon account under Preferences → "
+"Personal Document Settings, and on the Kindle in Settings → Your Account."
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:149
+msgid "Kindle E-mail Address"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:154
+msgid "Sent From"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:157
+msgid "Provider"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:159
+msgid "Your E-mail Address"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:167
+msgid "Server Settings"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:168
+msgid "Outgoing Mail Server"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:171 src/dialogs/sharing_prefs.py:124
+msgid "Port"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:173
+msgid "Security"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:175
+msgid "User Name, When Not the Address"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:183
+msgid "Approve Your Address at Amazon"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:184
+msgid ""
+"Amazon delivers only mail from addresses on your Approved Personal Document "
+"E-mail List"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:196 src/dialogs/kindle_mail.py:349
+msgid "Send a _Test"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:199
+msgid "_Remove Account"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:291
+msgid "App Password"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:294
+msgid "no encryption"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:307
+#, python-brace-format
+msgid ""
+"Amazon delivers only mail from addresses on your Approved Personal Document "
+"E-mail List. Add {sender} to it."
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:341
+msgid "Sending…"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:352
+#, python-brace-format
+msgid "Test sent to {address}. Check your inbox."
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:356
+#, python-brace-format
+msgid "Could not send the test: {error}"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:376
+#, python-brace-format
+msgid "Bookcase: Send to Kindle ({address})"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:409
+msgid "Send to Kindle was removed"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:423
+msgid "Mail EPUB, PDF and TXT books to a Kindle through your e-mail account"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:432
+#, python-brace-format
+msgid "From {sender}"
+msgstr ""
+
+#: src/dialogs/kindle_mail.py:435
+msgid "Not set up"
+msgstr ""
+
+#: src/dialogs/highlights.py:66
+msgid "Kindle Clippings"
+msgstr ""
+
+#: src/dialogs/highlights.py:70 src/dialogs/highlights.py:117
+msgid "Import Kindle Highlights"
+msgstr ""
+
+#: src/dialogs/highlights.py:70 src/dialogs/highlights.py:127
+#: src/dialogs/highlights.py:226
+msgid "_Import"
+msgstr ""
+
+#: src/dialogs/highlights.py:90
+msgid "No highlights found in that file"
+msgstr ""
+
+#: src/dialogs/highlights.py:103
+#, python-brace-format
+msgid "{n} note"
+msgid_plural "{n} notes"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: after the counts of a book's clippings.
+#: src/dialogs/highlights.py:108
+#, python-brace-format
+msgid "{counts}, all imported before"
+msgstr ""
+
+#: src/dialogs/highlights.py:109
+#, python-brace-format
+msgid "{counts}, {n} new"
+msgstr ""
+
+#: src/dialogs/highlights.py:135
+#, python-brace-format
+msgid ""
+"{n} highlight or note from {books} book. Already imported ones are skipped."
+msgid_plural ""
+"{n} highlights and notes from {books} books. Already imported ones are "
+"skipped."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/highlights.py:145
+msgid ""
+"Kindle locations are not places in your copy of a book: Bookcase finds each "
+"highlight’s place when you next open the book."
+msgstr ""
+
+#: src/dialogs/highlights.py:169 src/dialogs/highlights.py:189
+msgid "Choose Book…"
+msgstr ""
+
+#: src/dialogs/highlights.py:184
+#, python-brace-format
+msgid "{author}Not in your library · {counts}"
+msgstr ""
+
+#: src/dialogs/highlights.py:200
+msgid "Change…"
+msgstr ""
+
+#: src/dialogs/highlights.py:225
+#, python-brace-format
+msgid "_Import {n}"
+msgid_plural "_Import {n}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/highlights.py:233
+msgid "Could not import the highlights"
+msgstr ""
+
+#: src/dialogs/highlights.py:236
+#, python-brace-format
+msgid "Imported {n} highlight into {books} book"
+msgid_plural "Imported {n} highlights into {books} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/highlights.py:239
+#, python-brace-format
+msgid "Imported {n} highlight into “{title}”"
+msgid_plural "Imported {n} highlights into “{title}”"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/highlights.py:245
+msgid "No new highlights"
+msgstr ""
+
+#: src/dialogs/highlights.py:254
+msgid "Choose Book"
+msgstr ""
+
+#: src/dialogs/highlights.py:257 src/dialogs/highlights.py:258
+msgid "Search your library"
+msgstr ""
+
+#: src/dialogs/highlights.py:261
+msgid "No Books Found"
+msgstr ""
+
+#: src/dialogs/highlights.py:347
+msgid "Markdown"
+msgstr ""
+
+#: src/dialogs/highlights.py:351
+msgid "Export Highlights"
+msgstr ""
+
+#: src/dialogs/highlights.py:362 src/dialogs/highlights.py:409
+msgid "Could not export the highlights"
+msgstr ""
+
+#: src/dialogs/highlights.py:364
+#, python-brace-format
+msgid "Highlights exported to “{name}”"
+msgstr ""
+
+#: src/dialogs/highlights.py:394
+msgid "No book has highlights or bookmarks yet"
+msgstr ""
+
+#: src/dialogs/highlights.py:396
+msgid "Export All Highlights To"
+msgstr ""
+
+#: src/dialogs/highlights.py:411
+#, python-brace-format
+msgid "Exported the highlights of {n} book"
+msgid_plural "Exported the highlights of {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/bulk_metadata.py:54
+msgid "Waiting"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:54
+msgid "Found"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:55
+msgid "Check This Match"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:55 src/dialogs/bulk_metadata.py:185
+msgid "Not Found"
+msgstr ""
+
+#. Translators: a book found online, in a drop-down: "Title — Author, 2011".
+#: src/dialogs/bulk_metadata.py:70
+#, python-brace-format
+msgid "{title} — {facts}"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:76
+msgid "A new cover"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:76
+msgid "A cover, where there was none"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:79
+#, python-brace-format
+msgid "Replaces the description: {new}"
+msgstr ""
+
+#. Translators: tags found online, added to the book's own.
+#: src/dialogs/bulk_metadata.py:82
+#, python-brace-format
+msgid "Adds {tags}"
+msgstr ""
+
+#. Translators: a field's change in the review: "Publisher: Old Press → New Press".
+#: src/dialogs/bulk_metadata.py:85
+#, python-brace-format
+msgid "{label}: {old} → {new}"
+msgstr ""
+
+#. Translators: a field of a book and the value found for it ("Publisher: Tidewater Press").
+#: src/dialogs/bulk_metadata.py:89
+#, python-brace-format
+msgid "{label}: {new}"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:123
+msgid "_Review"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:136
+msgid ""
+"Open Library is asked about one book every few seconds, as it asks of apps. "
+"Nothing changes until you review and apply."
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:140
+msgid "_Stop"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:168
+msgid "Replace Existing Details"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:169
+msgid ""
+"Off: only empty fields are filled. Titles and authors are never changed."
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:180
+msgid "Nothing to Change"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:181
+msgid "The books found already have what Open Library knows"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:192
+msgid "Review"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:284
+#, python-brace-format
+msgid "{n} found"
+msgid_plural "{n} found"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/bulk_metadata.py:287
+#, python-brace-format
+msgid "{n} to check"
+msgid_plural "{n} to check"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/bulk_metadata.py:291
+#, python-brace-format
+msgid "{n} not found"
+msgid_plural "{n} not found"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/bulk_metadata.py:293
+msgid "Done"
+msgstr ""
+
+#. Translators: the summary after looking books up: "Done: 8 found, 2 to check".
+#: src/dialogs/bulk_metadata.py:295
+#, python-brace-format
+msgid "{state}: {counts}"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:302
+#, python-brace-format
+msgid "about {n} minute left"
+msgid_plural "about {n} minutes left"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: progress of Find Metadata: "Looking up 3 of 12 · about 1 minute
+#. left".
+#: src/dialogs/bulk_metadata.py:306
+#, python-brace-format
+msgid "Looking up {number} of {total} · {when}"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:347
+#, python-brace-format
+msgid "{n} Book to Update"
+msgid_plural "{n} Books to Update"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/bulk_metadata.py:361
+#, python-brace-format
+msgid "Check this match: “{title}” by {authors}"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:367
+msgid "Nothing new in this match"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:401
+msgid "Match"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:404
+msgid "Open Library found more than one likely book"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:491
+#, python-brace-format
+msgid "_Apply to {n} Book"
+msgid_plural "_Apply to {n} Books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/bulk_metadata.py:502
+msgid "Could not save the metadata"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:506
+#, python-brace-format
+msgid "Found metadata for “{title}”"
+msgstr ""
+
+#: src/dialogs/bulk_metadata.py:509
+#, python-brace-format
+msgid "Updated {n} book"
+msgid_plural "Updated {n} books"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/opds.py:206
+msgid "Unknown format"
+msgstr ""
+
+#. A feed's link to file:// or ftp:// is never followed: a catalogue reads
+#. nothing on this computer.
+#: src/opds.py:331 src/opds.py:442 src/opds.py:665 src/opds.py:667
+#: src/opds.py:670 src/opds.py:676 src/opds.py:1142
+msgid "This address is not a book catalogue"
+msgstr ""
+
+#: src/opds.py:842 src/pages/catalog.py:459
+msgid "This catalogue cannot be searched"
+msgstr ""
+
+#: src/opds.py:928
+msgid "Over 75,000 free books whose copyright has expired"
+msgstr ""
+
+#: src/opds.py:930
+msgid "Free books, classics and new writers"
+msgstr ""
+
+#: src/opds.py:932
+msgid "Free books in Polish"
+msgstr ""
+
+#: src/opds.py:1092
+#, python-brace-format
+msgid "{host} asks for a user name and password"
+msgstr ""
+
+#: src/opds.py:1094
+#, python-brace-format
+msgid "{host} refused access"
+msgstr ""
+
+#: src/opds.py:1096
+#, python-brace-format
+msgid "{host} has nothing at this address"
+msgstr ""
+
+#: src/opds.py:1098
+#, python-brace-format
+msgid "{host} is busy; try again in a moment"
+msgstr ""
+
+#: src/opds.py:1099
+#, python-brace-format
+msgid "{host} answered with an error ({code})"
+msgstr ""
+
+#: src/opds.py:1104
+#, python-brace-format
+msgid "Could not reach {host}. Check the address and the network connection."
+msgstr ""
+
+#: src/opds.py:1175
+msgid "The catalogue sent more than Bookcase can read"
+msgstr ""
+
+#: src/opds.py:1245
+msgid ""
+"The catalogue sent a web page, not a book. It may need you to sign in on its "
+"website."
+msgstr ""
+
+#: src/opds.py:1252
+msgid "Download cancelled"
+msgstr ""
+
+#: src/opds.py:1262
+msgid "The file is too large"
+msgstr ""
+
+#: src/opds.py:1406
+msgid "No cover"
+msgstr ""
+
+#: src/opds.py:1580
+msgid "Could not add the book"
+msgstr ""
+
+#: src/pages/discover.py:82
+msgid "Catalogue Menu"
+msgstr ""
+
+#: src/pages/discover.py:177
+#, python-brace-format
+msgid "Removed “{title}”"
+msgstr ""
+
+#: src/pages/discover.blp:19 src/dialogs/add_catalog.py:50
+msgid "Add Catalogue"
+msgstr ""
+
+#: src/pages/discover.blp:44
+msgid ""
+"Free books from online catalogues, and books from your own server: Calibre-"
+"Web, Kavita, Komga or Calibre’s content server."
+msgstr ""
+
+#: src/pages/discover.blp:69 src/pages/discover.blp:98
+msgid "_Add Catalogue…"
+msgstr ""
+
+#: src/pages/discover.blp:89
+msgid "No Catalogues"
+msgstr ""
+
+#: src/pages/discover.blp:90
+msgid ""
+"Add a catalogue by its address, or bring back the free ones Bookcase comes "
+"with"
+msgstr ""
+
+#: src/pages/discover.blp:109
+msgid "_Restore Free Catalogues"
+msgstr ""
+
+#: src/pages/catalog.py:136
+#, python-brace-format
+msgid "“{title}” is in your library already"
+msgstr ""
+
+#: src/pages/catalog.py:144
+#, python-brace-format
+msgid "Could not download “{title}”: {error}"
+msgstr ""
+
+#: src/pages/catalog.py:154 src/pages/catalog.py:159 src/pages/catalog.py:165
+msgid "Downloads"
+msgstr ""
+
+#: src/pages/catalog.py:170
+msgid "_Clear Finished"
+msgstr ""
+
+#: src/pages/catalog.py:223 src/dialogs/catalog_entry.py:202
+#: src/widgets/remote_cover.py:160
+msgid "In your library"
+msgstr ""
+
+#: src/pages/catalog.py:226
+msgid "Could not download"
+msgstr ""
+
+#: src/pages/catalog.py:232 src/dialogs/catalog_entry.blp:140
+msgid "Cancel Download"
+msgstr ""
+
+#: src/pages/catalog.py:374
+msgid "Search Results"
+msgstr ""
+
+#: src/pages/catalog.py:378
+#, python-brace-format
+msgid "“{terms}” in {catalog}"
+msgstr ""
+
+#: src/pages/catalog.py:417
+msgid "_Refresh"
+msgstr ""
+
+#: src/pages/catalog.py:418
+msgid "Open in _Browser"
+msgstr ""
+
+#: src/pages/catalog.py:419 src/pages/catalog.py:593
+msgid "_Edit Catalogue…"
+msgstr ""
+
+#: src/pages/catalog.py:497
+msgid "Nothing Here"
+msgstr ""
+
+#: src/pages/catalog.py:499
+msgid "This part of the catalogue is empty"
+msgstr ""
+
+#. Translators: a catalogue filter and how many books it has ("Poetry (120)").
+#: src/pages/catalog.py:543
+#, python-brace-format
+msgid "{facet} ({count})"
+msgstr ""
+
+#. Translators: a catalogue filter's group and the filter ("Language: French").
+#: src/pages/catalog.py:552
+#, python-brace-format
+msgid "{group}: {facet}"
+msgstr ""
+
+#: src/pages/catalog.py:588
+msgid "Sign In Required"
+msgstr ""
+
+#: src/pages/catalog.py:589
+msgid "_Sign In…"
+msgstr ""
+
+#: src/pages/catalog.py:591
+msgid "Not a Catalogue"
+msgstr ""
+
+#: src/pages/catalog.py:592 src/dialogs/add_catalog.py:141
+msgid "Nothing at this address is a book catalogue (OPDS)"
+msgstr ""
+
+#: src/pages/catalog.py:598
+msgid "Could Not Open the Catalogue"
+msgstr ""
+
+#: src/pages/catalog.blp:32
+msgid "Search the Catalogue"
+msgstr ""
+
+#: src/pages/catalog.blp:45
+msgid "Search the catalogue"
+msgstr ""
+
+#: src/pages/catalog.blp:125
+msgid "_More"
+msgstr ""
+
+#. Translators: a book on sale in a catalogue: "Buy · 4.99 EUR".
+#: src/dialogs/catalog_entry.py:46
+#, python-brace-format
+msgid "Buy · {price} {currency}"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:49
+msgid "Protected by DRM"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:51
+msgid "On loan from the library’s website"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:53
+msgid "Sold on the catalogue’s website"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:55
+msgid "A format Bookcase does not read"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:123
+#, python-brace-format
+msgid "_Download {format}"
+msgstr ""
+
+#. Translators: a book's place in its series: "Coastal Tales, book 2".
+#. Translators: a book's series and its number in it: "The Tides, book 2".
+#: src/dialogs/catalog_entry.py:148 src/sharing.py:676
+#, python-brace-format
+msgid "{series}, book {number}"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:171
+#, python-brace-format
+msgid "Download {format}"
+msgstr ""
+
+#: src/dialogs/catalog_entry.py:217
+msgid "Bookcase cannot download this book"
+msgstr ""
+
+#: src/dialogs/catalog_entry.blp:134
+msgid "Download Progress"
+msgstr ""
+
+#: src/dialogs/catalog_entry.blp:168
+msgid "_Show in Library"
+msgstr ""
+
+#: src/dialogs/catalog_entry.blp:227
+msgid "Formats"
+msgstr ""
+
+#: src/dialogs/add_catalog.py:50
+msgid "Edit Catalogue"
+msgstr ""
+
+#: src/dialogs/add_catalog.py:57
+msgid "Password (Unchanged When Empty)"
+msgstr ""
+
+#: src/dialogs/add_catalog.py:105
+#, python-brace-format
+msgid "Bookcase catalogue: {title}"
+msgstr ""
+
+#: src/dialogs/add_catalog.py:137
+msgid "The user name or password is not right"
+msgstr ""
+
+#: src/dialogs/add_catalog.py:138
+msgid "This catalogue asks for a user name and password"
+msgstr ""
+
+#: src/dialogs/add_catalog.blp:39
+msgid ""
+"An OPDS catalogue: a Calibre-Web server’s /opds, Kavita’s /api/opds/ address "
+"with your API key, Komga’s /opds/v1.2/catalog, or Calibre’s content "
+"server’s /opds."
+msgstr ""
+
+#: src/dialogs/add_catalog.blp:42
+msgid "Address"
+msgstr ""
+
+#: src/dialogs/add_catalog.blp:47
+msgid "Name (Optional)"
+msgstr ""
+
+#: src/dialogs/add_catalog.blp:52
+msgid "Sign In"
+msgstr ""
+
+#: src/dialogs/add_catalog.blp:53
+msgid ""
+"Only for a catalogue that asks for it. The password is kept in your keyring."
+msgstr ""
+
+#: src/calibre_write.py:257
+msgid "Calibre is open. Bookcase writes to its library once it is closed."
+msgstr ""
+
+#: src/calibre_write.py:295
+msgid ""
+"This Calibre library was made by a newer Calibre than Bookcase knows: "
+"Bookcase does not write to it."
+msgstr ""
+
+#: src/calibre_write.py:299
+msgid "This metadata.db is not a Calibre library’s."
+msgstr ""
+
+#: src/calibre_write.py:303
+msgid ""
+"This Calibre library is from an older Calibre: open it in Calibre once to "
+"bring it up to date."
+msgstr ""
+
+#: src/calibre_write.py:312
+msgid "The Calibre library’s metadata.db cannot be found."
+msgstr ""
+
+#: src/calibre_write.py:320
+#, python-brace-format
+msgid "The Calibre library cannot be read: {error}"
+msgstr ""
+
+#: src/calibre_write.py:354
+#, python-brace-format
+msgid "metadata.db could not be backed up: {error}"
+msgstr ""
+
+#: src/calibre_write.py:595
+#, python-brace-format
+msgid "The Calibre library is in use: {error}"
+msgstr ""
+
+#: src/calibre_write.py:600
+#, python-brace-format
+msgid ""
+"The Calibre library failed its check after the change, which was undone: "
+"{error}"
+msgstr ""
+
+#: src/calibre_write.py:624
+#, python-brace-format
+msgid ""
+"The Calibre library failed its check after Bookcase wrote to it: restore "
+"{name} if Calibre complains."
+msgstr ""
+
+#: src/calibre_write.py:637
+msgid ""
+"The Calibre library’s database is damaged; Bookcase does not write to it. "
+"Calibre’s Check Library can repair it."
+msgstr ""
+
+#: src/calibre_write.py:866
+msgid "Edits made in Bookcase stay in Bookcase"
+msgstr ""
+
+#: src/calibre_write.py:868
+#, python-brace-format
+msgid "{n} book’s changes waiting for Calibre to close"
+msgid_plural "{n} books’ changes waiting for Calibre to close"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/calibre_write.py:872
+msgid "Writing to Calibre…"
+msgstr ""
+
+#: src/calibre_write.py:876
+#, python-brace-format
+msgid "{n} book’s changes to write"
+msgid_plural "{n} books’ changes to write"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/calibre_write.py:878
+msgid "Calibre has every change made in Bookcase"
+msgstr ""
+
+#: src/calibre_write.py:1007
+#, python-brace-format
+msgid "Could not write to the Calibre library: {error}"
+msgstr ""
+
+#: src/converting.py:369
+msgid "Already in the library"
+msgstr ""
+
+#: src/converting.py:371
+msgid "No file to convert from"
+msgstr ""
+
+#: src/converting.py:375
+msgid "Needs Calibre’s ebook-convert"
+msgstr ""
+
+#: src/converting.py:395
+#, python-brace-format
+msgid "ebook-convert could not start: {error}"
+msgstr ""
+
+#: src/converting.py:419 src/converting.py:500 src/dialogs/convert.py:232
+msgid "Conversion cancelled"
+msgstr ""
+
+#: src/converting.py:425
+#, python-brace-format
+msgid "ebook-convert failed: {error}"
+msgstr ""
+
+#: src/converting.py:463
+msgid "Making a Kobo EPUB"
+msgstr ""
+
+#: src/converting.py:467
+#, python-brace-format
+msgid "The Kobo EPUB could not be made: {error}"
+msgstr ""
+
+#: src/converting.py:486
+msgid "The book already has this format"
+msgstr ""
+
+#: src/converting.py:510
+#, python-brace-format
+msgid "The converted book could not be saved: {error}"
+msgstr ""
+
+#: src/dialogs/calibre_step.py:36
+msgid "Keep Calibre in Step"
+msgstr ""
+
+#: src/dialogs/calibre_step.py:37
+msgid "Write the details you edit in Bookcase to this Calibre library"
+msgstr ""
+
+#: src/dialogs/calibre_step.py:39
+msgid "Changes"
+msgstr ""
+
+#: src/dialogs/calibre_step.py:95
+msgid ""
+"Details you edit in Bookcase — title, authors, series, tags, publisher, "
+"date, languages, description, rating, identifiers and cover — will be "
+"written to this library’s metadata.db, the way Calibre writes them. Files "
+"and folders are never renamed.\n"
+"\n"
+"Bookcase writes only while Calibre is closed, backs up metadata.db first "
+"(once a day, beside it) and checks the database after each change. Changes "
+"made while Calibre is open wait until it closes."
+msgstr ""
+
+#: src/dialogs/calibre_step.py:104
+#, python-brace-format
+msgid "{n} book you edited in Bookcase earlier will be written too."
+msgid_plural "{n} books you edited in Bookcase earlier will be written too."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/dialogs/calibre_step.py:107
+msgid "Keep Calibre in Step?"
+msgstr ""
+
+#: src/dialogs/calibre_step.py:109
+msgid "_Write to Calibre"
+msgstr ""
+
+#: src/dialogs/convert.py:30
+msgid "EPUB"
+msgstr ""
+
+#: src/dialogs/convert.py:30
+msgid "For most e-readers and apps"
+msgstr ""
+
+#: src/dialogs/convert.py:31
+msgid "An EPUB with Kobo’s page numbers and statistics"
+msgstr ""
+
+#: src/dialogs/convert.py:32
+msgid "AZW3"
+msgstr ""
+
+#: src/dialogs/convert.py:32
+msgid "For Kindles"
+msgstr ""
+
+#: src/dialogs/convert.py:33
+msgid "MOBI"
+msgstr ""
+
+#: src/dialogs/convert.py:33
+msgid "For older Kindles"
+msgstr ""
+
+#: src/dialogs/convert.py:34
+msgid "PDF"
+msgstr ""
+
+#: src/dialogs/convert.py:34
+msgid "Fixed pages, for printing"
+msgstr ""
+
+#: src/dialogs/convert.py:35
+msgid "FB2"
+msgstr ""
+
+#: src/dialogs/convert.py:35
+msgid "FictionBook, for some readers"
+msgstr ""
+
+#: src/dialogs/convert.py:50
+msgid "Convert"
+msgstr ""
+
+#: src/dialogs/convert.py:65
+#, python-brace-format
+msgid ""
+"A copy of “{title}” is converted and added to it. Its own files stay as they "
+"are."
+msgstr ""
+
+#: src/dialogs/convert.py:85
+msgid ""
+"Formats other than Kobo EPUB are made by Calibre’s ebook-convert, which is "
+"not installed. Install Calibre (most distributions call the package "
+"“calibre”; its command-line tools come with it), then open Convert again."
+msgstr ""
+
+#: src/dialogs/convert.py:97 src/dialogs/convert.py:136
+msgid "_Convert"
+msgstr ""
+
+#: src/dialogs/convert.py:162
+msgid "Converting…"
+msgstr ""
+
+#: src/dialogs/convert.py:224
+#, python-brace-format
+msgid "Converted “{title}” to {format}"
+msgstr ""
+
+#: src/dialogs/convert.py:236
+msgid "Could not convert the book"
+msgstr ""
+
+#: src/sharing.py:302
+msgid "The newest books first"
+msgstr ""
+
+#: src/sharing.py:306
+#, python-brace-format
+msgid "{count} author"
+msgid_plural "{count} authors"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/sharing.py:308
+#, python-brace-format
+msgid "{count} series"
+msgid_plural "{count} series"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/sharing.py:310
+#, python-brace-format
+msgid "{count} tag"
+msgid_plural "{count} tags"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/sharing.py:315
+#, python-brace-format
+msgid "{count} shelf"
+msgid_plural "{count} shelves"
+msgstr[0] ""
+msgstr[1] ""
+
+#. Translators: a list's title; {query} is what was searched for.
+#: src/sharing.py:343
+#, python-brace-format
+msgid "Search: {query}"
+msgstr ""
+
+#: src/sharing.py:564
+msgid "Search the library"
+msgstr ""
+
+#: src/sharing.py:624
+msgid "Title, author, tag…"
+msgstr ""
+
+#: src/sharing.py:642
+msgid "Search for a title, an author, a series or a tag."
+msgstr ""
+
+#: src/sharing.py:644
+msgid "No books"
+msgstr ""
+
+#: src/sharing.py:649
+msgid "Previous"
+msgstr ""
+
+#: src/sharing.py:655
+msgid "Next"
+msgstr ""
+
+#: src/sharing.py:659
+msgid ""
+"Reading apps that open OPDS catalogues (KOReader, Readest, Thorium…) can use "
+"this address:"
+msgstr ""
+
+#: src/sharing.py:1181
+msgid "Bookcase library sharing"
+msgstr ""
+
+#: src/sharing.py:1284
+#, python-brace-format
+msgid "Bookcase on {host}"
+msgstr ""
+
+#: src/sharing.py:1382
+#, python-brace-format
+msgid "Port {port} is in use by another program: choose another"
+msgstr ""
+
+#: src/sharing.py:1384
+#, python-brace-format
+msgid "Port {port} cannot be used: choose one above 1024"
+msgstr ""
+
+#: src/sharing.py:1385
+#, python-brace-format
+msgid "Sharing could not start: {error}"
+msgstr ""
+
+#. Translators: the main menu while the library is shared; {address} is like
+#. 192.168.1.20:8095.
+#: src/dialogs/sharing_prefs.py:48
+#, python-brace-format
+msgid "Sharing on {address}"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:49
+msgid "Sharing On"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:60
+msgid "Sharing"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:69
+msgid ""
+"Get books onto an e-reader or a phone over Wi-Fi: while Bookcase is open, "
+"devices on the same network can browse your library and download its books, "
+"in a web browser or a reading app. Nothing can be changed or added from them."
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:73
+msgid "Share Library"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:81
+msgid "Connect"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:82
+msgid "On the e-reader or phone, open this address in the web browser"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:88
+msgid "Or point a phone’s camera at this code"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:97
+msgid "Reading Apps"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:98
+msgid ""
+"In KOReader (Search → OPDS catalog), Readest, Thorium or any app that reads "
+"OPDS catalogues, add this address with the user name and password below"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:101
+msgid "Catalogue Address"
+msgstr ""
+
+#. Who can connect, and how.
+#: src/dialogs/sharing_prefs.py:106
+msgid "Access"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:108
+msgid "Who Can Connect"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:109
+msgid "Devices on This Network"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:109
+msgid "This Computer Only"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:112
+msgid "Require Password"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:167
+#, python-brace-format
+msgid "On at {address}"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:168
+msgid "On, but this computer is not on a network"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:170
+msgid "Starting…"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:175
+msgid "Off"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:200
+msgid "Only this computer can connect: other devices are refused."
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:202
+msgid ""
+"Use sharing on networks you trust, such as your home’s. As with Calibre’s "
+"content server, the address is plain HTTP: the password keeps others out, "
+"but is not encrypted on the way."
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:206
+msgid "Without a password, anyone on this network can download your books."
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:220
+msgid "Web Address"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:230
+msgid "Copy Address"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:246
+msgid "Address copied"
+msgstr ""
+
+#: src/dialogs/sharing_prefs.py:294
+msgid "Password changed"
+msgstr ""
+
+#. Translators: what a screen reader says of the QR code.
+#: src/widgets/qr_code.py:71
+#, python-brace-format
+msgid "QR code of {text}"
+msgstr ""

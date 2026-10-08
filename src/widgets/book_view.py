@@ -20,6 +20,8 @@ over the vendored foliate-js) on the bookcase:// scheme.
     view.get_toc(callback)                  # callback(toc)
     view.tts_start(callback) / tts_next(callback) / tts_stop()   # reading aloud, a sentence
                                             # at a time (callback(text), None at the end)
+    view.tts_prev(callback) / tts_word(offset)  # the sentence before; a word underlined
+    view.zoom(action, callback)             # a fixed layout's: 'in', 'out', 'fit-page'…
     view.location / view.fraction           # the last relocated place
 
 Signals (each carries the page's message as a dict, .claude/rules/reader.md):
@@ -420,8 +422,21 @@ class BookView(Adw.Bin):
         """callback(text) with the next sentence, or None at the end of the book."""
         self._call('ttsNext', None, callback)
 
+    def tts_prev(self, callback):
+        """callback(text) with the sentence before the one given last (highlighted)."""
+        self._call('ttsPrev', None, callback)
+
+    def tts_word(self, offset):
+        """Underline the word at `offset` of the sentence being read (as tts_next gave it)."""
+        self._call('ttsWord', {'offset': int(offset)})
+
     def tts_stop(self):
         self._call('ttsStop')
+
+    def zoom(self, action, callback=None):
+        """A fixed layout's zoom: 'in', 'out', 'fit-page' or 'fit-width'; callback({fit:
+        'page', 'width' or None, percent}), None for a book that reflows."""
+        self._call('zoom', {'action': action}, callback)
 
     def evaluate(self, script, callback=None):
         """Run a script in the page (tests and the demo script); callback(result)."""

@@ -7,12 +7,16 @@ import os
 import pathlib
 import shutil
 import tempfile
+import time
 import unittest
 import zipfile
 from unittest import mock
 
+from gi.repository import Gio, GLib
+
 from bookcase import devices, kepub
 from bookcase.formats import BookInfo
+from tests import fake_mtp
 from tests.support import make_epub, temporary_library
 
 
@@ -263,6 +267,199 @@ class SendTest(TreeTest):
         with self.assertRaises(devices.Cancelled):
             reader.send(self.library, FakeCovers(), self.book_id, cancellable=cancellable)
         self.assertEqual(os.listdir(reader.books_dir), [])
+
+
+class GioPathTest(TreeTest):
+    """The local case through Gio: a root given as a file:// URI."""
+
+    def test_detect_and_names_from_a_file_uri(self):
+        root = self.tree('kindle')
+        uri = Gio.File.new_for_path(root).get_uri()
+        kind, name, books_dir = devices.detect(uri, 'Kindle')
+        self.assertEqual((kind, books_dir), ('kindle', os.path.join(root, 'documents')))
+        device = devices.Device(uri, kind, name, books_dir)
+        self.assertTrue(device.local)
+        self.assertEqual(device.transport, 'usb')
+        self.assertEqual(device.storage.relative(os.path.join(root, 'documents', 'a.azw3')),
+                         'documents/a.azw3')
+        self.assertIsNone(device.storage.relative(str(self.directory)))
+
+    def test_upload_and_space_through_gio(self):
+        root = self.tree('generic')
+        storage = devices.Storage(Gio.File.new_for_path(root))
+        source = self.directory / 'source.txt'
+        source.write_bytes(b'x' * 5000)
+        done = []
+        storage.upload(str(source), 'Books/Deep/copy.txt', done.append)
+        self.assertEqual((pathlib.Path(root) / 'Books' / 'Deep' / 'copy.txt').read_bytes(),
+                         b'x' * 5000)
+        self.assertEqual(done[-1], 5000)
+        self.assertEqual(os.listdir(os.path.join(root, 'Books', 'Deep')), ['copy.txt'])
+        storage.upload(str(source), 'Books/Deep/copy.txt')  # over the one there
+        free, total = storage.space()
+        self.assertGreater(total, 0)
+        self.assertEqual(storage.read('Books/Deep/copy.txt', 10), b'x' * 10)
+        self.assertIsNone(storage.kind('Books/none'))
+
+    def test_cancelled_upload_leaves_nothing(self):
+        root = self.tree('generic')
+        storage = devices.Storage(Gio.File.new_for_path(root))
+        source = self.directory / 'source.txt'
+        source.write_bytes(b'x' * 5000)
+        cancellable = Gio.Cancellable()
+        cancellable.cancel()
+        with self.assertRaises(GLib.Error):
+            storage.upload(str(source), 'Books/copy.txt', None, cancellable)
+        self.assertEqual(os.listdir(os.path.join(root, 'Books')), [])
+
+
+class MtpTest(TreeTest):
+    """An MTP reader through the fake Gio layer (tests/fake_mtp.py): URIs, no local path."""
+
+    def setUp(self):
+        super().setUp()
+        fake_mtp.deleted_full_folders.clear()
+        self.folder = self.directory / 'mtp'
+        self.folder.mkdir()
+
+    def storage(self, name='Fake_Kindle_0001'):
+        root = fake_mtp.FakeFile(str(self.folder), f'mtp://{name}/')
+        return devices.Storage(root, new_for_path=fake_mtp.fake_new_for_path)
+
+    def kindle(self):
+        (self.folder / 'Internal Storage' / 'documents').mkdir(parents=True)
+        storage = self.storage()
+        found = devices.detect(storage, 'Kindle Paperwhite')
+        self.assertIsNotNone(found)
+        kind, name, books_dir = found
+        return devices.Device(storage.name(), kind, name, books_dir, storage=storage)
+
+    def test_kindle_detected_in_its_storage(self):
+        kindle = self.kindle()
+        self.assertEqual((kindle.kind, kindle.name), ('kindle', 'Kindle Paperwhite'))
+        self.assertEqual(kindle.books_dir,
+                         'mtp://Fake_Kindle_0001/Internal%20Storage/documents')
+        self.assertFalse(kindle.local)
+        self.assertEqual(kindle.transport, 'mtp')
+        self.assertEqual(kindle.books_rel, 'Internal Storage/documents')
+        self.assertEqual(kindle.space(), (3 * 1000 ** 3, 8 * 1000 ** 3))
+
+    def test_documents_alone_is_no_kindle_unless_named_one(self):
+        (self.folder / 'Internal shared storage' / 'documents').mkdir(parents=True)
+        self.assertIsNone(devices.detect(self.storage(), 'Pixel', removable=True))
+        (self.folder / 'Internal shared storage' / 'Books').mkdir()
+        kind, _name, books_dir = devices.detect(self.storage('Boox'), 'Boox Go', True)
+        self.assertEqual(kind, 'generic')
+        self.assertTrue(books_dir.endswith('/Internal%20shared%20storage/Books'))
+
+    def test_kindle_over_mtp_says_epub_goes_by_mail(self):
+        kindle = self.kindle()
+        with mock.patch.object(devices, 'ebook_convert', return_value=None):
+            self.assertIsNone(kindle.plan(['epub']))
+            reason = kindle.why_not(['epub'])
+        self.assertIn('AZW3, MOBI and PDF', reason)
+        self.assertIn('Send to Kindle', reason)
+        self.assertEqual(kindle.plan(['epub', 'azw3']).target, 'azw3')
+
+    def test_list_by_name_fetch_clippings_and_remove(self):
+        kindle = self.kindle()
+        documents = self.folder / 'Internal Storage' / 'documents'
+        (documents / 'A Quiet Harbour - Ada Lark.azw3').write_bytes(b'azw3')
+        (documents / 'A Quiet Harbour - Ada Lark.sdr').mkdir()
+        (documents / 'A Quiet Harbour - Ada Lark.sdr' / 'x.apnx').write_bytes(b'x')
+        (documents / 'My Clippings.txt').write_text('\ufeffA Quiet Harbour (Ada Lark)\n')
+        books = kindle.list_books()
+        self.assertEqual([(book.title, book.authors, book.hash) for book in books],
+                         [('A Quiet Harbour', ('Ada Lark',), '')])
+        book = books[0]
+        self.assertTrue(book.path.startswith('mtp://Fake_Kindle_0001/Internal%20Storage/'))
+        self.assertEqual(book.rel, 'Internal Storage/documents/A Quiet Harbour - Ada Lark.azw3')
+        self.assertTrue(kindle.has_clippings())
+        self.assertTrue(kindle.read_clippings().startswith('A Quiet Harbour'))
+
+        local = kindle.fetch(book.path, str(self.directory))
+        self.assertEqual(pathlib.Path(local).read_bytes(), b'azw3')
+
+        kindle.remove(book.path)
+        self.assertEqual(sorted(os.listdir(documents)), ['My Clippings.txt'])
+        self.assertEqual(fake_mtp.deleted_full_folders, [])  # emptied before deleting
+        with self.assertRaises(devices.DeviceError):
+            kindle.remove('mtp://Another_Device/x.azw3')
+
+    def test_send_over_mtp(self):
+        (self.folder / 'Internal shared storage' / 'Books').mkdir(parents=True)
+        storage = self.storage('Boox')
+        kind, name, books_dir = devices.detect(storage, 'Boox Go', True)
+        reader = devices.Device(storage.name(), kind, name, books_dir, storage=storage)
+        library = self.enterContext(temporary_library())
+        source = make_epub(self.directory / 'harbour.epub', title='A Quiet Harbour',
+                           authors=('Ada Lark',))
+        info = BookInfo(title='A Quiet Harbour', authors=['Ada Lark'], format='epub')
+        book_id = library.add_book(info, str(source), hash='', size=os.path.getsize(source))
+        fractions, remembered = [], []
+        sent = reader.send(library, FakeCovers(), book_id, progress=fractions.append,
+                           remember=lambda path: remembered.append(
+                               (os.path.basename(path), os.path.exists(path))))
+        self.assertEqual(sent, 'mtp://Boox/Internal%20shared%20storage/Books/'
+                               'A%20Quiet%20Harbour%20-%20Ada%20Lark.epub')
+        folder = self.folder / 'Internal shared storage' / 'Books'
+        self.assertEqual(os.listdir(folder), ['A Quiet Harbour - Ada Lark.epub'])
+        self.assertEqual(remembered, [('A Quiet Harbour - Ada Lark.epub', True)])
+        self.assertEqual(fractions[-1], 1.0)
+        self.assertEqual(fractions, sorted(fractions))
+        # Sent again: the rename cannot overwrite over MTP, so the old copy goes first.
+        reader.send(library, FakeCovers(), book_id)
+        self.assertEqual(os.listdir(folder), ['A Quiet Harbour - Ada Lark.epub'])
+        books = reader.list_books()
+        self.assertEqual(reader.match(library, books), {sent: book_id})
+
+    def test_cancel_over_mtp(self):
+        (self.folder / 'Books').mkdir()
+        storage = self.storage('Reader')
+        reader = devices.Device(storage.name(), 'generic', 'Reader',
+                                storage.name('Books'), storage=storage)
+        library = self.enterContext(temporary_library())
+        source = make_epub(self.directory / 'harbour.epub', title='A Quiet Harbour')
+        info = BookInfo(title='A Quiet Harbour', authors=[], format='epub')
+        book_id = library.add_book(info, str(source), hash='', size=os.path.getsize(source))
+        cancellable = Gio.Cancellable()
+
+        def cancel_at_upload(fraction):
+            if fraction >= 0.5:
+                cancellable.cancel()
+
+        with self.assertRaises(devices.Cancelled):
+            reader.send(library, FakeCovers(), book_id, progress=cancel_at_upload,
+                        cancellable=cancellable)
+        self.assertEqual(os.listdir(self.folder / 'Books'), [])
+
+    def test_monitor_looks_at_an_mtp_mount_in_a_thread(self):
+        (self.folder / 'Internal Storage' / 'documents').mkdir(parents=True)
+        storage = self.storage()
+        mount = fake_mtp.FakeMount(storage.root, 'Kindle')
+        monitor = devices.DeviceMonitor(watch_mounts=False)
+        added = []
+        monitor.connect('added', lambda _monitor, device: added.append(device))
+        monitor.add_mount(mount, storage)
+        context = GLib.MainContext.default()
+        for _ in range(200):
+            if added:
+                break
+            context.iteration(False)
+            time.sleep(0.01)
+        self.assertEqual([(device.kind, device.transport) for device in added],
+                         [('kindle', 'mtp')])
+        removed = []
+        monitor.connect('removed', lambda _monitor, device_id: removed.append(device_id))
+        monitor._on_mount_removed(None, mount)
+        self.assertEqual(removed, [added[0].id])
+
+    def test_other_schemes_are_not_readers(self):
+        root = fake_mtp.FakeFile(str(self.folder), 'smb://server/share/')
+        root.get_uri_scheme = lambda: 'smb'
+        monitor = devices.DeviceMonitor(watch_mounts=False)
+        monitor.add_mount(fake_mtp.FakeMount(root, 'Share'))
+        self.assertEqual(monitor.devices(), [])
 
 
 if __name__ == '__main__':

@@ -1,0 +1,74 @@
+{
+  "x-comment": [
+    "Flathub's manifest: the release build of a tagged version (FLATHUB.md).",
+    "Permissions, and why: docs/decisions.md ('The Flatpak sees the usual places; the file",
+    "chooser grants the rest'). network: Open Library, OPDS catalogues, KOReader sync, Send to",
+    "Kindle (SMTP), Look Up, Library Sharing's server (and Calibre's lock, an abstract socket).",
+    "~/Books: the library folder, made when missing. Documents, ~/Calibre Library: where",
+    "people keep books and Calibre libraries, read in place (written by Keep Calibre in Step,",
+    "trashed by Move to Trash). Downloads, read only: the welcome counts e-books there, which",
+    "are copied in. ~/.config/calibre: Calibre's record of where its library is. stardict:",
+    "offline dictionaries for Look Up. /run/media, /media, gvfs: e-readers on USB and MTP, and",
+    "their eject. speech-dispatcher: Read Aloud through the host's daemon. Avahi: Library",
+    "Sharing advertised on the network. Any other folder (a watched folder, a Calibre library",
+    "elsewhere, another library folder) comes through the file chooser portal, which keeps",
+    "the grant. The keyring is libsecret's Secret portal.",
+    "The GNOME runtime has WebKitGTK 6, PyGObject, pycairo, libsecret, bsdtar (CBR) and",
+    "blueprint-compiler 0.22; Poppler, lxml and speechd's client are built here."
+  ],
+  "id": "io.github.jackicus.Bookcase",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "51",
+  "sdk": "org.gnome.Sdk",
+  "command": "bookcase",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--share=network",
+    "--filesystem=~/Books:create",
+    "--filesystem=xdg-documents",
+    "--filesystem=~/Calibre Library",
+    "--filesystem=xdg-download:ro",
+    "--filesystem=~/.config/calibre:ro",
+    "--filesystem=~/.local/share/stardict:ro",
+    "--filesystem=/run/media",
+    "--filesystem=/media",
+    "--filesystem=xdg-run/gvfs",
+    "--talk-name=org.gtk.vfs.*",
+    "--filesystem=xdg-run/speech-dispatcher:ro",
+    "--system-talk-name=org.freedesktop.Avahi"
+  ],
+  "cleanup": [
+    "/include",
+    "/lib/pkgconfig",
+    "/share/pkgconfig",
+    "/share/gir-1.0",
+    "/share/man",
+    "*.la",
+    "*.a"
+  ],
+  "modules": [
+    "poppler.json",
+    "python3-lxml.json",
+    "python3-speechd.json",
+    {
+      "name": "bookcase",
+      "builddir": true,
+      "buildsystem": "meson",
+      "sources": [
+        {
+          "type": "git",
+          "url": "https://github.com/Jackicus/GNOME-Bookcase.git",
+          "tag": "v0.2.0",
+          "commit": "09c84514401dacabd8fbfe568f96b59ca865d572",
+          "x-checker-data": {
+            "type": "git",
+            "tag-pattern": "^v([\\d.]+)$"
+          }
+        }
+      ]
+    }
+  ]
+}

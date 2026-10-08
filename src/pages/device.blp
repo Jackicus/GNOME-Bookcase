@@ -6,7 +6,8 @@ using Adw 1;
 
 // A connected e-reader (pages/device.py): its storage, Eject, and the books on it, in two
 // lists: those not in the library (each with Add) and those that are (each opens the book).
-// Select turns on check boxes and a bottom bar to remove books from the device.
+// Select turns on check boxes and a bottom bar to remove books from the device. A Kobo adds
+// its collections switch and reading progress; any device a shelf's unsent books.
 template $BookcaseDevicePage: Adw.NavigationPage {
   title: _("Device");
 
@@ -154,6 +155,51 @@ template $BookcaseDevicePage: Adw.NavigationPage {
                   Image {
                     icon-name: "go-next-symbolic";
                     accessible-role: presentation;
+                  }
+                }
+              }
+
+              // A Kobo's own database: shelves as its collections (opted into per Kobo),
+              // and its reading progress brought into the library.
+              Adw.PreferencesGroup kobo_group {
+                visible: false;
+                title: _("Kobo");
+
+                Adw.SwitchRow collections_row {
+                  title: _("Sync Shelves as Kobo Collections");
+                  subtitle: _("Writes the Kobo’s database, with a backup beside it");
+                  subtitle-lines: 4;
+                }
+
+                Adw.ActionRow progress_row {
+                  visible: false;
+                  title: _("Bring Reading Progress From Kobo");
+                  subtitle-lines: 2;
+
+                  [suffix]
+                  Button progress_button {
+                    label: _("_Bring");
+                    use-underline: true;
+                    valign: center;
+                  }
+                }
+              }
+
+              // The books of a shelf that are not on the device yet, to send.
+              Adw.PreferencesGroup send_group {
+                visible: false;
+
+                Adw.ActionRow shelf_row {
+                  title: _("Send Unsent Books on a Shelf");
+                  subtitle-lines: 2;
+
+                  [suffix]
+                  MenuButton shelf_button {
+                    label: _("_Shelf");
+                    use-underline: true;
+                    always-show-arrow: true;
+                    valign: center;
+                    tooltip-text: _("Choose a Shelf");
                   }
                 }
               }

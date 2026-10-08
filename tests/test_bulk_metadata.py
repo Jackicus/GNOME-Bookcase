@@ -23,6 +23,23 @@ def server():
                    '/1-L.jpg': PNG})
 
 
+ORCHARD_SEARCH = {'docs': [
+    {'key': '/works/OL5W', 'title': 'The Orchard Murders', 'author_name': ['Tobias Wren'],
+     'first_publish_year': 2014, 'publisher': ['Lantern House'],
+     'number_of_pages_median': 304},
+    {'key': '/works/OL6W', 'title': 'The Orchard Murders: A Novel',
+     'author_name': ['Tobias Wren'], 'first_publish_year': 2019,
+     'publisher': ['Tidewater Press'], 'number_of_pages_median': 288},
+    {'key': '/works/OL7W', 'title': 'Orchard Murders', 'author_name': ['T. Wren'],
+     'first_publish_year': 2021},
+    {'key': '/works/OL8W', 'title': 'A Field Guide to Moths', 'author_name': ['Di Fen']},
+]}
+
+
+def orchard_server():
+    return Server({'/search.json': ORCHARD_SEARCH})
+
+
 class FakeCovers:
     def __init__(self, library):
         self.library = library
@@ -126,6 +143,29 @@ class BulkMetadataTest(unittest.TestCase):
             self.assertEqual(covers.data(one), cover_before)
             self.assertIsNone(covers.data(two))
 
+    def test_choices_and_pages(self):
+        with temporary_library() as library:
+            book_id = add_book(library, 'The Orchard Murders', ('Tobias Wren',))
+            lookup = bulk_metadata.run_lookup(bulk_metadata.Lookup.of(library.book(book_id)),
+                                              fetch=orchard_server())
+            self.assertEqual(lookup.status, 'found')
+            # Three plausible books; the moths are not one of them.
+            self.assertEqual([choice.key for choice in lookup.choices],
+                             ['/works/OL5W', '/works/OL6W', '/works/OL7W'])
+            self.assertEqual(lookup.chosen, 0)
+            found = bulk_metadata.changes(library.book(book_id), lookup)
+            details = {change.field: change.new for change in found['details']}
+            self.assertEqual(details['pages'], '304')
+            self.assertEqual(details['publisher'], 'Lantern House')
+            bulk_metadata.choose(lookup, 1, fetch=orchard_server())
+            self.assertEqual(lookup.chosen, 1)
+            self.assertEqual(lookup.candidate.publisher, 'Tidewater Press')
+            bulk_metadata.apply(library, FakeCovers(library), [lookup], {book_id: {'details'}})
+            book = library.book(book_id)
+            self.assertEqual((book.publisher, book.pages), ('Tidewater Press', 288))
+            with self.assertRaises(IndexError):
+                bulk_metadata.choose(lookup, 5)
+
     def test_queue_runs_and_cancels(self):
         with temporary_library() as library:
             ids = [add_book(library, 'A Quiet Harbour') for _n in range(3)]
@@ -170,6 +210,41 @@ class BulkDialogTest(unittest.TestCase):
             self.assertFalse(book.has_cover)
             self.assertEqual(app.toasts[-1], ('Found metadata for “A Quiet Harbour”', True))
             self.assertEqual(app.library.undo_label, 'Find Metadata')
+
+
+    def test_choosing_another_match(self):
+        from gi.repository import Adw
+
+        from bookcase.dialogs import bulk_metadata as dialog_module
+
+        with fake_app() as app:
+            book_id = add_book(app.library, 'The Orchard Murders', ('Tobias Wren',))
+            dialog = dialog_module.BulkMetadataDialog(app, [book_id], fetch=orchard_server())
+            dialog.start()
+            self.assertTrue(wait_for(lambda: dialog.finished, 5))
+            dialog.review()
+            row = dialog._review_rows[0]
+            combos = [child for child in _descendants(row) if isinstance(child, Adw.ComboRow)]
+            self.assertEqual(len(combos), 1)
+            self.assertEqual(combos[0].get_model().get_n_items(), 3)
+            self.assertEqual(dialog_module.choice_text(dialog.lookups[0].choices[1]),
+                             'The Orchard Murders: A Novel — Tobias Wren, 2019')
+            row.set_expanded(True)
+            combos[0].set_selected(1)
+            self.assertTrue(wait_for(lambda: not dialog._choosing, 5))
+            self.assertEqual(dialog.lookups[0].chosen, 1)
+            self.assertTrue(dialog._review_rows[0].get_expanded())  # kept open
+            dialog.apply()
+            self.assertEqual(app.library.book(book_id).publisher, 'Tidewater Press')
+            self.assertEqual(app.library.book(book_id).pages, 288)
+
+
+def _descendants(widget):
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _descendants(child)
+        child = child.get_next_sibling()
 
 
 if __name__ == '__main__':

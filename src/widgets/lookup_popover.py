@@ -4,15 +4,19 @@
 """Look Up in the reader: a word's definition and an encyclopedia summary, in the selection
 popover (a wide window) or a bottom sheet (a narrow one).
 
-    panel = LookupPanel(on_search=callback, service=None)   # a Gtk.Box
+    panel = LookupPanel(on_search=callback, service=None, settings=None)   # a Gtk.Box
     panel.show_text(text, language)     # a word: Dictionary and Wikipedia; more: Wikipedia
     panel.cancel()                      # forget the lookup running
-    present_sheet(window, text, language, on_search)        # the panel in a bottom sheet
+    present_sheet(window, text, language, on_search, settings=None)  # in a bottom sheet
     inline(window)                      # whether the window is wide enough for the popover
+    configure_service(service, settings)  # the Look Up preferences given to lookup.py
 
 The definitions come from lookup.service() (offline StarDict dictionaries first, else
 Wiktionary), the summaries from Wikipedia: fetched in a thread, cached, never blocking.
-Offline, the panel says so. Open in Browser opens the page the answer came from (Wiktionary
+Offline, the panel says so. With settings, each lookup follows the Look Up
+preferences (lookup-online, lookup-dictionary-order, lookup-dictionaries-off): online off,
+the panel has no Wikipedia and no Open in Browser, and a word no dictionary has is not
+found. Open in Browser opens the page the answer came from (Wiktionary
 for an offline dictionary's word); Search in Book calls on_search(text). The panel is the
 same for any view that emits the reader's 'selection' signal (an EPUB's, a PDF's).
 """
@@ -35,6 +39,20 @@ def inline(window):
     return window.get_width() >= INLINE_WIDTH
 
 
+def configure_service(service, settings):
+    """Hand the Look Up preferences to the lookup service (a stand-in without configure()
+    is left as it is)."""
+    configure = getattr(service, 'configure', None)
+    if settings is not None and configure is not None:
+        configure(online=settings.get_boolean('lookup-online'),
+                  order=settings.get_strv('lookup-dictionary-order'),
+                  disabled=settings.get_strv('lookup-dictionaries-off'))
+
+
+def online(settings):
+    return settings is None or settings.get_boolean('lookup-online')
+
+
 def _label(text, *classes, wrap=True, selectable=False):
     label = Gtk.Label(label=text, xalign=0, wrap=wrap, wrap_mode=Pango.WrapMode.WORD_CHAR,
                       max_width_chars=36, width_chars=1, selectable=selectable)
@@ -47,12 +65,13 @@ class LookupPanel(Gtk.Box):
     __gtype_name__ = 'BookcaseLookupPanel'
 
     def __init__(self, on_search=None, service=None, max_height=POPOVER_HEIGHT, min_height=-1,
-                 **kwargs):
+                 settings=None, **kwargs):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8, **kwargs)
         self.add_css_class('lookup-panel')
         self.set_size_request(PANEL_WIDTH, -1)
         self.on_search = on_search
         self.service = service
+        self.settings = settings
         self.text = ''
         self.language = 'en'
         self.answer = None  # the Article or Summary shown
@@ -116,8 +135,10 @@ class LookupPanel(Gtk.Box):
         self.text = ' '.join((text or '').split())[:200]
         self.language = language or 'en'
         word = lookup.is_word(self.text)
-        self.toggles.set_visible(word)
-        name = 'dictionary' if word else 'wikipedia'
+        connected = online(self.settings)
+        self.toggles.set_visible(word and connected)
+        self.browser_button.set_visible(connected)
+        name = 'dictionary' if word or not connected else 'wikipedia'
         if self.toggles.get_active_name() != name:
             self.toggles.set_active_name(name)  # loads, through notify::active-name
         else:
@@ -138,6 +159,7 @@ class LookupPanel(Gtk.Box):
 
     def _load(self):
         self.cancel()
+        configure_service(self._service(), self.settings)
         self.answer = None
         self._clear_result()
         self.source_label.set_label('')
@@ -178,6 +200,7 @@ class LookupPanel(Gtk.Box):
         for entry in article.entries:
             heading = entry.heading
             if entry.language:
+                # Translators: a dictionary entry's part of speech and language ("noun · English").
                 heading = _('{part_of_speech} · {language}').format(
                     part_of_speech=entry.heading, language=entry.language)
             title = _label(heading, 'heading')
@@ -208,7 +231,11 @@ class LookupPanel(Gtk.Box):
         self.stack.set_visible_child_name('result')
 
     def _show_error(self, error):
-        if getattr(error, 'offline', False):
+        if getattr(error, 'offline_only', False):
+            icon, title = 'accessories-dictionary-symbolic', _('Not in Your Dictionaries')
+            body = str(error) if lookup.is_word(self.text) else _(
+                'Online look-ups are turned off in Preferences')
+        elif getattr(error, 'offline', False):
             icon, title = 'network-offline-symbolic', _('No Connection')
             body = _('Looking up needs the internet, or a StarDict dictionary installed for '
                      'offline use')
@@ -242,7 +269,7 @@ class LookupPanel(Gtk.Box):
             self.on_search(self.text)
 
 
-def present_sheet(window, text, language, on_search=None, service=None):
+def present_sheet(window, text, language, on_search=None, service=None, settings=None):
     """The panel in a bottom sheet over `window` (a narrow one); returns the dialog. A window
     with set_dialog_open() hands its keys over while it is open."""
     dialog = Adw.Dialog(title=_('Look Up'), content_width=360,
@@ -260,6 +287,7 @@ def present_sheet(window, text, language, on_search=None, service=None):
             on_search(found)
 
     panel = LookupPanel(on_search=search, service=service, max_height=SHEET_HEIGHT,
+                        settings=settings,
                         min_height=SHEET_MIN_HEIGHT,
                         margin_start=12, margin_end=12, margin_bottom=12)
     toolbar.set_content(panel)

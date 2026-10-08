@@ -503,6 +503,8 @@ class Ring(Chart):
         number = self.layout(self.centre, scale=2.4 if self.size >= 140 else 2.0, bold=True)
         _w, number_height = number.get_pixel_size()
         caption = self.layout(self.caption) if self.caption else None
+        if caption is not None and caption.get_pixel_size()[0] > 2 * (radius - thickness):
+            caption = None  # large text: it would cross the ring (the card says it too)
         caption_height = caption.get_pixel_size()[1] if caption else 0
         y = cy - (number_height + caption_height) / 2
         self.draw_text(snapshot, number, cx, y, align='center')

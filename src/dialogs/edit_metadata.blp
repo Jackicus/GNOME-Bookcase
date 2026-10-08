@@ -245,6 +245,19 @@ template $BookcaseEditMetadataDialog: Adw.Dialog {
               enable-search: true;
             }
 
+            Adw.SpinRow pages_row {
+              title: _("Pages");
+              subtitle: _("0 when not known: Statistics then estimate it");
+              numeric: true;
+
+              adjustment: Adjustment {
+                lower: 0;
+                upper: 100000;
+                step-increment: 1;
+                page-increment: 10;
+              };
+            }
+
             Adw.ActionRow rating_row {
               title: _("Rating");
             }
@@ -316,6 +329,10 @@ template $BookcaseEditMetadataDialog: Adw.Dialog {
                 left-margin: 12;
                 right-margin: 12;
                 height-request: 160;
+
+                accessibility {
+                  label: _("Description");
+                }
               };
             }
           }

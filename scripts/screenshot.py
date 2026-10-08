@@ -6,9 +6,10 @@
 
     scripts/headless.sh scripts/screenshot.py [out.png] [--light] [--size WxH]
                           [--page KEY] [--book TITLE] [--read TITLE] [--sidebar]
-                          [--dialog edit|fetch|shelf|preferences|about|shortcuts|send|add|
+                          [--dialog edit|fetch|shelf|preferences|about|shortcuts|send|add|convert|
                            kindle-setup|send-kindle|clippings|bulk|bulk-progress]
                           [--search QUERY] [--scroll PX] [--device] [--wait MS]
+                          [--scene stacks|opened|year|review|downloads] [--text-scale 1.5]
 
 Builds nothing itself: run meson install -C build (or scripts/run.sh) first, and run it
 through scripts/headless.sh so the window opens on a private display. The demo library
@@ -30,6 +31,8 @@ twice, --filters the filter bar with choices (format=epub,rating=4), --menu the 
 menu, --go-to TEXT the Go To dialog, --outside the reader on a book read without adding it.
 --page discover lists the invented catalogue of scripts/demo_catalog.py (served on
 127.0.0.1) first; --catalog opens its New Arrivals, --entry TITLE a book's sheet in it.
+--scene sets up one of scripts/polish_shots.py's: All Books' series stacks, Recently Opened
+on Home, last year's statistics, its Year in Review, the catalogue's Downloads popover.
 In the narrow layout the shot shows the sidebar, or the page when
 --page is given (--sidebar keeps the sidebar).
 """
@@ -41,6 +44,7 @@ import sys
 import catalog_shots
 import harness
 import kindle_shots
+import polish_shots
 
 parser = argparse.ArgumentParser()
 parser.add_argument('out', nargs='?', default=os.path.join(harness.ROOT, 'build',
@@ -52,7 +56,7 @@ parser.add_argument('--book', metavar='TITLE')
 parser.add_argument('--read', metavar='TITLE')
 parser.add_argument('--sidebar', action='store_true')
 parser.add_argument('--dialog', choices=['edit', 'fetch', 'shelf', 'preferences', 'about',
-                                         'shortcuts', 'send', 'add',
+                                         'shortcuts', 'send', 'add', 'convert',
                                          *kindle_shots.NAMES])
 parser.add_argument('--search', metavar='QUERY')
 parser.add_argument('--scroll', metavar='PX', type=int, default=0)
@@ -72,6 +76,10 @@ parser.add_argument('--go-to', metavar='TEXT', help='the Go To dialog (Ctrl+K), 
 parser.add_argument('--catalog', action='store_true',
                     help="the invented catalogue's New Arrivals (scripts/demo_catalog.py)")
 parser.add_argument('--entry', metavar='TITLE', help="a book's sheet in that catalogue")
+parser.add_argument('--scene', choices=polish_shots.NAMES,
+                    help='a scene of scripts/polish_shots.py')
+parser.add_argument('--text-scale', metavar='FACTOR', type=float, default=1.0,
+                    help="large text: GNOME's Text Scaling Factor (1.5 is Large Text)")
 args = parser.parse_args()
 if args.welcome or args.duplicates:
     import scenes
@@ -80,6 +88,8 @@ if args.welcome or args.duplicates:
         scenes.welcome()
     else:
         duplicate_ids = scenes.duplicates()
+if args.scene:
+    polish_shots.prepare(args.scene)
 width, height = (int(n) for n in args.size.split('x'))
 if args.page.startswith('device'):
     args.device = True
@@ -88,6 +98,11 @@ app = harness.make_app('Screenshot', light=args.light, size=(width, height),
                        device=args.device)
 
 from gi.repository import Adw, GLib, Graphene, Gtk  # noqa: E402  (after make_app)
+
+if args.text_scale != 1.0:
+    # What GNOME's Text Scaling Factor does: the font resolution, 96 dpi times the factor.
+    app.connect('startup', lambda _app: Gtk.Settings.get_default().set_property(
+        'gtk-xft-dpi', int(96 * 1024 * args.text_scale)))
 
 steps = []
 failed = False
@@ -155,6 +170,10 @@ def open_dialog(window):
         from bookcase.dialogs import send
 
         send.present(app, window, [book_id()])
+    elif name == 'convert':
+        from bookcase.dialogs import convert
+
+        convert.present(app, window, book_id())
 
 
 def search(window):
@@ -331,6 +350,8 @@ def plan():
     if args.catalog or args.entry or args.page == 'discover':
         catalog_shots.setup(app)
     steps.append((resolve_page, 600))
+    if args.scene:
+        steps.extend(polish_shots.steps(app, args.scene))
     if args.catalog or args.entry:
         steps.append((catalog_shots.open_catalog, 2500))
     if args.entry:

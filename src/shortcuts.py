@@ -62,7 +62,10 @@ READER = {
     'leave-fullscreen': ['Escape'],
     'go-to': ['<primary>j'],
     'info': ['<primary>i'],
+    'print': ['<primary>p'],
     'read-aloud': ['<primary><shift>s'],
+    'read-aloud-next': ['<primary><shift>Right'],
+    'read-aloud-previous': ['<primary><shift>Left'],
     'close': ['<primary>w'],
 }
 
@@ -133,12 +136,15 @@ def sections():
             (_('Add a Bookmark'), accelerator('bookmark')),
             (_('Copy the Selected Text'), accelerator('copy')),
             (_('Highlights and Bookmarks'), accelerator('annotations')),
-            (_('Larger Text (Zoom In, for a PDF)'), accelerator('bigger')),
+            (_('Larger Text (Zoom In, for a PDF or a Comic)'), accelerator('bigger')),
             (_('Smaller Text (Zoom Out)'), accelerator('smaller')),
             (_('Reset Text Size (Zoom)'), accelerator('reset-size')),
             (_('Go to a Location'), accelerator('go-to')),
             (_('Book Details'), accelerator('info')),
+            (_('Print (a PDF)'), accelerator('print')),
             (_('Read Aloud'), accelerator('read-aloud')),
+            (_('Next Sentence, Reading Aloud'), accelerator('read-aloud-next')),
+            (_('Previous Sentence, Reading Aloud'), accelerator('read-aloud-previous')),
             (_('Fullscreen'), accelerator('fullscreen')),
         ]),
     ]
