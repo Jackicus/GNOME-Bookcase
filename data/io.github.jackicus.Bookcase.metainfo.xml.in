@@ -5,24 +5,27 @@
   <project_license>GPL-2.0-or-later</project_license>
 
   <name>Bookcase@NAME_SUFFIX@</name>
-  <summary>Flashcards that come back just before you forget</summary>
+  <summary>Keep your e-books in order and read them</summary>
   <description>
     <p>
-      Bookcase is a flashcard app for GNOME. Write a question and an answer, or a sentence
-      with a gap in it, and Bookcase shows the card again just before you would forget it,
-      using the FSRS algorithm: a few minutes of review a day keeps thousands of facts.
+      Bookcase keeps your e-books in one place and lets you read them. Add the books you
+      have, and it shows them as a shelf of covers, sorted into authors, series and genres,
+      with the book you are reading always one click away.
     </p>
     <p>
-      It opens Anki decks (.apkg files), including the ones shared by other learners, with
-      their pictures, sounds, scheduling and progress, and exports decks Anki can open.
+      Your files stay where you keep them: Bookcase reads a folder or a Calibre library in
+      place and never renames, moves or rewrites a book. Edits to titles, series and covers
+      live in its own library, and go with a copy when you send a book to your e-reader.
     </p>
     <ul>
-      <li>Decks, nested as deep as you like, with new, learning and due counts</li>
-      <li>Basic, reversed, type-in-the-answer, cloze and image occlusion cards</li>
-      <li>Review with the keyboard: Space to turn the card, 1 to 4 to grade it</li>
-      <li>Undo anything, from a grade to a deleted deck</li>
-      <li>Statistics: a review heatmap, what is due ahead, retention and card counts</li>
-      <li>Search across every card, with Anki's search syntax</li>
+      <li>EPUB, Kobo EPUB, MOBI, AZW3, FB2, CBZ comics, PDF and plain text</li>
+      <li>A reader with pages side by side, your choice of type and paper, highlights,
+        notes and bookmarks</li>
+      <li>Series in order, shelves of your own, and smart shelves that fill themselves</li>
+      <li>Fix titles, authors and covers by hand or from Open Library</li>
+      <li>Send books to a Kobo, Kindle or other e-reader over USB</li>
+      <li>Open a Calibre library as it is, without changing it</li>
+      <li>Undo anything, from an edit to a removed shelf</li>
     </ul>
   </description>
 
@@ -40,7 +43,13 @@
 
   <provides>
     <binary>bookcase</binary>
-    <mediatype>application/x-anki-package</mediatype>
+    <mediatype>application/epub+zip</mediatype>
+    <mediatype>application/x-mobipocket-ebook</mediatype>
+    <mediatype>application/vnd.amazon.mobi8-ebook</mediatype>
+    <mediatype>application/x-fictionbook+xml</mediatype>
+    <mediatype>application/x-zip-compressed-fb2</mediatype>
+    <mediatype>application/vnd.comicbook+zip</mediatype>
+    <mediatype>application/x-cbz</mediatype>
   </provides>
 
   <content_rating type="oars-1.1"/>
@@ -55,22 +64,34 @@
   </supports>
 
   <branding>
-    <color type="primary" scheme_preference="light">#99c1f1</color>
-    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+    <color type="primary" scheme_preference="light">#e9d3bb</color>
+    <color type="primary" scheme_preference="dark">#63452c</color>
   </branding>
 
   <screenshots>
     <screenshot type="default" environment="gnome">
-      <caption>A deck's overview: what is due today, and Study</caption>
-      <image type="source" width="1000" height="720">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/deck-light.png</image>
+      <caption>Home: the books you are reading, and what was added lately</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/home-light.png</image>
     </screenshot>
     <screenshot environment="gnome">
-      <caption>Reviewing a card, the answer shown, the grades below</caption>
-      <image type="source" width="1000" height="720">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/review-light.png</image>
+      <caption>Reading a novel, two pages side by side</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/reader-light.png</image>
     </screenshot>
     <screenshot environment="gnome">
-      <caption>Statistics: the year's reviews as a heatmap, what is due ahead</caption>
-      <image type="source" width="1000" height="720">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/stats-dark.png</image>
+      <caption>A book's details: its series, progress and highlights</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/book-light.png</image>
+    </screenshot>
+    <screenshot environment="gnome">
+      <caption>The whole library as covers, in the dark style</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/library-dark.png</image>
+    </screenshot>
+    <screenshot environment="gnome">
+      <caption>Reading at night</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/reader-dark.png</image>
+    </screenshot>
+    <screenshot environment="gnome">
+      <caption>A Kobo plugged in: what is on it, and what to send</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/device-light.png</image>
     </screenshot>
   </screenshots>
 
@@ -79,10 +100,11 @@
       <description>
         <p>The first release.</p>
         <ul>
-          <li>Decks, note types and cards: basic, reversed, type-in, cloze and image occlusion</li>
-          <li>FSRS scheduling with a desired-retention slider and an optimizer</li>
-          <li>Anki packages (.apkg, .colpkg) in and out, and CSV/TSV import</li>
-          <li>Search with Anki's syntax, statistics, and undo for every change</li>
+          <li>A library of covers with authors, series, tags, shelves and smart shelves</li>
+          <li>A reader for EPUB, MOBI, AZW3, FB2 and comics, with highlights and notes</li>
+          <li>Metadata and covers by hand or from Open Library</li>
+          <li>Calibre libraries and watched folders read in place</li>
+          <li>Sending to Kobo, Kindle and other e-readers over USB</li>
         </ul>
       </description>
     </release>

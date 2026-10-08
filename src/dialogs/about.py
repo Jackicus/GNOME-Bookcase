@@ -3,8 +3,8 @@
 
 """The About dialog (app.about): built from the app's metainfo, which the gresource carries
 (metainfo.xml), so its name, developer, links, licence and release notes are the metainfo's;
-with the debug information a bug report wants (versions, the collection's size, never its
-contents).
+with the debug information a bug report wants (versions, the library's size, never its
+contents). The dialog steps the window's keyed actions aside while it is open.
 
     about.present(app, parent)
 """
@@ -37,13 +37,20 @@ def debug_info(app):
                   f'{WebKit.get_micro_version()}')
     except (ValueError, ImportError):
         webkit = 'not available'
-    collection = app.collection
+    library = app.library
+    try:
+        folders = library.folders()
+        kinds = {kind: sum(1 for folder in folders if folder.kind == kind)
+                 for kind in ('watched', 'calibre')}
+        size = (f'Library: {library.count()} books, {len(library.shelves())} shelves, '
+                f'{kinds["watched"]} watched folders, {kinds["calibre"]} Calibre libraries')
+    except Exception as error:  # the information is for a bug report: never fail it
+        size = f'Library: unknown ({type(error).__name__})'
     lines = [
         f'Bookcase {app.version} ({app.get_application_id()})',
         f'Python {platform.python_version()}, PyGObject {gi.__version__}',
         f'GTK {gtk}, libadwaita {adw}, GLib {glib}, WebKitGTK {webkit}',
-        f'Collection: {collection.note_count()} notes, {collection.card_count()} cards'
-        + (' (demo)' if app.demo else ''),
+        size + (' (demo)' if app.demo else ''),
     ]
     return '\n'.join(lines) + '\n'
 
@@ -54,8 +61,9 @@ def build(app):
     about.set_application_icon(app.get_application_id())
     about.set_developers(DEVELOPERS)
     about.set_copyright('© 2026 Jack Tully')
-    about.set_comments(_('Flashcards with spaced repetition, for GNOME. Opens and writes '
-                         'Anki decks; schedules with FSRS.'))
+    about.set_comments(_('Keep your e-books in order and read them. Bookcase reads Calibre '
+                         'libraries and folders where they are, and never changes your '
+                         'files.'))
     # Translators: your names, one per line (with an address if you like), for the About
     # dialog's credits.
     credits = _('translator-credits')
@@ -68,5 +76,8 @@ def build(app):
 
 def present(app, parent):
     about = build(app)
+    if parent is not None and hasattr(parent, 'set_dialog_open'):
+        parent.set_dialog_open(True)
+        about.connect('closed', lambda *_args: parent.set_dialog_open(False))
     about.present(parent)
     return about

@@ -4,4 +4,130 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseAddBooksDialog: Adw.Dialog {}
+// Adding books, scanning a watched folder, linking a Calibre library (dialogs/add_books.py):
+// the progress ("working": n of m, the file, Cancel), then the summary ("done": what was
+// added, what was already there, what failed and why).
+template $BookcaseAddBooksDialog: Adw.Dialog {
+  content-width: 460;
+  width-request: 360;
+  height-request: 294;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Stack stack {
+      vhomogeneous: false;
+      transition-type: crossfade;
+
+      StackPage {
+        name: "working";
+
+        child: Box {
+          orientation: vertical;
+          spacing: 12;
+          margin-top: 24;
+          margin-bottom: 24;
+          margin-start: 24;
+          margin-end: 24;
+
+          Label progress_label {
+            xalign: 0;
+
+            styles [
+              "heading",
+              "numeric",
+            ]
+          }
+
+          ProgressBar progress_bar {}
+
+          Label file_label {
+            xalign: 0;
+            ellipsize: middle;
+
+            styles [
+              "caption",
+              "dimmed",
+            ]
+          }
+
+          Button cancel_button {
+            label: _("_Cancel");
+            use-underline: true;
+            halign: center;
+            margin-top: 12;
+
+            styles [
+              "pill",
+            ]
+          }
+        };
+      }
+
+      StackPage {
+        name: "done";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+          propagate-natural-height: true;
+          max-content-height: 560;
+
+          child: Box {
+            orientation: vertical;
+            spacing: 18;
+            margin-top: 6;
+            margin-bottom: 24;
+            margin-start: 12;
+            margin-end: 12;
+
+            Image summary_icon {
+              icon-name: "object-select-symbolic";
+              pixel-size: 48;
+              margin-top: 6;
+              accessible-role: presentation;
+            }
+
+            Label summary_title {
+              wrap: true;
+              justify: center;
+
+              styles [
+                "title-2",
+              ]
+            }
+
+            Label summary_label {
+              wrap: true;
+              justify: center;
+              visible: false;
+
+              styles [
+                "dimmed",
+              ]
+            }
+
+            ListBox summary_list {
+              selection-mode: none;
+
+              styles [
+                "boxed-list",
+              ]
+            }
+
+            Button done_button {
+              label: _("_Done");
+              use-underline: true;
+              halign: center;
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            }
+          };
+        };
+      }
+    };
+  };
+}

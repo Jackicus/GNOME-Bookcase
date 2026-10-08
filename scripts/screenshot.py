@@ -5,19 +5,25 @@
 """Render the app's window to a PNG, for checking UI changes without a human.
 
     scripts/headless.sh scripts/screenshot.py [out.png] [--light] [--size WxH]
-                          [--page KEY] [--study [DECK]] [--answer] [--sidebar]
-                          [--dialog add|new-deck|options|custom-study|import|export|
-                                    preferences|about|shortcuts|edit]
-                          [--search QUERY] [--scroll PX]
+                          [--page KEY] [--book TITLE] [--read TITLE] [--sidebar]
+                          [--dialog edit|fetch|shelf|preferences|about|shortcuts|send|add]
+                          [--search QUERY] [--scroll PX] [--device] [--wait MS]
 
 Builds nothing itself: run meson install -C build (or scripts/run.sh) first, and run it
-through scripts/headless.sh so the window opens on a private display. The demo collection
+through scripts/headless.sh so the window opens on a private display. The demo library
 (build/demo, generated when missing) is what it shows; settings go to a memory backend and
-animations are off. --page is a sidebar key: today, browse, stats, or deck:NAME (a deck's
-full name, "Spanish::Verbs"). --study pushes the review page of DECK (the --page's deck, or
-the first deck with cards due), --answer with its answer shown. --dialog opens a dialog over
-the page and shoots it. --search types a query into the browser. In the narrow layout the
-shot shows the sidebar, or the page when --page is given (--sidebar keeps the sidebar).
+animations are off.
+
+--page is a sidebar key: home, all, authors, series, tags, status:reading (unread,
+finished), shelf:NAME (a shelf's name or id), device:NAME (a device's name or id; --device
+plugs in the demo Kobo, build/demo-device, and --page device shows the first device).
+--book pushes a book's details page (TITLE is matched as a search would). --read opens the
+reader window for the book and shoots that window once its page has rendered (BookView's
+'relocated' signal, or --wait milliseconds at most). --dialog opens a dialog over the page
+(edit, fetch, send and add are for --book's book, or the first book; fetch searches Open
+Library, so it needs the network; shelf is New Smart Shelf) and shoots it. --search
+searches the library. In the narrow layout the shot shows the sidebar, or the page when
+--page is given (--sidebar keeps the sidebar).
 """
 
 import argparse
@@ -30,84 +36,96 @@ parser = argparse.ArgumentParser()
 parser.add_argument('out', nargs='?', default=os.path.join(harness.ROOT, 'build',
                                                             'screenshot.png'))
 parser.add_argument('--light', action='store_true')
-parser.add_argument('--size', default='1000x720')
-parser.add_argument('--page', default='today')
-parser.add_argument('--study', nargs='?', const='', metavar='DECK')
-parser.add_argument('--answer', action='store_true')
+parser.add_argument('--size', default='1100x760')
+parser.add_argument('--page', default='home')
+parser.add_argument('--book', metavar='TITLE')
+parser.add_argument('--read', metavar='TITLE')
 parser.add_argument('--sidebar', action='store_true')
-parser.add_argument('--dialog', choices=['add', 'new-deck', 'options', 'custom-study', 'import',
-                                         'export', 'preferences', 'about', 'shortcuts', 'edit'])
+parser.add_argument('--dialog', choices=['edit', 'fetch', 'shelf', 'preferences', 'about',
+                                         'shortcuts', 'send', 'add'])
 parser.add_argument('--search', metavar='QUERY')
 parser.add_argument('--scroll', metavar='PX', type=int, default=0)
+parser.add_argument('--device', action='store_true')
+parser.add_argument('--wait', metavar='MS', type=int, default=8000,
+                    help='the longest --read waits for the book to render')
 args = parser.parse_args()
 width, height = (int(n) for n in args.size.split('x'))
+if args.page.startswith('device'):
+    args.device = True
 
-app = harness.make_app('Screenshot', light=args.light, size=(width, height))
+app = harness.make_app('Screenshot', light=args.light, size=(width, height),
+                       device=args.device)
 
 from gi.repository import Adw, GLib, Graphene, Gtk  # noqa: E402  (after make_app)
 
 steps = []
 failed = False
+target_window = None
+
+
+def find_book(title):
+    """The id of the book whose title is `title` (exactly, else the first a search finds)."""
+    for book in app.library.books(query=f'title:"{title}"'):
+        if book.title.casefold() == title.casefold():
+            return book.id
+    books = app.library.books(query=title, limit=1)
+    if not books:
+        sys.exit(f'screenshot: no book called {title}')
+    return books[0].id
 
 
 def resolve_page(window):
     key = args.page
-    if key.startswith('deck:') and not key[5:].isdigit():
-        deck = app.collection.deck_by_name(key[5:])
-        if deck is None:
-            sys.exit(f'screenshot: no deck called {key[5:]}')
-        key = f'deck:{deck.id}'
+    if key.startswith('shelf:') and not key[6:].isdigit():
+        shelf = next((s for s in app.library.shelves() if s.name == key[6:]), None)
+        if shelf is None:
+            sys.exit(f'screenshot: no shelf called {key[6:]}')
+        key = f'shelf:{shelf.id}'
+    elif key.startswith('device'):
+        devices = app.devices.devices()
+        name = key[7:]
+        device = next((d for d in devices if not name or name in (d.name, d.id)), None)
+        if device is None:
+            sys.exit('screenshot: no device plugged in')
+        key = f'device:{device.id}'
     window.show_root(key)
 
 
-def study(window):
-    name = args.study
-    if name:
-        deck = app.collection.deck_by_name(name)
-        deck_id = deck.id if deck else None
-    else:
-        deck_id = window.current_deck_id()
-    if deck_id is None:
-        for node in app.scheduler.tree():
-            if node.total:
-                deck_id = node.deck.id
-                break
-    if deck_id is None:
-        sys.exit('screenshot: no deck to study')
-    page = window.study(deck_id)
-    if args.answer and hasattr(page, 'show_answer'):
-        GLib.timeout_add(600, lambda: (page.show_answer(), GLib.SOURCE_REMOVE)[1])
+def book_id():
+    if args.book:
+        return find_book(args.book)
+    if args.read:
+        return find_book(args.read)
+    return app.library.books(limit=1)[0].id
 
 
 def open_dialog(window):
-    actions = {'add': 'app.add', 'new-deck': 'app.new-deck', 'import': 'app.import',
-               'export': 'app.export', 'preferences': 'app.preferences',
-               'about': 'app.about', 'shortcuts': 'app.shortcuts',
-               'options': 'win.deck-options', 'custom-study': None, 'edit': None}
-    name = actions[args.dialog]
-    if args.dialog == 'custom-study':
-        from bookcase.dialogs import custom_study
+    name = args.dialog
+    if name in ('preferences', 'about', 'shortcuts'):
+        app.activate_action(name)
+    elif name == 'add':
+        # Adding the book's own file again: the dialog's report of a duplicate.
+        from bookcase.dialogs import add_books
 
-        custom_study.present(app, window, window.current_deck_id())
-    elif args.dialog == 'edit':
-        from bookcase.dialogs import add_edit
+        add_books.present(app, window, [app.library.files(book_id())[0].path])
+    elif name in ('edit', 'fetch'):
+        from bookcase.dialogs import edit_metadata
 
-        note_id = app.collection.find_notes('deck:Spanish')[0]
-        add_edit.present_edit(app, window, note_id)
-    elif args.dialog == 'import' and os.environ.get('BOOKCASE_IMPORT_FILE'):
-        from bookcase.dialogs import import_export
+        dialog = edit_metadata.present(app, window, [book_id()])
+        if name == 'fetch':  # Find Metadata… over it: this searches Open Library, online
+            GLib.timeout_add(600, lambda: dialog.find_metadata() and GLib.SOURCE_REMOVE)
+    elif name == 'shelf':
+        from bookcase.dialogs import shelf
 
-        import_export.present_import(app, window, os.environ['BOOKCASE_IMPORT_FILE'])
-    elif name.startswith('app.'):
-        app.activate_action(name[4:])
-    else:
-        window.activate_action(name)
+        shelf.present_new(app, window, smart=True)
+    elif name == 'send':
+        from bookcase.dialogs import send
+
+        send.present(app, window, [book_id()])
 
 
 def search(window):
-    page = window.navigation_view.get_visible_page()
-    if hasattr(page, 'search'):
-        page.search(args.search)
+    window.search(args.search)
 
 
 def scroll(window):
@@ -118,6 +136,39 @@ def scroll(window):
             adjustment.set_value(min(args.scroll,
                                      adjustment.get_upper() - adjustment.get_page_size()))
             return
+
+
+def read(window):
+    """Open the reader and shoot it when the book has drawn its first page."""
+    global target_window
+    before = set(Gtk.Window.list_toplevels())
+    app.open_book(find_book(args.read))
+    reader = next((w for w in Gtk.Window.list_toplevels()
+                   if w not in before and isinstance(w, Adw.ApplicationWindow)), None)
+    if reader is None:
+        raise RuntimeError('the reader window did not open')
+    target_window = reader
+    from bookcase.widgets.book_view import BookView
+
+    views = list(harness.descendants(reader, BookView))
+    if not views or not reader.get_visible():
+        raise RuntimeError('the reader window did not open the book')
+    done = []
+
+    def ready(*_args):
+        if not done:
+            done.append(True)
+            # One more frame or two for the page's fonts and images to settle.
+            GLib.timeout_add(900, shoot)
+        return GLib.SOURCE_REMOVE
+
+    def error(_view, message):
+        print(f'screenshot: the book did not open: {message}', file=sys.stderr)
+
+    views[0].connect('relocated', ready)
+    views[0].connect('error', error)
+    GLib.timeout_add(args.wait, ready)
+    return 'wait'
 
 
 def dialog_window(window):
@@ -160,13 +211,14 @@ def shoot():
 
 
 def _shoot():
-    window = app.get_active_window()
+    window = app.window() if hasattr(app, 'window') else app.get_active_window()
     if steps:
         step, delay = steps.pop(0)
-        step(window)
+        if step(window) == 'wait':
+            return GLib.SOURCE_REMOVE  # the step calls shoot() itself
         GLib.timeout_add(delay, shoot)
         return GLib.SOURCE_REMOVE
-    target = dialog_window(window)
+    target = target_window or dialog_window(window)
     paintable = Gtk.WidgetPaintable(widget=target)
     snapshot = Gtk.Snapshot()
     paintable.snapshot(snapshot, target.get_width(), target.get_height())
@@ -184,18 +236,20 @@ def on_activate(_app):
 
 def plan():
     window = app.get_active_window()
-    steps.append((resolve_page, 400))
+    steps.append((resolve_page, 600))
     if window.split_view.get_collapsed() and args.sidebar:
         steps.append((lambda w: w.split_view.set_show_content(False), 300))
-    if args.study is not None:
-        steps.append((study, 1500))
     if args.search:
         steps.append((search, 1200))
+    if args.book:
+        steps.append((lambda w: w.show_book(find_book(args.book)), 1000))
     if args.scroll:
         steps.append((scroll, 600))
     if args.dialog:
         steps.append((open_dialog, 1200))
-    GLib.timeout_add(800, shoot)
+    if args.read:
+        steps.append((read, 0))
+    GLib.timeout_add(1000, shoot)
     return GLib.SOURCE_REMOVE
 
 

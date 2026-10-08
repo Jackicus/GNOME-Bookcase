@@ -1,0 +1,17 @@
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!-- SPDX-FileCopyrightText: 2026 Jack Tully -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Book content is untrusted: no script but ours (and none of the book's), nothing from
+     outside bookcase://reader/, sections and resources only as blob: and data: URLs. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:; media-src 'self' blob: data:; connect-src 'self' blob: data:; frame-src blob: data:; object-src 'none'; base-uri 'none'; form-action 'none';">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="reader.css">
+<script type="module" src="reader.js"></script>
+</head>
+<body>
+<div id="footnote" hidden></div>
+</body>
+</html>

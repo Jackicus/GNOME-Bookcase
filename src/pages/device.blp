@@ -4,4 +4,201 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseDevicePage: Adw.NavigationPage {}
+// A connected e-reader (pages/device.py): its storage, Eject, and the books on it, in two
+// lists: those not in the library (each with Add) and those that are (each opens the book).
+// Select turns on check boxes and a bottom bar to remove books from the device.
+template $BookcaseDevicePage: Adw.NavigationPage {
+  title: _("Device");
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [end]
+      Button eject_button {
+        icon-name: "media-eject-symbolic";
+        tooltip-text: _("Eject");
+      }
+
+      [end]
+      ToggleButton select_button {
+        icon-name: "selection-mode-symbolic";
+        tooltip-text: _("Select");
+        sensitive: false;
+      }
+    }
+
+    content: Stack stack {
+      transition-type: crossfade;
+
+      StackPage {
+        name: "loading";
+
+        child: Adw.Spinner {
+          halign: center;
+          valign: center;
+          width-request: 32;
+          height-request: 32;
+        };
+      }
+
+      StackPage {
+        name: "gone";
+
+        child: Adw.StatusPage gone_status {
+          icon-name: "tablet-symbolic";
+          title: _("Device Disconnected");
+        };
+      }
+
+      StackPage {
+        name: "books";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 720;
+            tightening-threshold: 560;
+
+            child: Box {
+              orientation: vertical;
+              spacing: 24;
+              margin-top: 24;
+              margin-bottom: 24;
+              margin-start: 12;
+              margin-end: 12;
+
+              // The device and its storage.
+              Box {
+                orientation: vertical;
+                spacing: 12;
+
+                styles [
+                  "card",
+                  "device-storage",
+                ]
+
+                Box {
+                  spacing: 12;
+
+                  Image kind_image {
+                    icon-name: "ebook-reader";
+                    pixel-size: 48;
+                    accessible-role: presentation;
+                  }
+
+                  Box {
+                    orientation: vertical;
+                    valign: center;
+                    hexpand: true;
+
+                    Label name_label {
+                      xalign: 0;
+                      ellipsize: end;
+
+                      styles [
+                        "heading",
+                      ]
+                    }
+
+                    Label summary_label {
+                      xalign: 0;
+                      ellipsize: end;
+
+                      styles [
+                        "caption",
+                        "dimmed",
+                      ]
+                    }
+                  }
+                }
+
+                LevelBar space_bar {
+                  min-value: 0;
+                  max-value: 1;
+                  mode: continuous;
+                }
+
+                Label space_label {
+                  xalign: 0;
+                  wrap: true;
+
+                  styles [
+                    "caption",
+                    "numeric",
+                  ]
+                }
+              }
+
+              Adw.StatusPage empty_status {
+                visible: false;
+                title: _("No Books on This Device");
+                description: _("Send books to it with Send to Device… in a book’s menu");
+
+                styles [
+                  "compact",
+                ]
+              }
+
+              Adw.PreferencesGroup outside_group {
+                title: _("Not in Your Library");
+                description: _("Add a copy to keep it in Bookcase");
+
+                header-suffix: Button add_all_button {
+                  label: _("_Add All");
+                  use-underline: true;
+                  valign: center;
+
+                  styles [
+                    "flat",
+                  ]
+                };
+
+                ListBox outside_list {
+                  selection-mode: none;
+
+                  styles [
+                    "boxed-list",
+                  ]
+                }
+              }
+
+              Adw.PreferencesGroup inside_group {
+                title: _("In Your Library");
+
+                ListBox inside_list {
+                  selection-mode: none;
+
+                  styles [
+                    "boxed-list",
+                  ]
+                }
+              }
+            };
+          };
+        };
+      }
+    };
+
+    [bottom]
+    ActionBar selection_bar {
+      revealed: false;
+
+      [start]
+      Label selection_label {
+        ellipsize: end;
+      }
+
+      [end]
+      Button remove_button {
+        label: _("_Remove…");
+        use-underline: true;
+        sensitive: false;
+
+        styles [
+          "destructive-action",
+        ]
+      }
+    }
+  };
+}

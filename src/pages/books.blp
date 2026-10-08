@@ -4,4 +4,219 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseBooksPage: Adw.NavigationPage {}
+// A grid (or list) of books: All Books, a reading state, a shelf, an author's, a series', a
+// tag's or a search's books (pages/books.py).
+template $BookcaseBooksPage: Adw.NavigationPage {
+  title: _("All Books");
+
+  child: Adw.BreakpointBin breakpoint_bin {
+    width-request: 360;
+    height-request: 240;
+
+    Adw.Breakpoint compact_breakpoint {
+      condition ("max-width: 520sp")
+    }
+
+    child: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        title-widget: Adw.WindowTitle window_title {
+          title: _("All Books");
+        };
+
+        [end]
+        MenuButton sort_button {
+          icon-name: "view-sort-descending-symbolic";
+          tooltip-text: _("Sort and View");
+          menu-model: view_menu;
+        }
+
+        [end]
+        ToggleButton search_button {
+          icon-name: "system-search-symbolic";
+          tooltip-text: _("Search");
+          active: bind search_bar.search-mode-enabled bidirectional;
+        }
+      }
+
+      [top]
+      SearchBar search_bar {
+        key-capture-widget: breakpoint_bin;
+
+        child: Adw.Clamp {
+          maximum-size: 520;
+
+          child: SearchEntry search_entry {
+            placeholder-text: _("Search title, author, series, tags…");
+            hexpand: true;
+            search-delay: 200;
+          };
+        };
+      }
+
+      content: Stack stack {
+        transition-type: crossfade;
+
+        StackPage {
+          name: "grid";
+
+          child: ScrolledWindow grid_scroller {
+            hscrollbar-policy: never;
+
+            child: GridView grid_view {
+              max-columns: 30;
+              min-columns: 2;
+              enable-rubberband: true;
+
+              styles [
+                "book-grid",
+              ]
+            };
+          };
+        }
+
+        StackPage {
+          name: "list";
+
+          child: ScrolledWindow {
+            child: ColumnView column_view {
+              show-column-separators: false;
+              show-row-separators: true;
+              reorderable: false;
+              enable-rubberband: true;
+
+              styles [
+                "book-list",
+              ]
+
+              ColumnViewColumn title_column {
+                title: _("Title");
+                expand: true;
+                resizable: true;
+              }
+
+              ColumnViewColumn author_column {
+                title: _("Author");
+                expand: true;
+                resizable: true;
+              }
+
+              ColumnViewColumn series_column {
+                title: _("Series");
+                expand: true;
+                resizable: true;
+              }
+
+              ColumnViewColumn added_column {
+                title: _("Added");
+                fixed-width: 104;
+                resizable: true;
+              }
+
+              ColumnViewColumn rating_column {
+                title: _("Rating");
+                fixed-width: 92;
+              }
+
+              ColumnViewColumn format_column {
+                title: _("Format");
+                fixed-width: 76;
+                resizable: true;
+              }
+
+              ColumnViewColumn progress_column {
+                title: _("Progress");
+                fixed-width: 84;
+              }
+            };
+          };
+        }
+
+        StackPage {
+          name: "empty";
+
+          child: Adw.StatusPage empty_page {
+            icon-name: "library-symbolic";
+            title: _("No Books Yet");
+
+            child: Button empty_button {
+              label: _("_Add Books…");
+              use-underline: true;
+              halign: center;
+              action-name: "app.add-books";
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            };
+          };
+        }
+      };
+    };
+  };
+}
+
+menu view_menu {
+  section {
+    label: _("Sort By");
+
+    item {
+      label: _("_Date Added");
+      action: "books.sort-order";
+      target: "added";
+    }
+
+    item {
+      label: _("_Title");
+      action: "books.sort-order";
+      target: "title";
+    }
+
+    item {
+      label: _("_Author");
+      action: "books.sort-order";
+      target: "author";
+    }
+
+    item {
+      label: _("_Series");
+      action: "books.sort-order";
+      target: "series";
+    }
+
+    item {
+      label: _("_Published");
+      action: "books.sort-order";
+      target: "published";
+    }
+
+    item {
+      label: _("_Last Read");
+      action: "books.sort-order";
+      target: "last-read";
+    }
+
+    item {
+      label: _("_Rating");
+      action: "books.sort-order";
+      target: "rating";
+    }
+  }
+
+  section {
+    label: _("Show As");
+
+    item {
+      label: _("_Covers");
+      action: "books.view-mode";
+      target: "grid";
+    }
+
+    item {
+      label: _("L_ist");
+      action: "books.view-mode";
+      target: "list";
+    }
+  }
+}

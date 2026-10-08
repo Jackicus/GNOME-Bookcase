@@ -17,6 +17,7 @@ HOLDER = 'SPDX-FileCopyrightText: 2026 Jack Tully'
 PATTERNS = ('*.py', '*.blp', '*.js', '*.css', '*.sh', 'meson.build', 'meson.options',
             'bookcase.in')
 DIRECTORIES = ('src', 'scripts', 'tests', 'build-aux', 'data', 'po')
+VENDORED = ROOT / 'src' / 'reader' / 'foliate'  # foliate-js keeps its own headers
 COMMENT = {'.blp': '// {}', '.js': '// {}', '.css': '/* {} */'}
 
 
@@ -27,7 +28,7 @@ def source_files():
     for directory in DIRECTORIES:
         for pattern in PATTERNS:
             found.update(path for path in (ROOT / directory).rglob(pattern)
-                         if '__pycache__' not in path.parts)
+                         if '__pycache__' not in path.parts and VENDORED not in path.parents)
     return sorted(found)
 
 

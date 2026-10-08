@@ -4,4 +4,413 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseEditMetadataDialog: Adw.Dialog {}
+// Edit Metadata (dialogs/edit_metadata.py). One book: the cover beside the title, authors
+// and series (above them when narrow), then the details, identifiers and description. Many
+// books: the bulk group only, each row left empty (or on "Leave Unchanged") changing
+// nothing. Cancel and Save in the header; the arrows step through the books the dialog
+// was opened from, saving as they go.
+template $BookcaseEditMetadataDialog: Adw.Dialog {
+  content-width: 640;
+  content-height: 720;
+  width-request: 360;
+  height-request: 294;
+
+  Adw.Breakpoint {
+    condition ("max-width: 520sp")
+
+    setters {
+      top_box.orientation: vertical;
+      top_box.spacing: 18;
+      cover_box.halign: center;
+    }
+  }
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Button cancel_button {
+        label: _("_Cancel");
+        use-underline: true;
+        action-name: "edit.cancel";
+      }
+
+      [end]
+      Button save_button {
+        label: _("_Save");
+        use-underline: true;
+        action-name: "edit.save";
+
+        styles [
+          "suggested-action",
+        ]
+      }
+
+      [end]
+      Box step_box {
+        visible: false;
+        spacing: 6;
+
+        Button previous_button {
+          icon-name: "go-previous-symbolic";
+          tooltip-text: _("Save and Edit Previous Book");
+          action-name: "edit.previous";
+        }
+
+        Button next_button {
+          icon-name: "go-next-symbolic";
+          tooltip-text: _("Save and Edit Next Book");
+          action-name: "edit.next";
+        }
+      }
+    }
+
+    content: ScrolledWindow scrolled {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Adw.Clamp {
+        maximum-size: 640;
+        tightening-threshold: 480;
+
+        child: Box {
+          orientation: vertical;
+          spacing: 24;
+          margin-top: 12;
+          margin-bottom: 24;
+          margin-start: 12;
+          margin-end: 12;
+
+          // -- one book ------------------------------------------------------------------
+          Box top_box {
+            visible: bind template.single;
+            spacing: 18;
+
+            Box cover_box {
+              orientation: vertical;
+              spacing: 6;
+              valign: start;
+
+              MenuButton cover_button {
+                tooltip-text: _("Change Cover");
+                menu-model: cover_menu;
+                halign: center;
+
+                styles [
+                  "flat",
+                  "edit-cover-button",
+                ]
+
+                child: Overlay {
+                  child: Adw.Clamp {
+                    maximum-size: 128;
+                    orientation: horizontal;
+
+                    child: Adw.Clamp {
+                      maximum-size: 192;
+                      orientation: vertical;
+
+                      child: Stack cover_stack {
+                        width-request: 128;
+                        height-request: 192;
+
+                        StackPage {
+                          name: "picture";
+
+                          child: Picture cover_picture {
+                            content-fit: cover;
+                            width-request: 128;
+                            height-request: 192;
+
+                            styles [
+                              "card",
+                              "edit-cover",
+                            ]
+                          };
+                        }
+
+                        StackPage {
+                          name: "none";
+
+                          child: Box cover_placeholder {};
+                        }
+                      };
+                    };
+                  };
+
+                  [overlay]
+                  Image {
+                    icon-name: "document-edit-symbolic";
+                    halign: end;
+                    valign: end;
+                    margin-end: 6;
+                    margin-bottom: 6;
+                    accessible-role: presentation;
+
+                    styles [
+                      "edit-cover-badge",
+                    ]
+                  }
+                };
+              }
+            }
+
+            Adw.PreferencesGroup {
+              hexpand: true;
+              valign: start;
+
+              Adw.EntryRow title_row {
+                title: _("Title");
+              }
+
+              Adw.EntryRow authors_row {
+                title: _("Authors");
+              }
+
+              Adw.ExpanderRow sort_row {
+                title: _("Sort As");
+
+                Adw.EntryRow sort_title_row {
+                  title: _("Title Sort");
+                }
+
+                Adw.EntryRow author_sort_row {
+                  title: _("Author Sort");
+                }
+              }
+
+              Adw.EntryRow series_row {
+                title: _("Series");
+              }
+
+              Adw.SpinRow series_index_row {
+                title: _("Number in Series");
+                digits: 1;
+                numeric: true;
+
+                adjustment: Adjustment {
+                  lower: 0;
+                  upper: 9999;
+                  step-increment: 1;
+                  page-increment: 10;
+                };
+              }
+            }
+          }
+
+          Adw.PreferencesGroup details_group {
+            visible: bind template.single;
+            title: _("Details");
+
+            [header-suffix]
+            Button find_button {
+              label: _("_Find Metadata…");
+              use-underline: true;
+              action-name: "edit.find-metadata";
+              valign: center;
+
+              styles [
+                "flat",
+              ]
+            }
+
+            Adw.EntryRow publisher_row {
+              title: _("Publisher");
+            }
+
+            Adw.EntryRow published_row {
+              title: _("Published");
+
+              [suffix]
+              MenuButton calendar_button {
+                icon-name: "x-office-calendar-symbolic";
+                tooltip-text: _("Choose Date");
+                valign: center;
+
+                styles [
+                  "flat",
+                ]
+
+                popover: Popover calendar_popover {
+                  child: Calendar calendar {};
+                };
+              }
+            }
+
+            Adw.ComboRow language_row {
+              title: _("Language");
+              enable-search: true;
+            }
+
+            Adw.ActionRow rating_row {
+              title: _("Rating");
+            }
+          }
+
+          Adw.PreferencesGroup tags_group {
+            visible: bind template.single;
+            title: _("Tags");
+
+            Adw.PreferencesRow tag_chips_row {
+              activatable: false;
+              focusable: false;
+
+              child: Adw.WrapBox tag_box {
+                child-spacing: 6;
+                line-spacing: 6;
+                margin-top: 10;
+                margin-bottom: 10;
+                margin-start: 12;
+                margin-end: 12;
+              };
+            }
+
+            Adw.EntryRow tags_row {
+              title: _("Add Tag");
+              show-apply-button: true;
+            }
+
+            Adw.PreferencesRow suggestions_row {
+              visible: false;
+              activatable: false;
+              focusable: false;
+
+              child: Adw.WrapBox suggestion_box {
+                child-spacing: 6;
+                line-spacing: 6;
+                margin-top: 8;
+                margin-bottom: 8;
+                margin-start: 12;
+                margin-end: 12;
+              };
+            }
+          }
+
+          Adw.PreferencesGroup identifiers_group {
+            visible: bind template.single;
+            title: _("Identifiers");
+
+            Adw.EntryRow isbn_row {
+              title: _("ISBN");
+              input-purpose: digits;
+            }
+          }
+
+          Adw.PreferencesGroup description_group {
+            visible: bind template.single;
+            title: _("Description");
+
+            Frame {
+              styles [
+                "edit-description",
+              ]
+
+              child: TextView description_view {
+                wrap-mode: word_char;
+                accepts-tab: false;
+                top-margin: 12;
+                bottom-margin: 12;
+                left-margin: 12;
+                right-margin: 12;
+                height-request: 160;
+              };
+            }
+          }
+
+          // -- many books ----------------------------------------------------------------
+          Adw.PreferencesGroup bulk_group {
+            visible: bind template.single inverted;
+            description: _("Empty fields and “Leave Unchanged” keep each book’s own value");
+
+            Adw.EntryRow bulk_authors_row {
+              title: _("Authors");
+            }
+
+            Adw.EntryRow bulk_series_row {
+              title: _("Series");
+            }
+
+            Adw.SwitchRow bulk_number_row {
+              title: _("Number Automatically");
+              subtitle: _("In the order the books are listed");
+              sensitive: false;
+            }
+
+            Adw.SpinRow bulk_start_row {
+              title: _("Start At");
+              numeric: true;
+              visible: bind bulk_number_row.active;
+
+              adjustment: Adjustment {
+                lower: 0;
+                upper: 9999;
+                value: 1;
+                step-increment: 1;
+                page-increment: 10;
+              };
+            }
+
+            Adw.EntryRow bulk_publisher_row {
+              title: _("Publisher");
+            }
+
+            Adw.ComboRow bulk_language_row {
+              title: _("Language");
+              enable-search: true;
+            }
+
+            Adw.ComboRow bulk_rating_row {
+              title: _("Rating");
+            }
+
+            Adw.ComboRow bulk_status_row {
+              title: _("Status");
+            }
+          }
+
+          Adw.PreferencesGroup bulk_tags_group {
+            visible: bind template.single inverted;
+            title: _("Tags");
+
+            Adw.EntryRow bulk_add_tags_row {
+              title: _("Add Tags");
+            }
+
+            Adw.EntryRow bulk_remove_tags_row {
+              title: _("Remove Tags");
+            }
+          }
+        };
+      };
+    };
+  };
+}
+
+menu cover_menu {
+  section {
+    item {
+      label: _("_Choose Image…");
+      action: "edit.choose-cover";
+    }
+
+    item {
+      label: _("_Paste Image");
+      action: "edit.paste-cover";
+    }
+
+    item {
+      label: _("_Find Cover Online…");
+      action: "edit.find-cover";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Remove Cover");
+      action: "edit.remove-cover";
+    }
+  }
+}

@@ -4,4 +4,88 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseGroupsPage: Adw.NavigationPage {}
+// Authors, Series or Tags: the groups of the library with their counts, a filter entry, and
+// each group opening its books (pages/groups.py).
+template $BookcaseGroupsPage: Adw.NavigationPage {
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      title-widget: Adw.WindowTitle window_title {};
+
+      [end]
+      ToggleButton search_button {
+        icon-name: "system-search-symbolic";
+        tooltip-text: _("Filter");
+        active: bind search_bar.search-mode-enabled bidirectional;
+      }
+    }
+
+    [top]
+    SearchBar search_bar {
+      child: Adw.Clamp {
+        maximum-size: 520;
+
+        child: SearchEntry search_entry {
+          hexpand: true;
+          search-changed => $on_search_changed();
+          stop-search => $on_stop_search();
+          activate => $on_search_activate();
+        };
+      };
+    }
+
+    content: Stack stack {
+      StackPage {
+        name: "grid";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: GridView grid_view {
+            max-columns: 30;
+            min-columns: 2;
+            single-click-activate: true;
+            activate => $on_activate();
+
+            styles [
+              "group-grid",
+            ]
+          };
+        };
+      }
+
+      StackPage {
+        name: "list";
+
+        child: ScrolledWindow {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 720;
+            margin-top: 18;
+            margin-bottom: 18;
+            margin-start: 12;
+            margin-end: 12;
+
+            child: ListView list_view {
+              single-click-activate: true;
+              activate => $on_activate();
+              valign: start;
+
+              styles [
+                "boxed-list",
+                "group-list",
+              ]
+            };
+          };
+        };
+      }
+
+      StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage empty_page {};
+      }
+    };
+  };
+}

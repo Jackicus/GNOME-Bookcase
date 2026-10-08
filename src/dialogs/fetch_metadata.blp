@@ -4,4 +4,231 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseFetchMetadataDialog: Adw.Dialog {}
+// Find Metadata and Find Cover (dialogs/fetch_metadata.py). The results page searches as it
+// opens: a spinner, then the candidates (rows with a thumbnail and the source, or a grid of
+// covers), "No Matches" or the error, with the search terms under an expander to change.
+// Choosing a candidate pushes the comparison page (Find Metadata only): a check per field,
+// the found value above the current one, and Apply in the bottom bar.
+template $BookcaseFetchMetadataDialog: Adw.Dialog {
+  content-width: 560;
+  content-height: 680;
+  width-request: 360;
+  height-request: 294;
+
+  child: Adw.NavigationView navigation_view {
+    Adw.NavigationPage results_page {
+      title: _("Find Metadata");
+      tag: "results";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {}
+
+        content: Stack stack {
+          transition-type: crossfade;
+
+          StackPage {
+            name: "searching";
+
+            child: Adw.StatusPage searching_status {
+              title: _("Searching…");
+              description: _("Asking Open Library");
+
+              paintable: Adw.SpinnerPaintable {
+                widget: searching_status;
+              };
+            };
+          }
+
+          StackPage {
+            name: "results";
+
+            child: ScrolledWindow {
+              hscrollbar-policy: never;
+
+              child: Adw.Clamp {
+                maximum-size: 560;
+
+                child: Box {
+                  orientation: vertical;
+                  spacing: 18;
+                  margin-top: 12;
+                  margin-bottom: 24;
+                  margin-start: 12;
+                  margin-end: 12;
+
+                  ListBox query_list {
+                    selection-mode: none;
+
+                    styles [
+                      "boxed-list",
+                    ]
+
+                    Adw.ExpanderRow query_row {
+                      title: _("Search For");
+
+                      Adw.EntryRow query_title_row {
+                        title: _("Title");
+                      }
+
+                      Adw.EntryRow query_author_row {
+                        title: _("Author");
+                      }
+
+                      Adw.EntryRow query_isbn_row {
+                        title: _("ISBN");
+                        input-purpose: digits;
+                      }
+
+                      Adw.ButtonRow search_again_row {
+                        title: _("_Search Again");
+                        use-underline: true;
+                        start-icon-name: "system-search-symbolic";
+                      }
+                    }
+                  }
+
+                  ListBox candidate_list {
+                    selection-mode: none;
+
+                    styles [
+                      "boxed-list",
+                    ]
+                  }
+
+                  FlowBox cover_grid {
+                    visible: false;
+                    selection-mode: none;
+                    homogeneous: true;
+                    min-children-per-line: 2;
+                    max-children-per-line: 5;
+                    column-spacing: 12;
+                    row-spacing: 12;
+                  }
+
+                  Label sources_label {
+                    wrap: true;
+                    xalign: 0.5;
+                    justify: center;
+
+                    styles [
+                      "caption",
+                      "dimmed",
+                    ]
+                  }
+                };
+              };
+            };
+          }
+
+          StackPage {
+            name: "empty";
+
+            child: Adw.StatusPage empty_status {
+              icon-name: "system-search-symbolic";
+              title: _("No Matches");
+              description: _("Try fewer words, or only the title");
+
+              child: Button {
+                label: _("_Change Search");
+                use-underline: true;
+                halign: center;
+                action-name: "fetch.edit-query";
+
+                styles [
+                  "pill",
+                ]
+              };
+            };
+          }
+
+          StackPage {
+            name: "error";
+
+            child: Adw.StatusPage error_status {
+              icon-name: "network-offline-symbolic";
+              title: _("Could Not Search");
+
+              child: Button {
+                label: _("_Try Again");
+                use-underline: true;
+                halign: center;
+                action-name: "fetch.search";
+
+                styles [
+                  "pill",
+                  "suggested-action",
+                ]
+              };
+            };
+          }
+        };
+      };
+    }
+
+    Adw.NavigationPage compare_page {
+      title: _("Choose Fields");
+      tag: "compare";
+
+      child: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar {}
+
+        content: ScrolledWindow compare_scrolled {
+          hscrollbar-policy: never;
+
+          child: Adw.Clamp {
+            maximum-size: 560;
+
+            child: Box {
+              orientation: vertical;
+              spacing: 12;
+              margin-top: 12;
+              margin-bottom: 24;
+              margin-start: 12;
+              margin-end: 12;
+
+              Label compare_label {
+                wrap: true;
+                xalign: 0;
+
+                styles [
+                  "dimmed",
+                ]
+              }
+
+              ListBox compare_list {
+                selection-mode: none;
+
+                styles [
+                  "boxed-list",
+                ]
+              }
+            };
+          };
+        };
+
+        [bottom]
+        ActionBar {
+          [end]
+          Button apply_button {
+            label: _("_Apply");
+            use-underline: true;
+            action-name: "fetch.apply";
+
+            styles [
+              "suggested-action",
+            ]
+          }
+
+          [start]
+          Button select_all_button {
+            label: _("Select _All");
+            use-underline: true;
+            action-name: "fetch.select-all";
+          }
+        }
+      };
+    }
+  };
+}

@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-FileCopyrightText: 2026 Jack Tully
+# Maintainer: Jack Tully
+
+pkgname=bookcase-git
+_name=GNOME-Bookcase
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='E-book library and reader for GNOME; reads Calibre libraries in place'
+arch=('any')
+url='https://github.com/Jackicus/GNOME-Bookcase'
+license=('GPL-2.0-or-later')
+depends=('python' 'python-gobject' 'python-cairo' 'python-lxml' 'gtk4' 'libadwaita'
+         'webkitgtk-6.0' 'glib2' 'gdk-pixbuf2' 'hicolor-icon-theme')
+optdepends=('poppler-glib: covers and metadata of PDF books'
+            'calibre: converting EPUBs for a Kindle (ebook-convert)')
+makedepends=('git' 'meson' 'blueprint-compiler' 'gettext' 'appstream' 'desktop-file-utils')
+checkdepends=('python-gobject')
+provides=('bookcase')
+conflicts=('bookcase')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_name"
+  printf '%s.r%s.%s' "$(sed -n "s/^  version: '\(.*\)',$/\1/p" meson.build)" \
+    "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  arch-meson "$_name" build
+  meson compile -C build
+}
+
+check() {
+  meson test -C build --print-errorlogs --no-suite unit
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+}

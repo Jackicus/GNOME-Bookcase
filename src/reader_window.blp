@@ -4,4 +4,561 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseReaderWindow: Adw.ApplicationWindow {}
+template $BookcaseReaderWindow: Adw.ApplicationWindow {
+  width-request: 360;
+  height-request: 400;
+  title: _("Bookcase");
+
+  Adw.Breakpoint {
+    condition ("max-width: 720sp")
+
+    setters {
+      split_view.collapsed: true;
+    }
+  }
+
+  Adw.Breakpoint {
+    condition ("max-width: 450sp")
+
+    setters {
+      split_view.collapsed: true;
+      prev_button.visible: false;
+      next_button.visible: false;
+    }
+  }
+
+  content: Adw.ToastOverlay toast_overlay {
+    child: Adw.OverlaySplitView split_view {
+      show-sidebar: false;
+      min-sidebar-width: 260;
+      max-sidebar-width: 340;
+
+      sidebar: Adw.ToolbarView {
+        [top]
+        Adw.HeaderBar sidebar_header {
+          show-end-title-buttons: false;
+
+          title-widget: Adw.InlineViewSwitcher sidebar_switcher {
+            stack: sidebar_stack;
+            display-mode: icons;
+            homogeneous: true;
+          };
+        }
+
+        content: Adw.ViewStack sidebar_stack {
+          Adw.ViewStackPage {
+            name: "contents";
+            title: _("Contents");
+            icon-name: "view-list-bullet-symbolic";
+
+            child: Gtk.Stack contents_stack {
+              Gtk.StackPage {
+                name: "list";
+
+                child: Gtk.ScrolledWindow {
+                  hscrollbar-policy: never;
+
+                  child: Gtk.ListBox toc_list {
+                    selection-mode: single;
+
+                    styles [
+                      "navigation-sidebar",
+                    ]
+                  };
+                };
+              }
+
+              Gtk.StackPage {
+                name: "empty";
+
+                child: Adw.StatusPage {
+                  icon-name: "view-list-bullet-symbolic";
+                  title: _("No Contents");
+                  description: _("This book has no table of contents");
+
+                  styles [
+                    "compact",
+                  ]
+                };
+              }
+            };
+          }
+
+          Adw.ViewStackPage {
+            name: "annotations";
+            title: _("Highlights and Bookmarks");
+            icon-name: "user-bookmarks-symbolic";
+
+            child: Gtk.Stack annotations_stack {
+              Gtk.StackPage {
+                name: "list";
+
+                child: Gtk.ScrolledWindow {
+                  hscrollbar-policy: never;
+
+                  child: Gtk.ListBox annotations_list {
+                    selection-mode: none;
+
+                    styles [
+                      "navigation-sidebar",
+                    ]
+                  };
+                };
+              }
+
+              Gtk.StackPage {
+                name: "empty";
+
+                child: Adw.StatusPage {
+                  icon-name: "user-bookmarks-symbolic";
+                  title: _("No Highlights or Bookmarks");
+                  description: _("Select text to highlight it, or bookmark a page with Ctrl+D");
+
+                  styles [
+                    "compact",
+                  ]
+                };
+              }
+            };
+          }
+
+          Adw.ViewStackPage {
+            name: "search";
+            title: _("Search");
+            icon-name: "edit-find-symbolic";
+
+            child: Gtk.Box {
+              orientation: vertical;
+
+              Gtk.SearchEntry search_entry {
+                placeholder-text: _("Search the book");
+                margin-start: 12;
+                margin-end: 12;
+                margin-top: 6;
+                margin-bottom: 6;
+              }
+
+              Gtk.Stack search_stack {
+                vexpand: true;
+
+                Gtk.StackPage {
+                  name: "start";
+
+                  child: Adw.StatusPage {
+                    icon-name: "edit-find-symbolic";
+                    title: _("Search the Book");
+                    description: _("Find every place a word or phrase appears");
+
+                    styles [
+                      "compact",
+                    ]
+                  };
+                }
+
+                Gtk.StackPage {
+                  name: "list";
+
+                  child: Gtk.ScrolledWindow {
+                    hscrollbar-policy: never;
+
+                    child: Gtk.ListBox search_list {
+                      selection-mode: single;
+
+                      styles [
+                        "navigation-sidebar",
+                      ]
+                    };
+                  };
+                }
+
+                Gtk.StackPage {
+                  name: "empty";
+
+                  child: Adw.StatusPage {
+                    icon-name: "edit-find-symbolic";
+                    title: _("No Results");
+                    description: _("Try another word or phrase");
+
+                    styles [
+                      "compact",
+                    ]
+                  };
+                }
+              }
+
+              Gtk.Label search_status {
+                visible: false;
+                margin-top: 6;
+                margin-bottom: 6;
+                margin-start: 12;
+                margin-end: 12;
+                xalign: 0;
+
+                styles [
+                  "caption",
+                  "dimmed",
+                  "numeric",
+                ]
+              }
+            };
+          }
+        };
+      };
+
+      content: Adw.ToolbarView toolbar_view {
+        top-bar-style: flat;
+        bottom-bar-style: flat;
+
+        [top]
+        Adw.HeaderBar header_bar {
+          [start]
+          Gtk.ToggleButton sidebar_button {
+            icon-name: "sidebar-show-symbolic";
+            tooltip-text: _("Contents, Highlights and Search");
+            active: bind split_view.show-sidebar bidirectional;
+          }
+
+          title-widget: Adw.WindowTitle window_title {};
+
+          [end]
+          Gtk.MenuButton menu_button {
+            icon-name: "open-menu-symbolic";
+            tooltip-text: _("Main Menu");
+            menu-model: primary_menu;
+            primary: true;
+          }
+
+          [end]
+          Gtk.MenuButton typography_button {
+            icon-name: "preferences-desktop-font-symbolic";
+            tooltip-text: _("Text and Layout");
+            popover: typography_popover;
+          }
+
+          [end]
+          Gtk.ToggleButton bookmark_button {
+            icon-name: "bookmark-new-symbolic";
+            tooltip-text: _("Bookmark This Page");
+          }
+        }
+
+        content: Gtk.Overlay {
+          child: Gtk.Stack content_stack {
+            transition-type: crossfade;
+
+            Gtk.StackPage {
+              name: "loading";
+
+              child: Adw.Spinner {
+                halign: center;
+                valign: center;
+                width-request: 32;
+                height-request: 32;
+              };
+            }
+
+            Gtk.StackPage {
+              name: "book";
+
+              child: $BookcaseBookView book_view {};
+            }
+
+            Gtk.StackPage {
+              name: "status";
+
+              child: Adw.StatusPage status_page {
+                child: Gtk.Box status_buttons {
+                  orientation: vertical;
+                  spacing: 12;
+                  halign: center;
+                };
+              };
+            }
+          };
+
+          [overlay]
+          Gtk.Revealer return_revealer {
+            halign: center;
+            valign: end;
+            margin-bottom: 18;
+            transition-type: crossfade;
+            reveal-child: false;
+
+            child: Gtk.Button return_button {
+              tooltip-text: _("Go back to where you were reading");
+
+              child: Adw.ButtonContent return_content {
+                icon-name: "edit-undo-symbolic";
+                label: _("Back");
+              };
+
+              styles [
+                "pill",
+                "osd",
+                "reader-return",
+              ]
+            };
+          }
+        };
+
+        [bottom]
+        Gtk.Box bottom_bar {
+          spacing: 6;
+          margin-start: 6;
+          margin-end: 6;
+          margin-top: 2;
+          margin-bottom: 4;
+
+          Gtk.Button prev_button {
+            icon-name: "go-previous-symbolic";
+            tooltip-text: _("Previous Page");
+            valign: center;
+
+            styles [
+              "flat",
+            ]
+          }
+
+          Gtk.Scale progress_scale {
+            hexpand: true;
+            draw-value: false;
+            valign: center;
+            tooltip-text: _("Position in the book");
+
+            adjustment: Gtk.Adjustment {
+              lower: 0;
+              upper: 1;
+              step-increment: 0.01;
+              page-increment: 0.1;
+            };
+          }
+
+          Gtk.Button progress_button {
+            tooltip-text: _("Show Something Else");
+            valign: center;
+
+            child: Gtk.Label progress_label {
+              width-chars: 6;
+              ellipsize: end;
+
+              styles [
+                "numeric",
+                "caption",
+              ]
+            };
+
+            styles [
+              "flat",
+            ]
+          }
+
+          Gtk.Button next_button {
+            icon-name: "go-next-symbolic";
+            tooltip-text: _("Next Page");
+            valign: center;
+
+            styles [
+              "flat",
+            ]
+          }
+        }
+      };
+    };
+  };
+}
+
+Gtk.Popover typography_popover {
+  styles [
+    "reader-typography",
+  ]
+
+  child: Gtk.ScrolledWindow {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+    max-content-height: 640;
+
+    child: Gtk.Box {
+      orientation: vertical;
+      spacing: 12;
+      margin-start: 6;
+      margin-end: 6;
+      margin-top: 6;
+      margin-bottom: 6;
+      width-request: 300;
+
+      Gtk.Box theme_box {
+        halign: center;
+        spacing: 12;
+        margin-top: 6;
+      }
+
+      Adw.ToggleGroup font_group {
+        Adw.Toggle {
+          name: "publisher";
+          label: _("Original");
+          tooltip: _("The book's own typeface");
+        }
+
+        Adw.Toggle {
+          name: "serif";
+          label: _("Serif");
+        }
+
+        Adw.Toggle {
+          name: "sans";
+          label: _("Sans");
+        }
+      }
+
+      Gtk.Box {
+        spacing: 6;
+
+        Gtk.Button smaller_button {
+          label: _("A");
+          tooltip-text: _("Smaller Text");
+
+          styles [
+            "flat",
+            "reader-size-smaller",
+          ]
+        }
+
+        Gtk.Label size_label {
+          hexpand: true;
+
+          styles [
+            "numeric",
+            "heading",
+          ]
+        }
+
+        Gtk.Button bigger_button {
+          label: _("A");
+          tooltip-text: _("Bigger Text");
+
+          styles [
+            "flat",
+            "reader-size-bigger",
+          ]
+        }
+      }
+
+      Gtk.ListBox {
+        selection-mode: none;
+
+        styles [
+          "boxed-list",
+        ]
+
+        Adw.SpinRow line_height_row {
+          title: _("Line Spacing");
+          digits: 1;
+
+          adjustment: Gtk.Adjustment {
+            lower: 1.0;
+            upper: 2.4;
+            step-increment: 0.1;
+            page-increment: 0.5;
+          };
+        }
+
+        Adw.SpinRow margin_row {
+          title: _("Margins");
+          subtitle: _("Percent of the page");
+
+          adjustment: Gtk.Adjustment {
+            lower: 0;
+            upper: 25;
+            step-increment: 1;
+            page-increment: 5;
+          };
+        }
+
+        Adw.SpinRow max_width_row {
+          title: _("Text Width");
+          subtitle: _("Widest a column gets, in pixels");
+
+          adjustment: Gtk.Adjustment {
+            lower: 400;
+            upper: 2000;
+            step-increment: 40;
+            page-increment: 200;
+          };
+        }
+      }
+
+      Adw.ToggleGroup layout_group {
+        Adw.Toggle {
+          name: "paginated";
+          label: _("Pages");
+          icon-name: "view-paged-symbolic";
+        }
+
+        Adw.Toggle {
+          name: "scrolled";
+          label: _("Scrolled");
+          icon-name: "view-continuous-symbolic";
+        }
+      }
+
+      Gtk.ListBox {
+        selection-mode: none;
+
+        styles [
+          "boxed-list",
+        ]
+
+        Adw.SwitchRow two_pages_row {
+          title: _("Two Pages");
+          subtitle: _("Side by side when the window is wide");
+        }
+
+        Adw.SwitchRow justify_row {
+          title: _("Justify");
+        }
+
+        Adw.SwitchRow hyphenate_row {
+          title: _("Hyphenate");
+        }
+
+        Adw.SwitchRow publisher_row {
+          title: _("Publisher Styles");
+          subtitle: _("The book's own spacing and sizes");
+        }
+      }
+    };
+  };
+}
+
+menu primary_menu {
+  section {
+    item {
+      label: _("Fullscreen");
+      action: "win.fullscreen";
+    }
+
+    item {
+      label: _("Go to Location…");
+      action: "win.go-to";
+    }
+
+    item {
+      label: _("Book Details");
+      action: "win.info";
+    }
+  }
+
+  section {
+    item {
+      label: _("Keyboard Shortcuts");
+      action: "app.shortcuts";
+    }
+  }
+
+  section {
+    item {
+      label: _("Close");
+      action: "win.close";
+    }
+  }
+}

@@ -4,4 +4,101 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseHomePage: Adw.NavigationPage {}
+// The home page: Continue Reading, Recently Added and a row per shelf, each a scrolling row
+// of covers (pages/home.py fills them); with no books, a welcome that offers the three ways
+// in.
+template $BookcaseHomePage: Adw.NavigationPage {
+  title: _("Home");
+  tag: "home";
+
+  child: Adw.BreakpointBin {
+    width-request: 360;
+    height-request: 240;
+
+    Adw.Breakpoint compact_breakpoint {
+      condition ("max-width: 520sp")
+    }
+
+    child: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        [end]
+        Button {
+          icon-name: "system-search-symbolic";
+          tooltip-text: _("Search");
+          action-name: "win.search";
+        }
+      }
+
+      content: Stack stack {
+        transition-type: crossfade;
+
+        StackPage {
+          name: "home";
+
+          child: ScrolledWindow scroller {
+            hscrollbar-policy: never;
+
+            child: Box shelves_box {
+              orientation: vertical;
+              spacing: 30;
+              margin-top: 12;
+              margin-bottom: 30;
+
+              styles [
+                "home",
+              ]
+            };
+          };
+        }
+
+        StackPage {
+          name: "empty";
+
+          child: Adw.StatusPage empty_page {
+            icon-name: "library-symbolic";
+            title: _("Your Bookcase Is Empty");
+            description: _("Add e-books, or a folder Bookcase keeps an eye on. A Calibre library is read where it is: Bookcase never moves or changes your files.");
+
+            child: Box {
+              orientation: vertical;
+              halign: center;
+              spacing: 12;
+
+              Button {
+                label: _("_Add Books…");
+                use-underline: true;
+                action-name: "app.add-books";
+
+                styles [
+                  "pill",
+                  "suggested-action",
+                ]
+              }
+
+              Button {
+                label: _("Add a _Folder…");
+                use-underline: true;
+                action-name: "app.add-folder";
+
+                styles [
+                  "pill",
+                ]
+              }
+
+              Button {
+                label: _("_Link a Calibre Library…");
+                use-underline: true;
+                action-name: "app.link-calibre";
+
+                styles [
+                  "pill",
+                ]
+              }
+            };
+          };
+        }
+      };
+    };
+  };
+}

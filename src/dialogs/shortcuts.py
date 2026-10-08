@@ -4,7 +4,7 @@
 """The Keyboard Shortcuts dialog (app.shortcuts, Ctrl+?): every accelerator and key of
 shortcuts.py, grouped as shortcuts.sections() groups them.
 
-    shortcuts.present(window)
+    shortcuts.present(app, window)       # or present(window)
 
 libadwaita 1.9 leaves the dialog's rows without accessible names (a screen reader finds only
 their parts), so each is named "title: keys" once it is built.
@@ -14,18 +14,21 @@ from gettext import gettext as _
 
 from gi.repository import Adw, Gtk
 
-from ..shortcuts import accelerator, sections
+from ..shortcuts import sections
 
 
-def present(parent):
-    """Build the dialog and present it over `parent` (a window, or None); returns it."""
+def present(app, parent=None):
+    """Build the dialog and present it over `parent` (a window, or None); returns it.
+    present(window) works too."""
+    if parent is None and isinstance(app, Gtk.Widget):
+        parent = app
     dialog = Adw.ShortcutsDialog()
     names = {}
     for title, items in sections():
         section = Adw.ShortcutsSection(title=title)
-        for item_title, key in items:
-            section.add(Adw.ShortcutsItem.new(item_title, accelerator(key)))
-            keys = [_key_label(accel) for accel in accelerator(key).split()]
+        for item_title, accels in items:
+            section.add(Adw.ShortcutsItem.new(item_title, accels))
+            keys = [_key_label(accel) for accel in accels.split()]
             if len(keys) > 1:
                 # Translators: a shortcut's alternative keys, as a screen reader hears them:
                 # {keys} is the list but the last ("Menu"), {key} the last ("Shift+F10").
@@ -34,6 +37,9 @@ def present(parent):
             # shortcut does ("Quit"), {keys} its key or keys ("Ctrl+Q").
             names[item_title] = _('{title}: {keys}').format(title=item_title, keys=keys[0])
         dialog.add(section)
+    if parent is not None and hasattr(parent, 'set_dialog_open'):
+        parent.set_dialog_open(True)
+        dialog.connect('closed', lambda *_args: parent.set_dialog_open(False))
     dialog.present(parent)
     _name_rows(dialog, names)
     return dialog

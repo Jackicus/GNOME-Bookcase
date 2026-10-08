@@ -87,11 +87,13 @@ install_data(
   'main.py',
   'online.py',
   'reader_window.py',
+  'reading.py',
   'schema.py',
   'search.py',
   'shortcuts.py',
   'sidebar.py',
   'stats.py',
+  'titles.py',
   'window.py',
   install_dir: moduledir,
 )
@@ -109,6 +111,7 @@ install_data(
 
 install_data(
   'pages/__init__.py',
+  'pages/actions.py',
   'pages/book.py',
   'pages/books.py',
   'pages/device.py',
@@ -134,8 +137,10 @@ install_data(
 install_data(
   'widgets/__init__.py',
   'widgets/book_item.py',
+  'widgets/book_tile.py',
   'widgets/book_view.py',
   'widgets/cover.py',
+  'widgets/markup.py',
   'widgets/rating.py',
   'widgets/util.py',
   install_dir: moduledir / 'widgets',

@@ -1,2 +1,326 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* SPDX-FileCopyrightText: 2026 Jack Tully */
+
+/* A cover (widgets/cover.py): the shadow of a book standing on a shelf, under the rounded
+   corners the widget draws; the card colour shows while its thumbnail loads. A small cover
+   (the list) and a large one (the details page) shade to scale. */
+.book-cover {
+  border-radius: 4px;
+  background-color: var(--card-bg-color);
+  box-shadow: 0 1px 2px var(--shade-color), 0 3px 10px var(--shade-color);
+}
+
+.book-cover.small {
+  border-radius: 2px;
+  box-shadow: 0 1px 2px var(--shade-color);
+}
+
+.book-cover.large {
+  box-shadow: 0 2px 4px var(--shade-color), 0 8px 28px var(--shade-color);
+}
+
+/* The covers behind a series' first one (pages/groups.py) are a little faded. */
+.book-cover.behind {
+  opacity: 0.85;
+}
+
+/* A book tile (widgets/book_tile.py): its title in two lines at most, the progress bar
+   along the cover's foot, the series number in a pill on its corner, and the finished (or
+   missing) mark in a disc at the other. The bar and the pill sit on cover art of any
+   colour, so they are white on a dark veil in both styles (like the drawn covers' text). */
+.book-tile-title {
+  font-weight: 600;
+}
+
+progressbar.cover-progress {
+  margin: 0 8px 8px 8px;
+  min-width: 0;
+}
+
+progressbar.cover-progress > trough {
+  min-width: 0;
+}
+
+progressbar.cover-progress > trough,
+progressbar.cover-progress > trough > progress {
+  min-height: 4px;
+}
+
+progressbar.cover-progress > trough {
+  background-color: alpha(black, 0.45);
+}
+
+progressbar.cover-progress > trough > progress {
+  background-color: white;
+}
+
+.cover-badge {
+  margin: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: bold;
+  color: white;
+  background-color: alpha(black, 0.6);
+}
+
+.cover-mark {
+  margin: 6px;
+  padding: 3px;
+  border-radius: 999px;
+  color: var(--accent-fg-color);
+  background-color: var(--accent-bg-color);
+}
+
+.cover-mark.missing {
+  color: var(--warning-fg-color);
+  background-color: var(--warning-bg-color);
+}
+
+/* The grid of covers (pages/books.blp): room around each book, a rounded highlight when
+   it is selected or hovered, none of the list's row background. */
+gridview.book-grid {
+  padding: 12px 18px 24px 18px;
+}
+
+gridview.book-grid > child {
+  padding: 12px 10px;
+  border-radius: 12px;
+}
+
+gridview.book-grid > child:hover {
+  background-color: alpha(currentColor, 0.05);
+}
+
+gridview.book-grid > child:selected {
+  background-color: alpha(var(--accent-bg-color), 0.18);
+}
+
+gridview.book-grid > child:selected:hover {
+  background-color: alpha(var(--accent-bg-color), 0.24);
+}
+
+/* The list of books (pages/books.blp): rows tall enough for the small covers. */
+columnview.book-list > listview > row > cell {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* The home page's rows (pages/home.py): a cover is a flat button without a button's
+   padding, its hover the tile's own. */
+button.book-button {
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.shelf-row scrolledwindow > undershoot.left,
+.shelf-row scrolledwindow > undershoot.right {
+  background: none;
+}
+
+/* Authors and Series (pages/groups.blp): the same room as the grid of books. */
+gridview.group-grid {
+  padding: 12px 18px 24px 18px;
+}
+
+gridview.group-grid > child {
+  padding: 12px 6px;
+  border-radius: 12px;
+}
+
+/* Tags (pages/groups.blp): a list in a card. */
+listview.group-list {
+  border-radius: 12px;
+}
+
+/* A book's details (pages/book.blp): the description reads at a comfortable size, the
+   tags are small pills. */
+.book-description {
+  font-size: 1.05em;
+  line-height: 1.4;
+}
+
+button.tag-pill {
+  min-height: 24px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 0.9em;
+}
+
+progressbar.book-progress > trough,
+progressbar.book-progress > trough > progress {
+  min-height: 6px;
+  border-radius: 3px;
+}
+
+/* The sidebar's counts (sidebar.py). */
+.sidebar-count {
+  font-size: 0.9em;
+}
+
+/* The rating (widgets/rating.py): an editable one lights on hover; filled stars take the
+   warning colour, as ratings commonly do. */
+.rating.editable:hover {
+  opacity: 0.85;
+}
+
+.rating image {
+  color: var(--warning-color);
+}
+
+/* The device page's storage card (pages/device.blp). */
+.device-storage {
+  padding: 18px;
+}
+
+/* Edit Metadata's cover button (dialogs/edit_metadata.blp): the cover, not a button's
+   padding, with the pencil badge in its corner. */
+.edit-cover-button {
+  padding: 0;
+  border-radius: 6px;
+}
+
+.edit-cover {
+  border-radius: 6px;
+}
+
+.edit-cover-badge {
+  padding: 6px;
+  border-radius: 999px;
+  background-color: var(--popover-bg-color);
+  color: var(--popover-fg-color);
+  box-shadow: 0 1px 3px alpha(black, 0.3);
+}
+
+/* Edit Metadata's tags (dialogs/edit_metadata.py): a chip per tag, with its remove button. */
+.tag-chip {
+  border-radius: 999px;
+  background-color: alpha(currentColor, 0.1);
+  min-height: 30px;
+}
+
+.tag-chip > button {
+  min-width: 24px;
+  min-height: 24px;
+  margin: 3px;
+  padding: 0;
+}
+
+/* Edit Metadata's description: an entry-like frame around the text view. */
+.edit-description {
+  border-radius: 12px;
+}
+
+.edit-description > textview,
+.edit-description > textview > text {
+  background: none;
+  border-radius: 12px;
+}
+
+/* Find Metadata's thumbnails and source badges (dialogs/fetch_metadata.py). */
+.fetch-thumbnail {
+  border-radius: 4px;
+}
+
+.fetch-source {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: alpha(currentColor, 0.08);
+}
+
+.fetch-cover-tile {
+  padding: 6px;
+}
+
+/* The reader window (reader_window.py): the page and its bars take the paper theme's
+   colours (reading.THEMES; tests/test_reading.py checks they agree), the theme chips of the
+   Text and Layout popover, and the highlight colours (reader.js's HIGHLIGHTS, light). */
+.reader-page.theme-light { --reader-bg: #ffffff; --reader-fg: #1d1d1f; }
+.reader-page.theme-sepia { --reader-bg: #f4ecd8; --reader-fg: #5b4636; }
+.reader-page.theme-dark { --reader-bg: #222226; --reader-fg: #deddda; }
+.reader-page.theme-black { --reader-bg: #000000; --reader-fg: #c0bfbc; }
+
+.reader-page {
+  background-color: var(--reader-bg);
+  color: var(--reader-fg);
+  --headerbar-bg-color: var(--reader-bg);
+  --headerbar-fg-color: var(--reader-fg);
+  --headerbar-backdrop-color: var(--reader-bg);
+  --headerbar-shade-color: transparent;
+}
+
+.reader-page headerbar,
+.reader-page .top-bar,
+.reader-page .bottom-bar {
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  box-shadow: none;
+}
+
+.reader-size-smaller, .reader-size-bigger {
+  min-width: 48px;
+  font-family: serif;
+}
+
+.reader-size-smaller { font-size: 0.85em; }
+.reader-size-bigger { font-size: 1.45em; }
+
+.reader-return {
+  margin: 0 12px;
+}
+
+.reader-theme-chip {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.2);
+}
+
+.reader-theme-chip:checked {
+  box-shadow: inset 0 0 0 2px var(--accent-bg-color);
+}
+
+.reader-theme-chip.theme-auto { background: linear-gradient(135deg, #ffffff 50%, #222226 50%); color: var(--accent-color); }
+.reader-theme-chip.theme-light { background: #ffffff; color: #1d1d1f; }
+.reader-theme-chip.theme-sepia { background: #f4ecd8; color: #5b4636; }
+.reader-theme-chip.theme-dark { background: #222226; color: #deddda; }
+.reader-theme-chip.theme-black { background: #000000; color: #c0bfbc; }
+
+.reader-color-chip {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  color: rgba(0, 0, 0, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.reader-color-chip.color-yellow, .reader-highlight-mark.color-yellow { background: #f6d32d; }
+.reader-color-chip.color-green, .reader-highlight-mark.color-green { background: #57e389; }
+.reader-color-chip.color-blue, .reader-highlight-mark.color-blue { background: #62a0ea; }
+.reader-color-chip.color-pink, .reader-highlight-mark.color-pink { background: #f66151; }
+.reader-color-chip.color-purple, .reader-highlight-mark.color-purple { background: #c061cb; }
+
+.reader-highlight-mark {
+  border-radius: 2px;
+  min-width: 4px;
+}
+
+.reader-note-quote {
+  border-left: 3px solid alpha(currentColor, 0.3);
+  padding-left: 9px;
+  font-style: italic;
+}
+
+/* Small chips: Edit Metadata's tag suggestions and the shelf dialog's example searches. */
+.tag-suggestion,
+.shelf-example {
+  min-height: 26px;
+  padding: 2px 12px;
+  font-weight: normal;
+}
+
+.shelf-example {
+  font-family: monospace;
+  font-size: 0.9em;
+}

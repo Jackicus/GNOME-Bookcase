@@ -4,4 +4,285 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcasePreferencesDialog: Adw.PreferencesDialog {}
+// Preferences (app.preferences, Ctrl+,): where books live, how the reader opens books, how
+// books go to a Kobo, and the Google Books key. Rows are bound to their settings in
+// preferences.py; the folder lists are filled there from the library.
+template $BookcasePreferencesDialog: Adw.PreferencesDialog {
+  search-enabled: true;
+
+  Adw.PreferencesPage {
+    name: "library";
+    title: _("Library");
+    icon-name: "accessories-dictionary-symbolic";
+
+    Adw.PreferencesGroup {
+      title: _("Library Folder");
+      description: _("Books you add are copied here, into a folder per author. The files you add them from are left as they are.");
+
+      Adw.ActionRow library_folder_row {
+        title: _("Folder");
+        subtitle-selectable: true;
+
+        styles [
+          "property",
+        ]
+
+        [suffix]
+        Button library_folder_button {
+          label: _("_Change…");
+          use-underline: true;
+          valign: center;
+        }
+      }
+    }
+
+    Adw.PreferencesGroup watched_group {
+      title: _("Watched Folders");
+      description: _("Books in these folders are read where they are, never copied or moved. New books appear when the folder is read again.");
+
+      [header-suffix]
+      Button add_watched_button {
+        icon-name: "list-add-symbolic";
+        tooltip-text: _("Add Folder");
+        valign: center;
+
+        styles [
+          "flat",
+        ]
+      }
+
+      ListBox watched_list {
+        selection-mode: none;
+
+        styles [
+          "boxed-list",
+        ]
+
+        [placeholder]
+        Label {
+          label: _("No watched folders");
+          margin-top: 12;
+          margin-bottom: 12;
+
+          styles [
+            "dimmed",
+          ]
+        }
+      }
+    }
+
+    Adw.PreferencesGroup calibre_group {
+      title: _("Calibre Libraries");
+      description: _("A linked Calibre library is read in place: Calibre stays usable, and Bookcase never writes to its metadata.db. Edits made in Bookcase stay in Bookcase.");
+
+      [header-suffix]
+      Button add_calibre_button {
+        icon-name: "list-add-symbolic";
+        tooltip-text: _("Link Calibre Library");
+        valign: center;
+
+        styles [
+          "flat",
+        ]
+      }
+
+      ListBox calibre_list {
+        selection-mode: none;
+
+        styles [
+          "boxed-list",
+        ]
+
+        [placeholder]
+        Label {
+          label: _("No linked Calibre libraries");
+          margin-top: 12;
+          margin-bottom: 12;
+
+          styles [
+            "dimmed",
+          ]
+        }
+      }
+    }
+  }
+
+  Adw.PreferencesPage {
+    name: "reading";
+    title: _("Reading");
+    icon-name: "view-paged-symbolic";
+
+    Adw.PreferencesGroup {
+      title: _("Pages");
+      description: _("How books open. The reader’s Display menu changes these too.");
+
+      Adw.ComboRow theme_row {
+        title: _("Colours");
+
+        model: StringList {
+          strings [
+            _("Follow System"),
+            _("Light"),
+            _("Sepia"),
+            _("Dark"),
+            _("Black"),
+          ]
+        };
+      }
+
+      Adw.SwitchRow scrolled_row {
+        title: _("Scroll Instead of Turning Pages");
+      }
+
+      Adw.SwitchRow two_pages_row {
+        title: _("Two Pages Side by Side");
+        subtitle: _("When the window is wide enough");
+      }
+
+      Adw.SwitchRow animate_row {
+        title: _("Slide When Turning Pages");
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: _("Text");
+
+      Adw.SwitchRow publisher_styles_row {
+        title: _("Keep the Book’s Own Styles");
+        subtitle: _("When off, the settings below override the book’s");
+      }
+
+      Adw.ComboRow font_row {
+        title: _("Typeface");
+
+        model: StringList {
+          strings [
+            _("The Book’s Own"),
+            _("Serif"),
+            _("Sans Serif"),
+            _("Other…"),
+          ]
+        };
+      }
+
+      Adw.ActionRow custom_font_row {
+        title: _("Font");
+        visible: false;
+
+        [suffix]
+        FontDialogButton custom_font_button {
+          valign: center;
+          level: family;
+          use-font: true;
+
+          dialog: FontDialog {
+            title: _("Choose Font");
+          };
+        }
+      }
+
+      Adw.SpinRow font_size_row {
+        title: _("Text Size");
+        subtitle: _("In pixels");
+        numeric: true;
+
+        adjustment: Adjustment {
+          lower: 10;
+          upper: 40;
+          step-increment: 1;
+          page-increment: 4;
+        };
+      }
+
+      Adw.SpinRow line_height_row {
+        title: _("Line Spacing");
+        numeric: true;
+        digits: 1;
+
+        adjustment: Adjustment {
+          lower: 1.0;
+          upper: 2.4;
+          step-increment: 0.1;
+          page-increment: 0.5;
+        };
+      }
+
+      Adw.SpinRow margin_row {
+        title: _("Margins");
+        subtitle: _("Percent of the page’s width");
+        numeric: true;
+
+        adjustment: Adjustment {
+          lower: 0;
+          upper: 25;
+          step-increment: 1;
+          page-increment: 5;
+        };
+      }
+
+      Adw.SpinRow max_width_row {
+        title: _("Widest Column");
+        subtitle: _("In pixels");
+        numeric: true;
+
+        adjustment: Adjustment {
+          lower: 400;
+          upper: 2000;
+          step-increment: 20;
+          page-increment: 100;
+        };
+      }
+
+      Adw.SwitchRow justify_row {
+        title: _("Justify Text");
+      }
+
+      Adw.SwitchRow hyphenate_row {
+        title: _("Hyphenate Words");
+      }
+    }
+  }
+
+  Adw.PreferencesPage {
+    name: "devices";
+    title: _("Devices");
+    icon-name: "phone-symbolic";
+
+    Adw.PreferencesGroup {
+      title: _("Kobo");
+
+      Adw.SwitchRow kepub_row {
+        title: _("Send EPUBs as Kobo EPUBs");
+        subtitle: _("A Kobo shows reading statistics and page numbers only for its own kind of EPUB. The book in the library is not changed.");
+      }
+    }
+  }
+
+  Adw.PreferencesPage {
+    name: "online";
+    title: _("Online");
+    icon-name: "web-browser-symbolic";
+
+    Adw.PreferencesGroup {
+      title: _("Finding Metadata");
+      description: _("Find Metadata searches Open Library, which needs no account. With a Google Books API key it searches Google Books too.");
+
+      Adw.PasswordEntryRow google_key_row {
+        title: _("Google Books API Key");
+      }
+    }
+
+    Adw.PreferencesGroup {
+      Label {
+        label: _("A key is free from the Google Cloud console: create a project, turn on the Books API and make an API key under Credentials. Only the book’s title, author or ISBN is sent.");
+        wrap: true;
+        xalign: 0;
+
+        styles [
+          "caption",
+          "dimmed",
+        ]
+      }
+    }
+  }
+}

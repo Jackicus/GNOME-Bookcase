@@ -1,4 +1,1377 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # SPDX-FileCopyrightText: 2026 Jack Tully
 
-"""Not written yet: reader_window."""
+"""The reader window: one per open book.
+
+    reader_window.open(app, book_id)    # the book's window, raised if open; returns it
+    window.show_annotations()           # the sidebar open on highlights and bookmarks
+    window.book_id
+    window.view                         # its widgets.book_view.BookView
+
+The book (library.reading_file()) shows in a BookView. The header bar has the title and the
+chapter, the sidebar button, a bookmark toggle, the Text and Layout popover (the reader-*
+settings, applied as they change: the paper theme, typeface, size, spacing, margins, width,
+justification, hyphenation, pages or scrolling, two pages, the publisher's styles) and the
+main menu. The sidebar (an Adw.OverlaySplitView, docked when the window is wide) has the
+contents (the current chapter selected), the highlights and bookmarks (click to go, edit a
+note, change a colour, remove with Undo) and the search (results as they come, Ctrl+G and
+Ctrl+Shift+G through them). The bottom bar has the scrubber (with a mark per chapter) and a
+label that cycles, on click, through the percentage, the page, the time left in the chapter
+and in the book (stats.time_left, else foliate-js's estimate): the reader-progress-label
+setting. After a jump (the contents, a search result, a link, the scrubber) a button goes
+back to where the reader was.
+
+Selecting text opens a popover: a highlight colour, Add Note… (dialogs/note.py), Copy, Look
+Up (Wiktionary for a word, Wikipedia for more, in the browser) and Search; clicking a
+highlight opens it for that highlight, with Remove. Clicking the middle of the page hides or
+shows the bars; F11 is fullscreen, the bars hidden until the pointer reaches the top edge.
+
+The keys are shortcuts.READER, read by the window's own key controller in the capture phase
+(the web view takes no focus); Ctrl+scroll changes the text size; mouse buttons 8 and 9 go
+back and forward.
+
+The place is saved with library.set_progress() a second after the last move and on closing
+(the library marks an unread book as reading); the time spent is logged with
+library.log_session() on closing and after five idle minutes (reading.SessionClock).
+Reaching the end marks the book finished, with Undo. A book whose file is missing gets a
+status page with Locate File…; PDF and other formats foliate-js cannot show open in another
+app; without WebKitGTK a status page says so.
+"""
+
+import logging
+import os
+import time
+import urllib.parse
+from gettext import gettext as _
+from xml.sax.saxutils import escape
+
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
+
+from . import reading, stats
+from .library import COLORS, LibraryError
+from .shortcuts import READER
+from .widgets import book_view as book_view_module
+from .widgets.book_view import BookView  # noqa: F401  (the template's child)
+from .widgets.util import connect_weak
+
+log = logging.getLogger(__name__)
+
+SCHEMA_ID = 'io.github.jackicus.Bookcase'
+SAVE_DELAY_MS = 1000
+FONT_SIZES = (10, 40)
+FINISHED_FRACTION = 0.995
+RETURN_HIDE_TURNS = 3  # pages turned after a jump before the return button goes
+REVEAL_EDGE = 8  # pixels from the top edge that show the bars in fullscreen
+MAX_SCALE_MARKS = 60
+
+
+def color_names():
+    return {'yellow': _('Yellow'), 'green': _('Green'), 'blue': _('Blue'), 'pink': _('Pink'),
+            'purple': _('Purple')}
+
+
+def theme_names():
+    return {'auto': _('Follow System Style'), 'light': _('Light'), 'sepia': _('Sepia'),
+            'dark': _('Dark'), 'black': _('Black')}
+
+
+def open(app, book_id):  # noqa: A001  (the module's entry point, called as reader_window.open)
+    """The reader window of a book: the open one raised, else a new one. Returns it."""
+    for window in app.get_windows():
+        if isinstance(window, ReaderWindow) and window.book_id == book_id:
+            window.present()
+            return window
+    window = ReaderWindow(app, book_id)
+    window.present()
+    return window
+
+
+def _keymap():
+    """{(keyval, modifiers): name} of shortcuts.READER."""
+    keys = {}
+    for name, accels in READER.items():
+        for accel in accels:
+            ok, keyval, mods = Gtk.accelerator_parse(accel)
+            if ok and keyval:
+                keys[(Gdk.keyval_to_lower(keyval), int(mods))] = name
+    return keys
+
+
+@Gtk.Template(resource_path='/io/github/jackicus/Bookcase/reader_window.ui')
+class ReaderWindow(Adw.ApplicationWindow):
+    __gtype_name__ = 'BookcaseReaderWindow'
+
+    toast_overlay = Gtk.Template.Child()
+    split_view = Gtk.Template.Child()
+    sidebar_stack = Gtk.Template.Child()
+    contents_stack = Gtk.Template.Child()
+    toc_list = Gtk.Template.Child()
+    annotations_stack = Gtk.Template.Child()
+    annotations_list = Gtk.Template.Child()
+    search_entry = Gtk.Template.Child()
+    search_stack = Gtk.Template.Child()
+    search_list = Gtk.Template.Child()
+    search_status = Gtk.Template.Child()
+    toolbar_view = Gtk.Template.Child()
+    header_bar = Gtk.Template.Child()
+    sidebar_button = Gtk.Template.Child()
+    window_title = Gtk.Template.Child()
+    typography_button = Gtk.Template.Child()
+    bookmark_button = Gtk.Template.Child()
+    content_stack = Gtk.Template.Child()
+    book_view = Gtk.Template.Child()
+    status_page = Gtk.Template.Child()
+    status_buttons = Gtk.Template.Child()
+    return_revealer = Gtk.Template.Child()
+    return_button = Gtk.Template.Child()
+    return_content = Gtk.Template.Child()
+    bottom_bar = Gtk.Template.Child()
+    prev_button = Gtk.Template.Child()
+    next_button = Gtk.Template.Child()
+    progress_scale = Gtk.Template.Child()
+    progress_button = Gtk.Template.Child()
+    progress_label = Gtk.Template.Child()
+    typography_popover = Gtk.Template.Child()
+    theme_box = Gtk.Template.Child()
+    font_group = Gtk.Template.Child()
+    smaller_button = Gtk.Template.Child()
+    size_label = Gtk.Template.Child()
+    bigger_button = Gtk.Template.Child()
+    line_height_row = Gtk.Template.Child()
+    margin_row = Gtk.Template.Child()
+    max_width_row = Gtk.Template.Child()
+    layout_group = Gtk.Template.Child()
+    two_pages_row = Gtk.Template.Child()
+    justify_row = Gtk.Template.Child()
+    hyphenate_row = Gtk.Template.Child()
+    publisher_row = Gtk.Template.Child()
+
+    def __init__(self, app, book_id):
+        super().__init__(application=app)
+        self.app = app
+        self.library = app.library
+        self.settings = getattr(app, 'settings', None) or Gio.Settings.new(SCHEMA_ID)
+        self.book_id = book_id
+        self.book = self.library.book(book_id)
+        self.view = self.book_view
+        self.file = None
+        self.add_css_class('reader')
+        self.set_default_size(self.settings.get_int('reader-width'),
+                              self.settings.get_int('reader-height'))
+
+        self._place = None  # the last relocated message
+        self._loaded = None  # the loaded message
+        self._section_fractions = []
+        self._clock = None
+        self._save_source = 0
+        self._style_source = 0
+        self._scrub_source = 0
+        self._scrub_fraction = None
+        self._return_cfi = None
+        self._turns_since_jump = 0
+        self._finished_marked = False
+        self._annotations = []
+        self._selection = None  # the selection or highlight the popover is for
+        self._toc_rows = []
+        self._search_rows = []  # [(row, cfi)]
+        self._search_index = -1
+        self._search_count = 0
+        self._chrome_visible = True
+        self._peeking = False  # the bars shown by the pointer at the top edge, in fullscreen
+        self._bookmark_cfi = None  # the bookmark on the page shown
+        self._dialog_open = False
+        self._closed = False
+        self._rate = None  # the reader's pace in this book (fraction per second), or None
+        self._keys = _keymap()
+
+        self._build_actions()
+        self._build_controllers()
+        self._build_typography()
+        self._build_selection_popover()
+        self._connect_signals()
+        self._apply_theme_classes()
+        self._update_title()
+        self._open_book()
+
+    # -- setting up ------------------------------------------------------------------------
+
+    def _build_actions(self):
+        for name, callback in (('fullscreen', self._toggle_fullscreen),
+                               ('go-to', self._go_to_location),
+                               ('info', self._show_details),
+                               ('close', self._close)):
+            action = Gio.SimpleAction.new(name, None)
+            action.connect('activate', _weak_callback(self, callback))
+            self.add_action(action)
+        for name, callback in (('edit-note', self._edit_note_of),
+                               ('remove-annotation', self._remove_annotation_of),
+                               ('annotation-color', self._color_of)):
+            parameter = GLib.VariantType.new('(xs)' if name == 'annotation-color' else 'x')
+            action = Gio.SimpleAction.new(name, parameter)
+            action.connect('activate', _weak_callback(self, callback, argument=1))
+            self.add_action(action)
+
+    def _build_controllers(self):
+        keys = Gtk.EventControllerKey(propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        connect_weak(keys, 'key-pressed', self._on_key)
+        self.add_controller(keys)
+
+        scroll = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.VERTICAL | Gtk.EventControllerScrollFlags.DISCRETE,
+            propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        connect_weak(scroll, 'scroll', self._on_scroll)
+        self.add_controller(scroll)
+
+        buttons = Gtk.GestureClick(button=0, propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        connect_weak(buttons, 'pressed', self._on_button)
+        self.add_controller(buttons)
+
+        motion = Gtk.EventControllerMotion(propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        connect_weak(motion, 'motion', self._on_motion)
+        self.add_controller(motion)
+
+    def _connect_signals(self):
+        view = self.book_view
+        connect_weak(view, 'loaded', self._on_loaded)
+        connect_weak(view, 'toc-ready', self._on_toc)
+        connect_weak(view, 'relocated', self._on_relocated)
+        connect_weak(view, 'selection', self._on_selection)
+        connect_weak(view, 'annotation-activated', self._on_annotation_activated)
+        connect_weak(view, 'search-result', self._on_search_result)
+        connect_weak(view, 'search-done', self._on_search_done)
+        connect_weak(view, 'error', self._on_view_error)
+        connect_weak(view, 'toggle-chrome', self._on_toggle_chrome)
+        connect_weak(self.toc_list, 'row-activated', self._on_toc_activated)
+        connect_weak(self.annotations_list, 'row-activated', self._on_annotation_row)
+        connect_weak(self.search_list, 'row-activated', self._on_search_row)
+        connect_weak(self.search_entry, 'search-changed', self._on_search_changed)
+        connect_weak(self.search_entry, 'activate', self._on_search_activate)
+        connect_weak(self.search_entry, 'stop-search', self._on_stop_search)
+        connect_weak(self.bookmark_button, 'clicked', self._on_bookmark_clicked)
+        connect_weak(self.return_button, 'clicked', self._on_return)
+        self.prev_button.connect('clicked', _weak_callback(self, self._go_left))
+        self.next_button.connect('clicked', _weak_callback(self, self._go_right))
+        connect_weak(self.progress_scale, 'change-value', self._on_scrub)
+        connect_weak(self.progress_button, 'clicked', self._on_progress_clicked)
+        connect_weak(self, 'close-request', self._on_close_request)
+        connect_weak(self, 'notify::fullscreened', self._on_fullscreened)
+        connect_weak(self.split_view, 'notify::show-sidebar', self._on_sidebar_shown)
+        # The library, the settings and the style manager outlive the window: held weakly,
+        # disconnected on closing.
+        self._library_handler = connect_weak(self.library, 'changed', self._on_library_changed)
+        self._settings_handler = connect_weak(self.settings, 'changed', self._on_setting_changed)
+        self._style_handler = connect_weak(Adw.StyleManager.get_default(), 'notify::dark',
+                                           self._on_dark_changed)
+
+    # -- opening ---------------------------------------------------------------------------
+
+    def _open_book(self):
+        book = self.book
+        if book is None:
+            self._show_status('dialog-question-symbolic', _('Book Not Found'),
+                              _('This book is no longer in the library'))
+            return
+        files = self.library.files(self.book_id)
+        self.file = self.library.reading_file(self.book_id)
+        if self.file is not None and not os.path.exists(self.file.path):
+            self.file = None
+        if self.file is None:
+            if files:
+                missing = files[0]
+                self._show_status(
+                    'dialog-question-symbolic', _('File Not Found'),
+                    _('The book was at {path}. Locate it to keep reading.').format(
+                        path=missing.path),
+                    [(_('Locate File…'), True, self._locate_file, {'missing': missing})])
+            else:
+                self._show_status('dialog-question-symbolic', _('No File to Read'),
+                                  _('Only the details of this book are in the library'))
+            return
+        fmt = (self.file.format or '').lower()
+        if not reading.readable(fmt):
+            if fmt == 'pdf':
+                self._show_status('x-office-document-symbolic', _('PDF Opens Elsewhere'),
+                                  _('Bookcase cannot show PDF pages yet'),
+                                  [(_('Open in Document Viewer'), True, self._launch_file)])
+            else:
+                self._show_status(
+                    'x-office-document-symbolic', _('Format Not Supported'),
+                    _('Bookcase cannot show {format} books').format(format=fmt.upper()),
+                    [(_('Open in Another App'), True, self._launch_file)])
+            return
+        if not book_view_module.available():
+            self._show_status('dialog-warning-symbolic', _('Reading Needs WebKitGTK'),
+                              _('Install WebKitGTK 6.0 to read books in Bookcase'),
+                              [(_('Open in Another App'), True, self._launch_file)])
+            return
+        self._annotations = self.library.annotations(self.book_id)
+        self._refresh_annotation_list()
+        self.content_stack.set_visible_child_name('book')
+        self.book_view.open(self.file.path, fmt, location=book.location or None,
+                            fraction=book.progress or None,
+                            annotations=self._highlights(), bookmarks=self._bookmarks(),
+                            style=self._style())
+        self._clock = reading.SessionClock(book.progress or 0.0, time.time())
+        self._update_rate()
+
+    def _show_status(self, icon, title, description, buttons=()):
+        self.status_page.set_icon_name(icon)
+        self.status_page.set_title(title)
+        self.status_page.set_description(description)
+        while (child := self.status_buttons.get_first_child()) is not None:
+            self.status_buttons.remove(child)
+        for label, suggested, callback, *kwargs in buttons:
+            button = Gtk.Button(label=label, halign=Gtk.Align.CENTER)
+            button.add_css_class('pill')
+            if suggested:
+                button.add_css_class('suggested-action')
+            button.connect('clicked', _weak_callback(self, callback, **(kwargs or [{}])[0]))
+            self.status_buttons.append(button)
+        self.content_stack.set_visible_child_name('status')
+        for widget in (self.bookmark_button, self.typography_button, self.sidebar_button):
+            widget.set_sensitive(False)
+        self.bottom_bar.set_visible(False)
+
+    def _locate_file(self, missing):
+        dialog = Gtk.FileDialog(title=_('Locate File'), modal=True)
+        ref = self.weak_ref()
+
+        def done(dialog, result):
+            window = ref()
+            try:
+                gfile = dialog.open_finish(result)
+            except GLib.Error:
+                return
+            if window is None or gfile is None or gfile.get_path() is None:
+                return
+            try:
+                window.library.set_file_path(missing.id, gfile.get_path())
+            except LibraryError as error:
+                window.toast(str(error))
+                return
+            window.book = window.library.book(window.book_id)
+            for widget in (window.bookmark_button, window.typography_button,
+                           window.sidebar_button):
+                widget.set_sensitive(True)
+            window.bottom_bar.set_visible(True)
+            window._open_book()
+
+        dialog.open(self, None, done)
+
+    def _launch_file(self):
+        files = self.library.files(self.book_id)
+        if not files:
+            return
+        launcher = Gtk.FileLauncher.new(Gio.File.new_for_path(files[0].path))
+        launcher.launch(self, None, None)
+
+    def _highlights(self):
+        return [{'cfi': a.location, 'color': a.color} for a in self._annotations
+                if a.kind == 'highlight' and a.location]
+
+    def _bookmarks(self):
+        return [a.location for a in self._annotations if a.kind == 'bookmark' and a.location]
+
+    # -- the style -------------------------------------------------------------------------
+
+    def _style(self):
+        dark = Adw.StyleManager.get_default().get_dark()
+        title = self.book.title if self.book else ''
+        return reading.build_style(self._setting, dark, title)
+
+    def _setting(self, key):
+        return self.settings.get_value(key).unpack() if key not in (
+            'reader-theme', 'reader-font') else self.settings.get_string(key)
+
+    def _apply_style(self):
+        self._style_source = 0
+        self.book_view.set_style(self._style())
+        self._apply_theme_classes()
+        return GLib.SOURCE_REMOVE
+
+    def _apply_theme_classes(self):
+        dark = Adw.StyleManager.get_default().get_dark()
+        name = reading.theme_colors(self.settings.get_string('reader-theme'), dark)['name']
+        for theme in reading.THEMES:
+            self.toolbar_view.remove_css_class(f'theme-{theme}')
+        self.toolbar_view.add_css_class('reader-page')
+        self.toolbar_view.add_css_class(f'theme-{name}')
+
+    def _on_setting_changed(self, _settings, key):
+        if key in reading.STYLE_KEYS and not self._style_source:
+            self._style_source = GLib.idle_add(self._apply_style)
+        if key == 'reader-font-size':
+            self._update_size_label()
+        elif key == 'reader-scrolled':
+            self._update_layout_group()
+        elif key == 'reader-theme':
+            self._update_theme_chips()
+        elif key == 'reader-progress-label':
+            self._update_progress_label()
+
+    def _on_dark_changed(self, _manager, _pspec):
+        if not self._style_source:
+            self._style_source = GLib.idle_add(self._apply_style)
+
+    # -- the typography popover ------------------------------------------------------------
+
+    def _build_typography(self):
+        self._theme_chips = {}
+        group = None
+        names = theme_names()
+        for name in reading.THEME_NAMES:
+            chip = Gtk.ToggleButton(tooltip_text=names[name], group=group,
+                                    width_request=36, height_request=36)
+            chip.update_property([Gtk.AccessibleProperty.LABEL], [names[name]])
+            chip.add_css_class('reader-theme-chip')
+            chip.add_css_class(f'theme-{name}')
+            check = Gtk.Image(icon_name='object-select-symbolic', can_target=False)
+            chip.set_child(check)
+            group = group or chip
+            chip.connect('toggled', _weak_callback(self, self._on_theme_chip, argument=0,
+                                                   name=name))
+            self.theme_box.append(chip)
+            self._theme_chips[name] = chip
+        self._update_theme_chips()
+
+        flags = Gio.SettingsBindFlags.DEFAULT
+        self.settings.bind('reader-font', self.font_group, 'active-name', flags)
+        self.settings.bind('reader-line-height', self.line_height_row, 'value', flags)
+        self.settings.bind('reader-margin', self.margin_row, 'value', flags)
+        self.settings.bind('reader-max-width', self.max_width_row, 'value', flags)
+        self.settings.bind('reader-two-pages', self.two_pages_row, 'active', flags)
+        self.settings.bind('reader-justify', self.justify_row, 'active', flags)
+        self.settings.bind('reader-hyphenate', self.hyphenate_row, 'active', flags)
+        self.settings.bind('reader-publisher-styles', self.publisher_row, 'active', flags)
+        self._update_layout_group()
+        connect_weak(self.layout_group, 'notify::active-name', self._on_layout_changed)
+        self.smaller_button.connect('clicked',
+                                    _weak_callback(self, self._change_font_size, step=-1))
+        self.bigger_button.connect('clicked',
+                                   _weak_callback(self, self._change_font_size, step=1))
+        self._update_size_label()
+
+    def _update_theme_chips(self):
+        current = self.settings.get_string('reader-theme')
+        for name, chip in self._theme_chips.items():
+            chip.set_active(name == current)
+            chip.get_child().set_visible(name == current)
+
+    def _on_theme_chip(self, chip, name):
+        chip.get_child().set_visible(chip.get_active())
+        if chip.get_active() and self.settings.get_string('reader-theme') != name:
+            self.settings.set_string('reader-theme', name)
+
+    def _update_layout_group(self):
+        name = 'scrolled' if self.settings.get_boolean('reader-scrolled') else 'paginated'
+        if self.layout_group.get_active_name() != name:
+            self.layout_group.set_active_name(name)
+
+    def _on_layout_changed(self, group, _pspec):
+        scrolled = group.get_active_name() == 'scrolled'
+        if self.settings.get_boolean('reader-scrolled') != scrolled:
+            self.settings.set_boolean('reader-scrolled', scrolled)
+
+    def _update_size_label(self):
+        size = self.settings.get_int('reader-font-size')
+        self.size_label.set_label(_('{} px').format(size))
+        self.smaller_button.set_sensitive(size > FONT_SIZES[0])
+        self.bigger_button.set_sensitive(size < FONT_SIZES[1])
+
+    def _change_font_size(self, step=0):
+        if step == 0:
+            self.settings.reset('reader-font-size')
+            return
+        size = self.settings.get_int('reader-font-size') + step
+        self.settings.set_int('reader-font-size', max(FONT_SIZES[0], min(FONT_SIZES[1], size)))
+
+    # -- the page's messages ---------------------------------------------------------------
+
+    def _on_loaded(self, _view, loaded):
+        self._loaded = loaded
+        self._section_fractions = loaded.get('sectionFractions') or []
+        scale = self.progress_scale
+        scale.clear_marks()
+        if 1 < len(self._section_fractions) <= MAX_SCALE_MARKS:
+            for fraction in self._section_fractions[1:]:
+                scale.add_mark(min(1.0, fraction), Gtk.PositionType.BOTTOM, None)
+        if loaded.get('dir') == 'rtl':
+            scale.set_inverted(True)
+
+    def _on_toc(self, _view, toc):
+        while (row := self.toc_list.get_first_child()) is not None:
+            self.toc_list.remove(row)
+        self._toc_rows = []
+
+        def add(items, depth):
+            for item in items:
+                label = Gtk.Label(label=item.get('label') or _('Untitled'), xalign=0,
+                                  ellipsize=Pango.EllipsizeMode.END,
+                                  tooltip_text=item.get('label') or None,
+                                  margin_start=6 + 18 * depth, margin_top=4,
+                                  margin_bottom=4)
+                if depth:
+                    label.add_css_class('dimmed')
+                row = Gtk.ListBoxRow(child=label)
+                row.href = item.get('href') or ''
+                self.toc_list.append(row)
+                self._toc_rows.append(row)
+                add(item.get('subitems') or [], depth + 1)
+
+        add(toc, 0)
+        self.contents_stack.set_visible_child_name('list' if self._toc_rows else 'empty')
+        if self._place:
+            self._select_toc(self._place)
+
+    def _on_relocated(self, _view, place):
+        if place.get('fraction') is None:
+            return  # before the first layout
+        previous = self._place
+        self._place = place
+        fraction = place['fraction']
+        now = time.time()
+        if self._clock is not None:
+            ended = self._clock.activity(now, fraction)
+            if ended is not None:
+                self._log_session(ended)
+        self._schedule_save()
+        if self._scrub_source == 0:
+            self.progress_scale.set_value(fraction)
+        self._update_progress_label()
+        self._update_title()
+        self._select_toc(place)
+        self._set_bookmark_state(place.get('bookmark'))
+        if place.get('jumpedFrom') and previous is not None:
+            self._show_return(place['jumpedFrom'], previous)
+        elif place.get('reason') in ('page', 'scroll', 'snap') and self._return_cfi:
+            self._turns_since_jump += 1
+            if self._turns_since_jump >= RETURN_HIDE_TURNS:
+                self._hide_return()
+        if place.get('atEnd') and fraction >= 0.5:
+            self._mark_finished()
+
+    def _on_view_error(self, _view, message):
+        log.warning('the book could not be opened: %s', message)
+        self._show_status('dialog-warning-symbolic', _('This Book Cannot Be Opened'),
+                          _('The file may be damaged, or in a format Bookcase cannot read'),
+                          [(_('Open in Another App'), False, self._launch_file)])
+
+    # -- progress, sessions, finishing -----------------------------------------------------
+
+    def _schedule_save(self):
+        if self._save_source:
+            GLib.source_remove(self._save_source)
+        self._save_source = GLib.timeout_add(SAVE_DELAY_MS, self._save_progress)
+
+    def _save_progress(self):
+        self._save_source = 0
+        place = self._place
+        if place is None or self.book is None:
+            return GLib.SOURCE_REMOVE
+        try:
+            self.library.set_progress(self.book_id, place['fraction'], place.get('cfi') or '')
+        except (LibraryError, OSError) as error:
+            log.warning('saving the place in book %s: %s', self.book_id, error)
+        return GLib.SOURCE_REMOVE
+
+    def _log_session(self, session):
+        try:
+            self.library.log_session(self.book_id, session.started, session.seconds,
+                                     session.start_fraction, session.end_fraction)
+        except (LibraryError, OSError) as error:
+            log.warning('logging a reading session: %s', error)
+        self._update_rate()
+
+    def _update_rate(self):
+        try:
+            left = stats.time_left(self.library, self.book_id, 0.0)
+        except Exception:  # noqa: BLE001  (an estimate is never worth failing over)
+            log.exception('estimating the reading speed')
+            left = None
+        self._rate = 1.0 / left.book if left is not None and left.book > 0 else None
+
+    def _mark_finished(self):
+        if self._finished_marked:
+            return
+        self._finished_marked = True
+        book = self.library.book(self.book_id)
+        if book is None or book.status == 'finished':
+            return
+        try:
+            self.library.set_status([self.book_id], 'finished')
+        except LibraryError as error:
+            log.warning('marking book %s finished: %s', self.book_id, error)
+            return
+        self.toast(_('Marked as finished'), undo=True)
+
+    # -- the bottom bar --------------------------------------------------------------------
+
+    def _times_left(self, place):
+        """(chapter, book) minutes left at the reader's pace, or (None, None)."""
+        if self._rate is None:
+            return None, None
+        fraction = place.get('fraction') or 0.0
+        section = place.get('section') or {}
+        index = section.get('current')
+        chapter = None
+        if index is not None and index + 1 < len(self._section_fractions):
+            end = self._section_fractions[index + 1]
+            chapter = max(0.0, end - fraction) / self._rate / 60
+        return chapter, (1.0 - fraction) / self._rate / 60
+
+    def _update_progress_label(self):
+        place = self._place
+        if place is None:
+            self.progress_label.set_label('')
+            return
+        kind = self.settings.get_string('reader-progress-label')
+        chapter, book = self._times_left(place)
+        if self._scrub_fraction is not None:
+            text = reading.progress_text('percent', {'fraction': self._scrub_fraction})
+        else:
+            text = reading.progress_text(kind, place, chapter, book)
+        self.progress_label.set_label(text)
+        self.progress_scale.set_tooltip_text(
+            reading.progress_text('percent', place))
+
+    def _on_progress_clicked(self, _button):
+        kind = self.settings.get_string('reader-progress-label')
+        self.settings.set_string('reader-progress-label', reading.next_label(kind))
+
+    def _on_scrub(self, _scale, _scroll, value):
+        self._scrub_fraction = max(0.0, min(1.0, value))
+        self._update_progress_label()
+        if self._scrub_source:
+            GLib.source_remove(self._scrub_source)
+        self._scrub_source = GLib.timeout_add(150, self._scrub_done)
+        return False
+
+    def _scrub_done(self):
+        self._scrub_source = 0
+        fraction, self._scrub_fraction = self._scrub_fraction, None
+        if fraction is not None:
+            self.book_view.go_to_fraction(fraction)
+        return GLib.SOURCE_REMOVE
+
+    def _update_title(self):
+        title = self.book.title if self.book else _('Bookcase')
+        self.set_title(title)
+        self.window_title.set_title(title)
+        chapter = (self._place or {}).get('chapter') or {}
+        self.window_title.set_subtitle(chapter.get('label') or '')
+
+    # -- the return button -----------------------------------------------------------------
+
+    def _show_return(self, cfi, previous):
+        self._return_cfi = cfi
+        self._turns_since_jump = 0
+        label = reading.progress_text('page' if previous.get('page') else 'percent', previous)
+        self.return_content.set_label(_('Back to {}').format(label))
+        self.return_revealer.set_reveal_child(True)
+
+    def _hide_return(self):
+        self._return_cfi = None
+        self.return_revealer.set_reveal_child(False)
+
+    def _on_return(self, _button):
+        cfi = self._return_cfi
+        self._hide_return()
+        if cfi:
+            self.book_view.go_to(cfi)
+            # going back is a jump too: hide the button it brings
+            GLib.timeout_add(400, _weak_callback(self, self._hide_return_once))
+
+    def _hide_return_once(self):
+        self._hide_return()
+        return GLib.SOURCE_REMOVE
+
+    # -- contents --------------------------------------------------------------------------
+
+    def _select_toc(self, place):
+        chapter = place.get('chapter') or {}
+        href = chapter.get('href')
+        row = next((row for row in self._toc_rows if href and row.href == href), None)
+        if row is None:
+            self.toc_list.unselect_all()
+            return
+        if self.toc_list.get_selected_row() is not row:
+            self.toc_list.select_row(row)
+
+    def _on_toc_activated(self, _list, row):
+        if row.href:
+            self.book_view.go_to(row.href)
+        if self.split_view.get_collapsed():
+            self.split_view.set_show_sidebar(False)
+
+    def _close(self):
+        self.close()
+
+    def _go_left(self):
+        self.book_view.go_left()
+
+    def _go_right(self):
+        self.book_view.go_right()
+
+    def _show_sidebar(self, page):
+        shown = self.sidebar_stack.get_visible_child_name()
+        if self.split_view.get_show_sidebar() and shown == page:
+            self.split_view.set_show_sidebar(False)
+            return
+        self.sidebar_stack.set_visible_child_name(page)
+        self.split_view.set_show_sidebar(True)
+        if page == 'search':
+            self.search_entry.grab_focus()
+
+    def _on_sidebar_shown(self, split_view, _pspec):
+        if not split_view.get_show_sidebar():
+            self.set_focus(None)
+
+    # -- highlights and bookmarks ----------------------------------------------------------
+
+    def _on_library_changed(self, _library, kind):
+        if kind == 'annotations':
+            self._annotations = self.library.annotations(self.book_id)
+            self._refresh_annotation_list()
+            self.book_view.set_annotations(self._highlights())
+            self.book_view.set_bookmarks(self._bookmarks(),
+                                         _weak_callback(self, self._set_bookmark_state,
+                                                        argument=0))
+        elif kind == 'books':
+            book = self.library.book(self.book_id)
+            if book is not None:
+                self.book = book
+                self._update_title()
+
+    def _refresh_annotation_list(self):
+        listbox = self.annotations_list
+        while (row := listbox.get_first_child()) is not None:
+            listbox.remove(row)
+        for annotation in self._annotations:
+            listbox.append(self._annotation_row(annotation))
+        self.annotations_stack.set_visible_child_name('list' if self._annotations else 'empty')
+
+    def _annotation_row(self, annotation):
+        box = Gtk.Box(spacing=12, margin_top=6, margin_bottom=6)
+        if annotation.kind == 'highlight':
+            mark = Gtk.Box(width_request=4, valign=Gtk.Align.FILL)
+            mark.add_css_class('reader-highlight-mark')
+            mark.add_css_class(f'color-{annotation.color}')
+        else:
+            mark = Gtk.Image(icon_name='user-bookmarks-symbolic', valign=Gtk.Align.START,
+                             accessible_role=Gtk.AccessibleRole.PRESENTATION)
+        box.append(mark)
+        texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True)
+        if annotation.kind == 'highlight':
+            text = Gtk.Label(label=' '.join(annotation.text.split()) or _('Highlight'),
+                             xalign=0, wrap=True,
+                             wrap_mode=Pango.WrapMode.WORD_CHAR, lines=4,
+                             ellipsize=Pango.EllipsizeMode.END, max_width_chars=30)
+        else:
+            text = Gtk.Label(label=annotation.text or _('Bookmark'), xalign=0,
+                             ellipsize=Pango.EllipsizeMode.END)
+        texts.append(text)
+        if annotation.note:
+            note = Gtk.Label(label=annotation.note, xalign=0, wrap=True, lines=3,
+                             wrap_mode=Pango.WrapMode.WORD_CHAR,
+                             ellipsize=Pango.EllipsizeMode.END, max_width_chars=30)
+            note.add_css_class('dimmed')
+            texts.append(note)
+        where = Gtk.Label(label=reading.progress_text('percent',
+                                                      {'fraction': annotation.position}),
+                          xalign=0)
+        where.add_css_class('caption')
+        where.add_css_class('dimmed')
+        where.add_css_class('numeric')
+        texts.append(where)
+        box.append(texts)
+
+        menu = Gio.Menu()
+        if annotation.kind == 'highlight':
+            menu.append(_('Edit Note…') if annotation.note else _('Add Note…'),
+                        f'win.edit-note({annotation.id})')
+            colors = Gio.Menu()
+            for color, name in color_names().items():
+                colors.append(name, f"win.annotation-color(({annotation.id}, '{color}'))")
+            menu.append_submenu(_('Colour'), colors)
+        menu.append(_('Remove'), f'win.remove-annotation({annotation.id})')
+        button = Gtk.MenuButton(icon_name='view-more-symbolic', menu_model=menu,
+                                valign=Gtk.Align.START, tooltip_text=_('More'))
+        button.add_css_class('flat')
+        box.append(button)
+        row = Gtk.ListBoxRow(child=box)
+        row.annotation_id = annotation.id
+        row.location = annotation.location
+        return row
+
+    def _annotation(self, annotation_id):
+        return next((a for a in self._annotations if a.id == annotation_id), None)
+
+    def _on_annotation_row(self, _list, row):
+        if row.location:
+            self.book_view.go_to(row.location)
+        if self.split_view.get_collapsed():
+            self.split_view.set_show_sidebar(False)
+
+    def _edit_note_of(self, annotation_id):
+        annotation = self._annotation(annotation_id)
+        if annotation is not None:
+            self._edit_note(annotation.text, annotation.note,
+                            lambda note: self._update_annotation(annotation_id, note=note))
+
+    def _edit_note(self, text, note, done):
+        from .dialogs import note as note_dialog
+
+        note_dialog.present(self.app, self, text, note, done)
+
+    def _color_of(self, value):
+        annotation_id, color = value
+        self._update_annotation(annotation_id, color=color)
+
+    def _update_annotation(self, annotation_id, note=None, color=None):
+        try:
+            self.library.update_annotation(annotation_id, note=note, color=color)
+        except LibraryError as error:
+            self.toast(str(error))
+
+    def _remove_annotation_of(self, annotation_id):
+        annotation = self._annotation(annotation_id)
+        if annotation is None:
+            return
+        try:
+            self.library.remove_annotation(annotation_id)
+        except LibraryError as error:
+            self.toast(str(error))
+            return
+        self.toast(_('Highlight removed') if annotation.kind == 'highlight'
+                   else _('Bookmark removed'), undo=True)
+
+    def _set_bookmark_state(self, cfi):
+        self._bookmark_cfi = cfi
+        self.bookmark_button.set_active(bool(cfi))
+        self.bookmark_button.set_tooltip_text(_('Remove Bookmark') if cfi
+                                              else _('Bookmark This Page'))
+
+    def _on_bookmark_clicked(self, _button):
+        self._toggle_bookmark()
+
+    def _toggle_bookmark(self):
+        place = self._place
+        if place is None:
+            return
+        cfi = self._bookmark_cfi
+        if cfi:
+            annotation = next((a for a in self._annotations
+                               if a.kind == 'bookmark' and a.location == cfi), None)
+            if annotation is not None:
+                self._remove_annotation_of(annotation.id)
+            return
+        start = place.get('start') or place.get('cfi')
+        if not start:
+            return
+        chapter = (place.get('chapter') or {}).get('label') or self.book.title
+        try:
+            self.library.add_annotation(self.book_id, 'bookmark', start, text=chapter,
+                                        position=place.get('fraction') or 0.0)
+        except LibraryError as error:
+            self.toast(str(error))
+
+    # -- the selection popover -------------------------------------------------------------
+
+    def _build_selection_popover(self):
+        popover = Gtk.Popover(position=Gtk.PositionType.TOP, autohide=True)
+        popover.add_css_class('reader-selection')
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        colors = Gtk.Box(spacing=6, halign=Gtk.Align.CENTER)
+        self._color_buttons = {}
+        names = color_names()
+        for color in COLORS:
+            button = Gtk.Button(tooltip_text=names[color], width_request=30, height_request=30)
+            button.update_property([Gtk.AccessibleProperty.LABEL],
+                                   [_('Highlight in {}').format(names[color])])
+            button.add_css_class('circular')
+            button.add_css_class('reader-color-chip')
+            button.add_css_class(f'color-{color}')
+            button.set_child(Gtk.Image(icon_name='object-select-symbolic', visible=False,
+                                       can_target=False))
+            button.connect('clicked', _weak_callback(self, self._on_color, color=color))
+            colors.append(button)
+            self._color_buttons[color] = button
+        box.append(colors)
+        actions = Gtk.Box(spacing=2, halign=Gtk.Align.CENTER)
+        self._selection_buttons = {}
+        for name, icon, tooltip, callback in (
+                ('note', 'document-edit-symbolic', _('Add Note…'), self._on_note),
+                ('copy', 'edit-copy-symbolic', _('Copy'), self._on_copy),
+                ('lookup', 'accessories-dictionary-symbolic', _('Look Up'), self._on_lookup),
+                ('search', 'edit-find-symbolic', _('Search the Book'), self._on_search_selection),
+                ('remove', 'user-trash-symbolic', _('Remove Highlight'), self._on_remove)):
+            button = Gtk.Button(icon_name=icon, tooltip_text=tooltip)
+            button.add_css_class('flat')
+            button.connect('clicked', _weak_callback(self, callback))
+            actions.append(button)
+            self._selection_buttons[name] = button
+        box.append(actions)
+        popover.set_child(box)
+        popover.set_parent(self.book_view)
+        popover.connect('closed', _weak_callback(self, self._on_selection_closed))
+        self._selection_popover = popover
+
+    def _popup_selection(self, rect, annotation=None):
+        popover = self._selection_popover
+        for color, button in self._color_buttons.items():
+            button.get_child().set_visible(annotation is not None and annotation.color == color)
+        self._selection_buttons['remove'].set_visible(annotation is not None)
+        self._selection_buttons['note'].set_tooltip_text(
+            _('Edit Note…') if annotation is not None and annotation.note else _('Add Note…'))
+        if rect:
+            area = Gdk.Rectangle()
+            area.x, area.y = int(rect.get('x', 0)), int(rect.get('y', 0))
+            area.width = max(1, int(rect.get('width', 1)))
+            area.height = max(1, int(rect.get('height', 1)))
+            popover.set_pointing_to(area)
+            # Above the line, unless it is too near the top of the page.
+            popover.set_position(Gtk.PositionType.TOP if area.y > 140
+                                 else Gtk.PositionType.BOTTOM)
+        popover.popup()
+
+    def _on_selection(self, _view, selection):
+        if selection is None:
+            if self._selection is not None and self._selection.get('annotation_id') is None:
+                self._selection = None
+                self._selection_popover.popdown()
+            return
+        self._selection = {'cfi': selection['cfi'], 'text': selection.get('text', ''),
+                           'fraction': selection.get('fraction') or 0.0,
+                           'annotation_id': None}
+        self._popup_selection(selection.get('rect'))
+
+    def _on_annotation_activated(self, _view, message):
+        annotation = next((a for a in self._annotations
+                           if a.kind == 'highlight' and a.location == message.get('cfi')), None)
+        if annotation is None:
+            return
+        self._selection = {'cfi': annotation.location, 'text': annotation.text,
+                           'fraction': annotation.position, 'annotation_id': annotation.id}
+        self._popup_selection(message.get('rect'), annotation)
+
+    def _on_selection_closed(self):
+        if self._selection is not None and self._selection.get('annotation_id') is None:
+            self.book_view.clear_selection()
+        self._selection = None
+
+    def _take_selection(self):
+        selection = self._selection
+        self._selection_popover.popdown()
+        return selection
+
+    def _add_highlight(self, selection, color='yellow', note=''):
+        try:
+            self.library.add_annotation(self.book_id, 'highlight', selection['cfi'],
+                                        text=selection['text'], note=note, color=color,
+                                        position=selection['fraction'])
+        except LibraryError as error:
+            self.toast(str(error))
+        self.book_view.clear_selection()
+
+    def _on_color(self, color):
+        selection = self._take_selection()
+        if selection is None:
+            return
+        if selection['annotation_id'] is not None:
+            self._update_annotation(selection['annotation_id'], color=color)
+        else:
+            self._add_highlight(selection, color)
+
+    def _on_note(self):
+        selection = self._take_selection()
+        if selection is None:
+            return
+        annotation_id = selection['annotation_id']
+        if annotation_id is not None:
+            self._edit_note_of(annotation_id)
+        else:
+            self._edit_note(selection['text'], '',
+                            lambda note: self._add_highlight(selection, note=note))
+
+    def _on_copy(self):
+        selection = self._take_selection()
+        if selection is not None and selection['text']:
+            self.get_clipboard().set(selection['text'])
+            self.toast(_('Copied'))
+
+    def _on_lookup(self):
+        selection = self._take_selection()
+        if selection is None or not selection['text']:
+            return
+        text = ' '.join(selection['text'].split())
+        language = ((self.book.language if self.book else '') or 'en').split('-')[0][:3]
+        language = language.lower() if language.isalpha() else 'en'
+        if ' ' not in text and len(text) < 40:
+            uri = (f'https://{language}.wiktionary.org/wiki/'
+                   f'{urllib.parse.quote(text.strip(".,;:!?«»“”‘’\"()").lower())}')
+        else:
+            uri = (f'https://{language}.wikipedia.org/w/index.php?search='
+                   f'{urllib.parse.quote_plus(text[:200])}')
+        Gtk.UriLauncher.new(uri).launch(self, None, None, None)
+
+    def _on_search_selection(self):
+        selection = self._take_selection()
+        if selection is None or not selection['text']:
+            return
+        self.sidebar_stack.set_visible_child_name('search')
+        self.split_view.set_show_sidebar(True)
+        self.search_entry.set_text(' '.join(selection['text'].split())[:100])
+        self._start_search()
+
+    def _on_remove(self):
+        selection = self._take_selection()
+        if selection is not None and selection['annotation_id'] is not None:
+            self._remove_annotation_of(selection['annotation_id'])
+
+    # -- search ----------------------------------------------------------------------------
+
+    def _on_search_changed(self, _entry):
+        self._start_search()
+
+    def _on_search_activate(self, _entry):
+        if self._search_rows:
+            self._search_step(1)
+
+    def _on_stop_search(self, entry):
+        if entry.get_text():
+            entry.set_text('')
+        else:
+            self.set_focus(None)
+            if self.split_view.get_collapsed():
+                self.split_view.set_show_sidebar(False)
+
+    def _start_search(self):
+        text = self.search_entry.get_text().strip()
+        while (row := self.search_list.get_first_child()) is not None:
+            self.search_list.remove(row)
+        self._search_rows = []
+        self._search_index = -1
+        self._search_count = 0
+        self.search_status.set_visible(False)
+        if not text:
+            self.book_view.clear_search()
+            self.search_stack.set_visible_child_name('start')
+            return
+        self.search_status.set_label(_('Searching…'))
+        self.search_status.set_visible(True)
+        self.book_view.search(text)
+
+    def _on_search_result(self, _view, result):
+        heading = Gtk.Label(label=result.get('label') or _('Untitled'), xalign=0,
+                            ellipsize=Pango.EllipsizeMode.END, margin_top=6)
+        heading.add_css_class('heading')
+        header = Gtk.ListBoxRow(child=heading, activatable=False, selectable=False)
+        self.search_list.append(header)
+        for item in result.get('items') or []:
+            markup = (escape(item.get('pre', '')) + '<b>' + escape(item.get('match', ''))
+                      + '</b>' + escape(item.get('post', '')))
+            label = Gtk.Label(use_markup=True, label=markup, xalign=0, wrap=True,
+                              wrap_mode=Pango.WrapMode.WORD_CHAR, lines=3,
+                              ellipsize=Pango.EllipsizeMode.END, max_width_chars=30,
+                              margin_top=2, margin_bottom=2)
+            row = Gtk.ListBoxRow(child=label)
+            row.cfi = item.get('cfi')
+            self.search_list.append(row)
+            self._search_rows.append(row)
+            self._search_count += 1
+        self.search_stack.set_visible_child_name('list')
+        self.search_status.set_label(_('{} results so far').format(self._search_count))
+
+    def _on_search_done(self, _view, done):
+        if done.get('query') != self.search_entry.get_text().strip():
+            return
+        count = done.get('count') or 0
+        if count == 0:
+            self.search_stack.set_visible_child_name('empty')
+            self.search_status.set_visible(False)
+            return
+        self.search_status.set_label(
+            (_('{} result') if count == 1 else _('{} results')).format(count))
+
+    def _on_search_row(self, _list, row):
+        cfi = getattr(row, 'cfi', None)
+        if cfi:
+            self._search_index = self._search_rows.index(row)
+            self.book_view.select(cfi)
+            if self.split_view.get_collapsed():
+                self.split_view.set_show_sidebar(False)
+
+    def _search_step(self, step):
+        if not self._search_rows:
+            return
+        self._search_index = (self._search_index + step) % len(self._search_rows)
+        row = self._search_rows[self._search_index]
+        self.search_list.select_row(row)
+        self.book_view.select(row.cfi)
+
+    # -- keys, the pointer, chrome ---------------------------------------------------------
+
+    def set_dialog_open(self, is_open):
+        """A dialog over the window takes the keys while it is open (dialogs/note.py)."""
+        self._dialog_open = bool(is_open)
+
+    def _on_key(self, _controller, keyval, _keycode, state):
+        if self._dialog_open:
+            return False
+        mods = int(state & Gtk.accelerator_get_default_mod_mask())
+        lower = Gdk.keyval_to_lower(keyval)
+        name = self._keys.get((lower, mods))
+        if name is None:
+            name = self._keys.get((lower, mods & ~int(Gdk.ModifierType.SHIFT_MASK)))
+        if name is None:
+            return False
+        focus = self.get_focus()
+        typing = isinstance(focus, Gtk.Text | Gtk.TextView | Gtk.Editable)
+        if typing and not (mods & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK)) \
+                and name not in ('fullscreen', 'leave-fullscreen'):
+            return False
+        if typing and name == 'leave-fullscreen':
+            return False  # the search entry's stop-search
+        if self.content_stack.get_visible_child_name() != 'book' and name not in (
+                'fullscreen', 'leave-fullscreen', 'close', 'info'):
+            return False
+        return self._run_key(name, lower) is not False
+
+    def _run_key(self, name, keyval):
+        view = self.book_view
+        if name == 'next':
+            if keyval in (Gdk.KEY_Right, Gdk.KEY_l):
+                view.go_right()
+            else:
+                view.next()
+        elif name == 'previous':
+            if keyval in (Gdk.KEY_Left, Gdk.KEY_h):
+                view.go_left()
+            else:
+                view.prev()
+        elif name == 'scroll-down':
+            view.scroll(1)
+        elif name == 'scroll-up':
+            view.scroll(-1)
+        elif name == 'start':
+            view.start()
+        elif name == 'end':
+            view.end()
+        elif name == 'next-chapter':
+            view.next_section()
+        elif name == 'previous-chapter':
+            view.prev_section()
+        elif name == 'back':
+            view.back()
+        elif name == 'forward':
+            view.forward()
+        elif name == 'contents':
+            self._show_sidebar('contents')
+        elif name == 'annotations':
+            self._show_sidebar('annotations')
+        elif name == 'search':
+            self.sidebar_stack.set_visible_child_name('search')
+            self.split_view.set_show_sidebar(True)
+            self.search_entry.grab_focus()
+        elif name == 'search-next':
+            self._search_step(1)
+        elif name == 'search-previous':
+            self._search_step(-1)
+        elif name == 'bookmark':
+            self._toggle_bookmark()
+        elif name == 'bigger':
+            self._change_font_size(1)
+        elif name == 'smaller':
+            self._change_font_size(-1)
+        elif name == 'reset-size':
+            self._change_font_size(0)
+        elif name == 'fullscreen':
+            self._toggle_fullscreen()
+        elif name == 'leave-fullscreen':
+            if self.is_fullscreen():
+                self.unfullscreen()
+            elif self.split_view.get_collapsed() and self.split_view.get_show_sidebar():
+                self.split_view.set_show_sidebar(False)
+            elif not self._chrome_visible:
+                self._set_chrome(True)
+            else:
+                return False
+        elif name == 'go-to':
+            self._go_to_location()
+        elif name == 'info':
+            self._show_details()
+        elif name == 'close':
+            self.close()
+        else:
+            return False
+        return True
+
+    def _on_scroll(self, controller, _dx, dy):
+        state = controller.get_current_event_state()
+        if not state & Gdk.ModifierType.CONTROL_MASK or dy == 0:
+            return False
+        self._change_font_size(-1 if dy > 0 else 1)
+        return True
+
+    def _on_button(self, gesture, _n_press, _x, _y):
+        button = gesture.get_current_button()
+        if button == 8:
+            self.book_view.back()
+        elif button == 9:
+            self.book_view.forward()
+        else:
+            return
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _on_motion(self, _controller, _x, y):
+        if not self.is_fullscreen() or self._chrome_visible:
+            if self.is_fullscreen() and self._chrome_visible and self._peeking:
+                bar = self.header_bar.get_height() + 24
+                bottom = self.get_height() - self.bottom_bar.get_height() - 24
+                if bar < y < bottom:
+                    self._peeking = False
+                    self._set_chrome(False)
+            return
+        if y <= REVEAL_EDGE:
+            self._peeking = True
+            self._set_chrome(True)
+
+    def _on_toggle_chrome(self, _view):
+        self._peeking = False
+        self._set_chrome(not self._chrome_visible)
+
+    def _set_chrome(self, visible):
+        self._chrome_visible = visible
+        self.toolbar_view.set_reveal_top_bars(visible)
+        self.toolbar_view.set_reveal_bottom_bars(visible)
+        if self.content_stack.get_visible_child_name() == 'book':
+            self.book_view.show_progress(not visible)
+
+    def _toggle_fullscreen(self):
+        if self.is_fullscreen():
+            self.unfullscreen()
+        else:
+            self.fullscreen()
+
+    def _on_fullscreened(self, _window, _pspec):
+        fullscreen = self.is_fullscreen()
+        self.toolbar_view.set_extend_content_to_top_edge(fullscreen)
+        self.toolbar_view.set_extend_content_to_bottom_edge(fullscreen)
+        self._peeking = False
+        self._set_chrome(not fullscreen)
+
+    # -- the menu's other items ------------------------------------------------------------
+
+    def _go_to_location(self):
+        if self._place is None:
+            return
+        dialog = Adw.AlertDialog(heading=_('Go to Location'),
+                                 body=_('A percentage of the book, from 0 to 100'))
+        entry = Gtk.Entry(input_purpose=Gtk.InputPurpose.NUMBER, activates_default=True,
+                          text=str(int((self._place.get('fraction') or 0) * 100)))
+        dialog.set_extra_child(entry)
+        dialog.add_response('cancel', _('Cancel'))
+        dialog.add_response('go', _('Go'))
+        dialog.set_response_appearance('go', Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response('go')
+        dialog.set_close_response('cancel')
+        ref = self.weak_ref()
+
+        def response(_dialog, answer):
+            window = ref()
+            window.set_dialog_open(False) if window is not None else None
+            if window is None or answer != 'go':
+                return
+            try:
+                percent = float(entry.get_text().strip().rstrip('%').replace(',', '.'))
+            except ValueError:
+                return
+            window.book_view.go_to_fraction(max(0.0, min(100.0, percent)) / 100)
+
+        dialog.connect('response', response)
+        self.set_dialog_open(True)
+        dialog.present(self)
+        entry.grab_focus()
+
+    def _show_details(self):
+        get_window = getattr(self.app, 'window', None)
+        window = get_window() if callable(get_window) else None
+        if window is None or not hasattr(window, 'show_book'):
+            return
+        window.show_book(self.book_id)
+        window.present()
+
+    def show_annotations(self):
+        """The sidebar open on the highlights and bookmarks (the book details page's
+        Highlights button)."""
+        self.sidebar_stack.set_visible_child_name('annotations')
+        self.split_view.set_show_sidebar(True)
+        self.present()
+
+    def toast(self, text, undo=False):
+        """A toast in this window; with Undo, app.undo() puts the last change back."""
+        toast = Adw.Toast(title=text, timeout=5 if undo else 2)
+        if undo:
+            toast.set_button_label(_('Undo'))
+            app = self.app
+            toast.connect('button-clicked', lambda *_args: app.undo())
+        self.toast_overlay.add_toast(toast)
+        return toast
+
+    def add_toast(self, toast):
+        self.toast_overlay.add_toast(toast)
+
+    # -- closing ---------------------------------------------------------------------------
+
+    def _on_close_request(self, _window):
+        if self._closed:
+            return False
+        self._closed = True
+        if self._save_source:
+            GLib.source_remove(self._save_source)
+            self._save_source = 0
+        self._save_progress()
+        if self._clock is not None:
+            session = self._clock.finish(time.time())
+            if session is not None:
+                self._log_session(session)
+            self._clock = None
+        for source in (self._style_source, self._scrub_source):
+            if source:
+                GLib.source_remove(source)
+        self._style_source = self._scrub_source = 0
+        if not self.is_maximized() and not self.is_fullscreen():
+            width, height = self.get_default_size()
+            if width > 0 and height > 0:
+                self.settings.set_int('reader-width', width)
+                self.settings.set_int('reader-height', height)
+        for obj, handler in ((self.library, self._library_handler),
+                             (self.settings, self._settings_handler),
+                             (Adw.StyleManager.get_default(), self._style_handler)):
+            if obj.handler_is_connected(handler):
+                obj.disconnect(handler)
+        self._selection_popover.unparent()
+        self.book_view.close()
+        return False
+
+
+def _weak_callback(widget, method, argument=None, **kwargs):
+    """A signal handler (or GLib callback) calling `method` (a bound method of `widget`, or
+    of its class) while `widget` lives, without keeping it alive: method(**kwargs), or
+    method(value, **kwargs) with the handler's argument at index `argument` (an action's
+    parameter is unpacked)."""
+    ref = widget.weak_ref()
+    function = method.__func__
+
+    def call(*args):
+        instance = ref()
+        if instance is None:
+            return False
+        if argument is None:
+            return function(instance, **kwargs)
+        value = args[argument] if len(args) > argument else None
+        if isinstance(value, GLib.Variant):
+            value = value.unpack()
+        return function(instance, value, **kwargs)
+
+    return call

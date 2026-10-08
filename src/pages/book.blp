@@ -4,4 +4,216 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseBookPage: Adw.NavigationPage {}
+// A book's details, pushed over a grid or the home page: the cover beside the title,
+// authors, series, rating and progress with Read; the description, tags, the details, the
+// files and the highlights (pages/book.py fills the rows).
+template $BookcaseBookPage: Adw.NavigationPage {
+  title: _("Book");
+
+  child: Adw.BreakpointBin {
+    width-request: 360;
+    height-request: 240;
+
+    Adw.Breakpoint {
+      condition ("max-width: 640sp")
+
+      setters {
+        hero.orientation: vertical;
+        hero.spacing: 18;
+        info_box.halign: center;
+        title_label.xalign: 0.5;
+        title_label.justify: center;
+        authors_label.xalign: 0.5;
+        authors_label.justify: center;
+        series_label.xalign: 0.5;
+        series_label.justify: center;
+        rating_box.halign: center;
+        status_label.xalign: 0.5;
+        progress_bar.halign: center;
+        buttons_box.halign: center;
+        buttons_box.orientation: vertical;
+      }
+    }
+
+    child: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {
+        show-title: false;
+
+        [end]
+        MenuButton more_button {
+          icon-name: "view-more-symbolic";
+          tooltip-text: _("More");
+        }
+
+        [end]
+        Button edit_button {
+          icon-name: "document-edit-symbolic";
+          tooltip-text: _("Edit Details");
+          action-name: "book.edit";
+        }
+      }
+
+      content: ScrolledWindow {
+        hscrollbar-policy: never;
+
+        child: Adw.Clamp {
+          maximum-size: 880;
+          tightening-threshold: 600;
+
+          child: Box {
+            orientation: vertical;
+            spacing: 30;
+            margin-top: 12;
+            margin-bottom: 30;
+            margin-start: 18;
+            margin-end: 18;
+
+            Box hero {
+              spacing: 36;
+
+              Box cover_box {
+                halign: center;
+                valign: start;
+              }
+
+              Box info_box {
+                orientation: vertical;
+                spacing: 8;
+                hexpand: true;
+                valign: center;
+
+                Label title_label {
+                  xalign: 0;
+                  wrap: true;
+                  wrap-mode: word_char;
+                  selectable: true;
+
+                  styles [
+                    "title-1",
+                  ]
+                }
+
+                Label authors_label {
+                  xalign: 0;
+                  wrap: true;
+                  use-markup: true;
+
+                  styles [
+                    "title-4",
+                  ]
+                }
+
+                Label series_label {
+                  xalign: 0;
+                  wrap: true;
+                  use-markup: true;
+
+                  styles [
+                    "dimmed",
+                  ]
+                }
+
+                Box rating_box {
+                  halign: start;
+                  margin-top: 4;
+                }
+
+                Label status_label {
+                  xalign: 0;
+                  margin-top: 6;
+
+                  styles [
+                    "caption",
+                    "dimmed",
+                    "numeric",
+                  ]
+                }
+
+                ProgressBar progress_bar {
+                  halign: start;
+                  width-request: 220;
+
+                  styles [
+                    "book-progress",
+                  ]
+                }
+
+                Box buttons_box {
+                  spacing: 12;
+                  margin-top: 12;
+                  halign: start;
+
+                  Button read_button {
+                    label: _("_Read");
+                    use-underline: true;
+                    action-name: "book.read";
+
+                    styles [
+                      "pill",
+                      "suggested-action",
+                    ]
+                  }
+
+                  Button finished_button {
+                    use-underline: true;
+
+                    styles [
+                      "pill",
+                    ]
+                  }
+                }
+              }
+            }
+
+            Box description_box {
+              orientation: vertical;
+              spacing: 6;
+
+              Label {
+                label: _("Description");
+                xalign: 0;
+
+                styles [
+                  "heading",
+                ]
+              }
+
+              Label description_label {
+                xalign: 0;
+                wrap: true;
+                wrap-mode: word_char;
+                use-markup: true;
+                selectable: true;
+
+                styles [
+                  "book-description",
+                ]
+              }
+            }
+
+            FlowBox tags_box {
+              selection-mode: none;
+              column-spacing: 6;
+              row-spacing: 6;
+              max-children-per-line: 30;
+              homogeneous: false;
+            }
+
+            Adw.PreferencesGroup details_group {
+              title: _("Details");
+            }
+
+            Adw.PreferencesGroup reading_group {
+              title: _("Reading");
+            }
+
+            Adw.PreferencesGroup files_group {
+              title: _("Files");
+            }
+          };
+        };
+      };
+    };
+  };
+}

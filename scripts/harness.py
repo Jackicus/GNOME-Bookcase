@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Jack Tully
 
 """The developer scripts' shared start: the installed app, on its own, off the desktop's
-settings, on the demo collection.
+settings, on the demo library.
 
 screenshot.py runs the installed build (meson install -C build, or scripts/run.sh, first)
 in-process. make_app() does what the scripts need:
@@ -10,8 +10,10 @@ in-process. make_app() does what the scripts need:
 - the installed modules on sys.path (build/install/share/bookcase) and the translations bound;
 - GSettings on the memory backend with the installed schema, so nothing a script sets reaches
   the desktop's settings;
-- the demo collection: build/demo, generated first when it is missing (scripts/demo_collection.py),
+- the demo library: build/demo, generated first when it is missing (scripts/demo_library.py),
   unless BOOKCASE_DATA_DIR names another; the app runs with --demo;
+- with device=True, a pretend Kobo plugged in: build/demo-device, laid out by
+  demo_library.make_device() and passed to the app as BOOKCASE_TEST_DEVICE;
 - gi's versions, the gresource registered, main.Application under an app ID of its own
   (io.github.jackicus.Bookcase.<suffix>, NON_UNIQUE: beside a running app);
 - at startup: the colour scheme forced dark (or light), animations off, stock GNOME's icon
@@ -35,16 +37,27 @@ SCHEMA_DIR = os.path.join(PREFIX, 'share', 'glib-2.0', 'schemas')
 LOCALEDIR = os.path.join(PREFIX, 'share', 'locale')
 ICONS = os.path.join(PREFIX, 'share', 'icons')
 DEMO_DIR = os.path.join(ROOT, 'build', 'demo')
+DEVICE_DIR = os.path.join(ROOT, 'build', 'demo-device')
 BASE_ID = 'io.github.jackicus.Bookcase'
 
 
-def ensure_demo_collection():
+def ensure_demo_library():
     """Generate build/demo when it is missing and BOOKCASE_DATA_DIR names no other."""
     if os.environ.get('BOOKCASE_DATA_DIR') or os.path.exists(
-            os.path.join(DEMO_DIR, 'collection.sqlite')):
+            os.path.join(DEMO_DIR, 'library.sqlite')):
         return
-    subprocess.run([sys.executable, os.path.join(ROOT, 'scripts', 'demo_collection.py'),
+    subprocess.run([sys.executable, os.path.join(ROOT, 'scripts', 'demo_library.py'),
                     '--data-dir', DEMO_DIR], check=True)
+
+
+def ensure_demo_device():
+    """Lay out build/demo-device (a Kobo with a few of the demo books on it) and plug it in
+    through BOOKCASE_TEST_DEVICE."""
+    if not os.path.isdir(DEVICE_DIR):
+        subprocess.run([sys.executable, os.path.join(ROOT, 'scripts', 'demo_library.py'),
+                        '--data-dir', os.environ.get('BOOKCASE_DATA_DIR', DEMO_DIR),
+                        '--device', DEVICE_DIR], check=True)
+    os.environ['BOOKCASE_TEST_DEVICE'] = DEVICE_DIR
 
 
 def project_version():
@@ -69,10 +82,13 @@ def require_install():
                  'run meson install -C build first')
 
 
-def make_app(suffix, light=False, animations=False, stock_look=True, size=None, name=None):
-    """The installed app's main.Application on the demo collection, not yet run."""
+def make_app(suffix, light=False, animations=False, stock_look=True, size=None, name=None,
+             device=False):
+    """The installed app's main.Application on the demo library, not yet run."""
     require_install()
-    ensure_demo_collection()
+    ensure_demo_library()
+    if device:
+        ensure_demo_device()
     os.environ['GSETTINGS_SCHEMA_DIR'] = SCHEMA_DIR
     os.environ['GSETTINGS_BACKEND'] = 'memory'  # never the desktop's settings
     os.environ.setdefault('BOOKCASE_DATA_DIR', DEMO_DIR)
@@ -110,6 +126,8 @@ def make_app(suffix, light=False, animations=False, stock_look=True, size=None, 
         if size is not None:
             app.settings.set_int('window-width', size[0])
             app.settings.set_int('window-height', size[1])
+            app.settings.set_int('reader-width', size[0])
+            app.settings.set_int('reader-height', size[1])
 
     def on_window_added(_app, window):
         window.set_resizable(False)

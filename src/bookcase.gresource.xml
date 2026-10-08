@@ -14,7 +14,31 @@
     <file preprocess="xml-stripblanks">shelf.ui</file>
     <file preprocess="xml-stripblanks">preferences.ui</file>
     <file>style.css</file>
+    <!-- The app's own symbolic icons (src/icons/), found by GTK under the resource base path. -->
+    <file alias="icons/scalable/actions/tag-symbolic.svg" preprocess="xml-stripblanks">icons/tag-symbolic.svg</file>
+    <file alias="icons/scalable/actions/library-symbolic.svg" preprocess="xml-stripblanks">icons/library-symbolic.svg</file>
+    <file alias="icons/scalable/actions/book-open-symbolic.svg" preprocess="xml-stripblanks">icons/book-open-symbolic.svg</file>
+    <file alias="icons/scalable/actions/book-closed-symbolic.svg" preprocess="xml-stripblanks">icons/book-closed-symbolic.svg</file>
     <file preprocess="xml-stripblanks">metainfo.xml</file>
     <!-- The reader page (src/reader/) and the vendored foliate-js. -->
+    <file>reader/reader.html</file>
+    <file>reader/reader.css</file>
+    <file>reader/reader.js</file>
+    <file>reader/foliate/view.js</file>
+    <file>reader/foliate/epub.js</file>
+    <file>reader/foliate/epubcfi.js</file>
+    <file>reader/foliate/mobi.js</file>
+    <file>reader/foliate/fb2.js</file>
+    <file>reader/foliate/comic-book.js</file>
+    <file>reader/foliate/paginator.js</file>
+    <file>reader/foliate/fixed-layout.js</file>
+    <file>reader/foliate/overlayer.js</file>
+    <file>reader/foliate/progress.js</file>
+    <file>reader/foliate/text-walker.js</file>
+    <file>reader/foliate/search.js</file>
+    <file>reader/foliate/tts.js</file>
+    <file>reader/foliate/footnotes.js</file>
+    <file>reader/foliate/vendor/zip.js</file>
+    <file>reader/foliate/vendor/fflate.js</file>
   </gresource>
 </gresources>

@@ -4,4 +4,121 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $BookcaseShelfDialog: Adw.Dialog {}
+// New Shelf, New Smart Shelf and Edit Shelf (dialogs/shelf.py): the name, and for a smart
+// shelf its search with a live count of the books it finds and example chips that add to
+// it.
+template $BookcaseShelfDialog: Adw.Dialog {
+  content-width: 460;
+  width-request: 360;
+  height-request: 294;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Button cancel_button {
+        label: _("_Cancel");
+        use-underline: true;
+      }
+
+      [end]
+      Button apply_button {
+        use-underline: true;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    content: ScrolledWindow {
+      hscrollbar-policy: never;
+      propagate-natural-height: true;
+
+      child: Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-top: 12;
+        margin-bottom: 24;
+        margin-start: 12;
+        margin-end: 12;
+
+        Adw.PreferencesGroup {
+          Adw.EntryRow name_row {
+            title: _("Name");
+          }
+        }
+
+        Label error_label {
+          visible: false;
+          xalign: 0;
+          wrap: true;
+          margin-start: 12;
+
+          styles [
+            "caption",
+            "error",
+          ]
+        }
+
+        Adw.PreferencesGroup query_group {
+          visible: false;
+          title: _("Books");
+          description: _("A smart shelf holds the books its search finds, as the library changes");
+
+          Adw.EntryRow query_row {
+            title: _("Search");
+
+            [suffix]
+            Label count_label {
+              valign: center;
+
+              styles [
+                "caption",
+                "dimmed",
+                "numeric",
+              ]
+            }
+          }
+        }
+
+        Box examples_box {
+          visible: bind query_group.visible;
+          orientation: vertical;
+          spacing: 8;
+          margin-start: 12;
+          margin-end: 12;
+
+          Label {
+            label: _("Add to the search");
+            xalign: 0;
+
+            styles [
+              "caption-heading",
+              "dimmed",
+            ]
+          }
+
+          Adw.WrapBox example_chips {
+            child-spacing: 6;
+            line-spacing: 6;
+          }
+
+          Label {
+            label: _("Words match the title, authors, series, tags and publisher. Put a minus before a search to leave its books out, and “or” between two to find either.");
+            xalign: 0;
+            wrap: true;
+
+            styles [
+              "caption",
+              "dimmed",
+            ]
+          }
+        }
+      };
+    };
+  };
+}

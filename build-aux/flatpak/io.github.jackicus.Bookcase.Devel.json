@@ -1,0 +1,66 @@
+{
+  "x-comment": [
+    "Development only: GNOME Builder or flatpak-builder run the .Devel build from this tree.",
+    "The GNOME 50 runtime ships WebKitGTK 6.0, PyGObject and pycairo; lxml is built here",
+    "(from git, so Cython first). Poppler's typelib is optional (PDF covers and metadata)",
+    "and not in the runtime: without it PDFs are listed by their file names. Books live",
+    "anywhere in the home folder (the library folder, watched folders, Calibre libraries)",
+    "and e-readers mount under /run/media, hence those two filesystem permissions; the",
+    "network is for Open Library. Written without a GNOME 50 runtime or flatpak-builder to",
+    "test it on: not built yet."
+  ],
+  "id": "io.github.jackicus.Bookcase.Devel",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "command": "bookcase",
+  "finish-args": [
+    "--share=ipc",
+    "--share=network",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--filesystem=home",
+    "--filesystem=/run/media"
+  ],
+  "cleanup": ["/include", "/lib/pkgconfig", "/share/pkgconfig", "*.la", "*.a"],
+  "modules": [
+    {
+      "name": "blueprint-compiler",
+      "buildsystem": "meson",
+      "cleanup": ["*"],
+      "sources": [
+        {"type": "git", "url": "https://gitlab.gnome.org/GNOME/blueprint-compiler.git",
+         "tag": "v0.22.2"}
+      ]
+    },
+    {
+      "name": "python3-cython",
+      "buildsystem": "simple",
+      "cleanup": ["*"],
+      "build-commands": [
+        "pip3 install --no-index --no-build-isolation --prefix=${FLATPAK_DEST} ."
+      ],
+      "sources": [
+        {"type": "git", "url": "https://github.com/cython/cython.git", "tag": "3.1.4"}
+      ]
+    },
+    {
+      "name": "python3-lxml",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --no-index --no-build-isolation --prefix=${FLATPAK_DEST} ."
+      ],
+      "sources": [
+        {"type": "git", "url": "https://github.com/lxml/lxml.git", "tag": "lxml-6.0.2"}
+      ]
+    },
+    {
+      "name": "bookcase",
+      "builddir": true,
+      "buildsystem": "meson",
+      "config-opts": ["-Dprofile=development"],
+      "sources": [{"type": "dir", "path": "../.."}]
+    }
+  ]
+}

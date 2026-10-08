@@ -1,0 +1,67 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2026 Jack Tully */
+
+/* The reader page around foliate-js's view. The colours are the paper theme's, set by
+   reader.js from the style Python sends (--bg, --fg, --link, --dim). */
+
+:root {
+    --bg: #ffffff;
+    --fg: #1d1d1f;
+    --link: #1c71d8;
+    --dim: rgba(0, 0, 0, 0.5);
+    --overlayer-highlight-opacity: 0.35;
+    --overlayer-highlight-blend-mode: multiply;
+    color-scheme: light;
+}
+
+:root.dark {
+    color-scheme: dark;
+    --overlayer-highlight-opacity: 0.4;
+    --overlayer-highlight-blend-mode: screen;
+}
+
+html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.4 system-ui, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+foliate-view {
+    display: block;
+    height: 100%;
+}
+
+/* The running head and foot (the chapter, the percentage) in paginated mode. */
+foliate-view::part(head), foliate-view::part(foot) {
+    color: var(--fg);
+    font: 13px system-ui, sans-serif;
+}
+
+/* A footnote, shown over the page when its reference is clicked. */
+#footnote {
+    position: fixed;
+    z-index: 10;
+    box-sizing: border-box;
+    width: min(440px, calc(100vw - 24px));
+    height: min(260px, 45vh);
+    padding: 6px 0;
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--fg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 6px 24px rgba(0, 0, 0, 0.25);
+    outline: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+    overflow: hidden;
+}
+
+#footnote[hidden] {
+    display: none;
+}
+
+#footnote foliate-view {
+    height: 100%;
+}

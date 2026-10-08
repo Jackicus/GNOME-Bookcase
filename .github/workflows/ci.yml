@@ -32,8 +32,8 @@ jobs:
       GSK_RENDERER: cairo
       GDK_DISABLE: gl,vulkan
       GTK_A11Y: none
-      # The card face falls back to the plain renderer: WebKit's sandbox (bubblewrap) cannot
-      # start inside the container.
+      # WebKit's sandbox (bubblewrap) cannot start inside the container: the tests that need a
+      # WebKit view (the reader's) skip themselves when this is set.
       BOOKCASE_NO_WEBKIT: 1
     steps:
       - name: Name this week's package cache
@@ -53,8 +53,9 @@ jobs:
       - name: Install build and test dependencies
         run: |
           pacman -Syu --noconfirm --needed \
-            git python python-gobject python-cairo gtk4 libadwaita glib2 gdk-pixbuf2 \
-            meson ninja pkgconf blueprint-compiler gettext \
+            git python python-gobject python-cairo python-lxml gtk4 libadwaita glib2 \
+            gdk-pixbuf2 webkitgtk-6.0 poppler-glib meson ninja pkgconf blueprint-compiler \
+            gettext noto-fonts \
             appstream desktop-file-utils adwaita-icon-theme \
             ruff xorg-server-xvfb xorg-xauth
           # Keep only the installed versions, so the saved cache does not grow.
