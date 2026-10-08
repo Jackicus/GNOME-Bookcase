@@ -61,8 +61,8 @@
         {
           "type": "git",
           "url": "https://github.com/Jackicus/GNOME-Bookcase.git",
-          "tag": "v0.2.0",
-          "commit": "09c84514401dacabd8fbfe568f96b59ca865d572",
+          "tag": "v0.3.0",
+          "commit": "61ed98cfb5488e933969c10375b564e0e646372e",
           "x-checker-data": {
             "type": "git",
             "tag-pattern": "^v([\\d.]+)$"
