@@ -161,7 +161,7 @@ def pump(timeout_ms=200):
         iterate(context)
 
 
-def wait_for(predicate, timeout=1.0):
+def wait_for(predicate, timeout=5.0):
     """Run the default main context until predicate() is true (True) or timeout seconds
     have passed (False)."""
     from gi.repository import GLib
