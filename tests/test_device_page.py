@@ -188,7 +188,9 @@ class DeviceWidgetsTest(unittest.TestCase):
         dialog.force_close()
         page.remove_books([str(self.stranger)])
         self.assertTrue(wait_for(lambda: not self.stranger.exists()
-                                 and len(rows(page.outside_list)) == 0))
+                                 and len(rows(page.outside_list)) == 0),
+                        f'file there: {self.stranger.exists()}, '
+                        f'rows: {len(rows(page.outside_list))}, toasts: {self.app.toasts}')
         self.assertEqual(self.app.toasts, ['Removed 1 book from Kobo Clara 2E'])
         self.assertFalse(page.select_button.get_active())
 

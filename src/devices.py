@@ -453,7 +453,7 @@ class Device:
             except OSError:
                 break
             parent = os.path.dirname(parent)
-        _sync()
+        _sync(parent)
 
     # -- ejecting ----------------------------------------------------------------------------
 
@@ -505,11 +505,19 @@ def _run_ebook_convert(src, dest):
         raise DeviceError(_('Calibre could not convert the book')) from error
 
 
-def _sync():
+def _sync(directory):
+    """Flush a folder's entries (a file written, renamed or removed in it) to the device,
+    not every file system the computer has, as os.sync() would."""
     try:
-        os.sync()
-    except (AttributeError, OSError):
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
         pass
+    finally:
+        os.close(fd)
 
 
 def _copy_file(src, dest, progress):
@@ -526,7 +534,7 @@ def _copy_file(src, dest, progress):
             target.flush()
             os.fsync(target.fileno())
         os.replace(partial, dest)
-        _sync()
+        _sync(os.path.dirname(dest))
     except BaseException:
         try:
             os.remove(partial)
