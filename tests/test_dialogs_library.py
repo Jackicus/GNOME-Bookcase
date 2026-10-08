@@ -161,6 +161,8 @@ class TestAddBooks(unittest.TestCase):
 @requires_gtk
 class TestPreferences(unittest.TestCase):
     def test_bindings_and_folders(self):
+        from gi.repository import Gtk
+
         from bookcase.dialogs.preferences import PreferencesDialog, library_folder
 
         with fake_app() as app, tempfile.TemporaryDirectory() as folder:
@@ -169,6 +171,11 @@ class TestPreferences(unittest.TestCase):
             dialog = PreferencesDialog(app)
             self.assertIsNotNone(dialog.watched_list.get_row_at_index(0))
             self.assertIsNone(dialog.calibre_list.get_row_at_index(0))
+            # An empty list says so: the placeholder outlives the rows being made again.
+            dialog.show_folders()
+            placeholder = dialog.calibre_list.get_first_child()
+            self.assertIsInstance(placeholder, Gtk.Label)
+            self.assertTrue(placeholder.get_visible())
             dialog.font_size_row.set_value(22)
             self.assertEqual(settings.get_int('reader-font-size'), 22)
             settings.set_double('reader-line-height', 1.8)

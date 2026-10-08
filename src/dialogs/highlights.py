@@ -28,6 +28,7 @@ from gettext import ngettext
 from gi.repository import Adw, Gio, GLib, Gtk
 
 from .. import annotations
+from ..widgets.util import connect_weak, connect_weak_call
 from . import watch_dialog
 
 log = logging.getLogger(__name__)
@@ -121,11 +122,11 @@ class ClippingsDialog(Adw.Dialog):
         self.rows = []
         header = Adw.HeaderBar(show_start_title_buttons=False, show_end_title_buttons=False)
         cancel = Gtk.Button(label=_('_Cancel'), use_underline=True)
-        cancel.connect('clicked', lambda *_args: self.close())
+        connect_weak_call(cancel, 'clicked', self.close)
         header.pack_start(cancel)
         self.import_button = Gtk.Button(label=_('_Import'), use_underline=True)
         self.import_button.add_css_class('suggested-action')
-        self.import_button.connect('clicked', lambda *_args: self.run_import())
+        connect_weak_call(self.import_button, 'clicked', self.run_import)
         header.pack_end(self.import_button)
         page = Adw.PreferencesPage()
         total = sum(len(group.matches) for group in groups)
@@ -161,13 +162,13 @@ class ClippingsDialog(Adw.Dialog):
         row.clipping_group = group
         check = Gtk.CheckButton(valign=Gtk.Align.CENTER)
         check.update_property([Gtk.AccessibleProperty.LABEL], [group.title])
-        check.connect('toggled', lambda *_args: self._update())
+        connect_weak_call(check, 'toggled', self._update)
         row.add_prefix(check)
         row.set_activatable_widget(check)
         row.check = check
         choose = Gtk.Button(label=_('Choose Book…'), valign=Gtk.Align.CENTER)
         choose.add_css_class('flat')
-        choose.connect('clicked', self._on_choose, row)
+        connect_weak(choose, 'clicked', self._on_choose, row)
         row.add_suffix(choose)
         row.choose_button = choose
         self._show_row(row, initial=True)

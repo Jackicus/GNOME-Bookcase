@@ -30,6 +30,7 @@ import html.entities
 import logging
 import posixpath
 import re
+import shutil
 import zipfile
 from urllib.parse import unquote
 
@@ -52,6 +53,13 @@ SENTENCE = re.compile(r'.*?(?:[.!?…]+["”’»)\]]*\s+|$)', re.S)
 ENTITY = re.compile(r'&([A-Za-z][A-Za-z0-9]*);')
 XML_ENTITIES = frozenset(('amp', 'lt', 'gt', 'quot', 'apos'))
 STYLE = 'div#book-inner { margin-top: 0; margin-bottom: 0; }'
+MAX_DOCUMENT = 32 * 1024 * 1024  # a larger content document is copied unconverted
+
+
+def _parser():
+    """A parser for the book's own XML (untrusted): no entities, DTDs or network."""
+    return etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True,
+                           huge_tree=False)
 
 
 def kepub_name(name):
@@ -67,9 +75,20 @@ def is_kepub(path):
     """True when a content document of the book at `path` already carries koboSpans."""
     with zipfile.ZipFile(path) as archive:
         for name in _content_documents(archive):
-            if b'koboSpan' in archive.read(name):
-                return True
+            try:
+                if b'koboSpan' in _read(archive, name):
+                    return True
+            except (KeyError, ValueError):
+                continue
     return False
+
+
+def _read(archive, name):
+    """A member's bytes; ValueError for one that says it is larger than MAX_DOCUMENT
+    (zipfile inflates no member past what it says)."""
+    if archive.getinfo(name).file_size > MAX_DOCUMENT:
+        raise ValueError(f'{name} is too large')
+    return archive.read(name)
 
 
 def convert(src, dest):
@@ -83,23 +102,31 @@ def convert(src, dest):
             for info in archive.infolist():
                 if info.filename == 'mimetype':
                     continue
-                data = archive.read(info)
-                if info.filename in documents:
-                    data = convert_document(data, info.filename)
-                out.writestr(info, data, compress_type=info.compress_type)
+                if info.filename in documents and info.file_size <= MAX_DOCUMENT:
+                    data = convert_document(archive.read(info), info.filename)
+                    out.writestr(info, data, compress_type=info.compress_type)
+                    continue
+                # Streamed as it is: a large member is never held in memory whole.
+                copy = zipfile.ZipInfo(info.filename, date_time=info.date_time)
+                copy.external_attr = info.external_attr
+                copy.compress_type = info.compress_type
+                large = info.file_size >= zipfile.ZIP64_LIMIT
+                with archive.open(info) as reader, \
+                        out.open(copy, 'w', force_zip64=large) as writer:
+                    shutil.copyfileobj(reader, writer, 1 << 20)
     return dest
 
 
 def _content_documents(archive):
     """The zip names of the book's XHTML documents, the navigation document excepted."""
-    container = etree.fromstring(archive.read('META-INF/container.xml'))
+    container = etree.fromstring(_read(archive, 'META-INF/container.xml'), _parser())
     rootfile = container.find(f'.//{{{CONTAINER}}}rootfile')
     if rootfile is None:
         return []
     opf_path = rootfile.get('full-path', '')
     try:
-        opf = etree.fromstring(archive.read(opf_path))
-    except (KeyError, etree.XMLSyntaxError):
+        opf = etree.fromstring(_read(archive, opf_path), _parser())
+    except (KeyError, ValueError, etree.XMLSyntaxError):
         return []
     base = posixpath.dirname(opf_path)
     names = []
@@ -136,7 +163,7 @@ def convert_document(data, name=''):
     except UnicodeDecodeError:
         text = None
     parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True,
-                             huge_tree=True, remove_blank_text=False)
+                             huge_tree=False, remove_blank_text=False)
     try:
         if text is not None:
             source = _numeric_entities(text)

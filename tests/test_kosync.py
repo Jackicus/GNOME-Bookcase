@@ -105,6 +105,23 @@ class ProtocolTest(unittest.TestCase):
         self.assertEqual(kosync.status_text(now, error='Wrong', now=now), 'Wrong')
 
 
+class StoreTest(unittest.TestCase):
+
+    def test_a_store_that_is_not_an_object_is_started_afresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'sync.json')
+            for text in ('[1, 2]', '"text"', '12', 'null', '{"pending": [1]}', '{'):
+                with self.subTest(text=text):
+                    with open(path, 'w', encoding='utf-8') as file:
+                        file.write(text)
+                    store = kosync.Store(path)
+                    self.assertEqual(store.pending(), {})
+                    store.set_pending('doc', {'percentage': 0.5})
+                    self.assertEqual(kosync.Store(path).pending(),
+                                     {'doc': {'percentage': 0.5}})
+            self.assertEqual(sorted(os.listdir(directory)), ['sync.json'])
+
+
 class ClientTest(unittest.TestCase):
     def setUp(self):
         self.server = FakeServer().start()
@@ -130,6 +147,69 @@ class ClientTest(unittest.TestCase):
         self.assertEqual((remote.percentage, remote.cfi, remote.device, remote.device_id),
                          (0.4321, 'epubcfi(/6/4)', 'Desk', 'DEV1'))
         self.assertTrue(client.health())
+
+    def _redirector(self, location):
+        """A server on 127.0.0.1 answering every GET with a 302 to `location`."""
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+            def do_GET(self):
+                seen.append(dict((k.lower(), v) for k, v in self.headers.items()))
+                self.send_response(302)
+                self.send_header('Location', location)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+
+        httpd = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        return f'http://127.0.0.1:{httpd.server_address[1]}', seen
+
+    def test_the_key_never_follows_a_redirect_to_another_host(self):
+        client = kosync.Client(self.server.url)
+        client.register('ada', 'tide')
+        elsewhere = self.server.url.replace('127.0.0.1', 'localhost') + '/users/auth'
+        url, seen = self._redirector(elsewhere)
+        with self.assertRaises(kosync.SyncError) as caught:
+            kosync.Client(url, 'ada', kosync.key_for('tide')).login()
+        self.assertTrue(caught.exception.unauthorized)  # it arrived without the key
+        self.assertEqual(seen[0]['x-auth-key'], kosync.key_for('tide'))
+        headers = self.server.requests[-1][2]
+        self.assertNotIn('x-auth-key', headers)
+        self.assertNotIn('x-auth-user', headers)
+
+    def test_the_key_follows_a_redirect_on_its_own_server(self):
+        import urllib.request
+
+        handler = kosync._KeyRedirect()
+        request = urllib.request.Request('http://sync.example/users/auth', headers={
+            'x-auth-user': 'ada', 'x-auth-key': 'k'})
+        for target, kept in (('http://sync.example/v1/users/auth', True),
+                             ('https://sync.example/users/auth', True),
+                             ('http://sync.example:8080/users/auth', False),
+                             ('http://other.example/users/auth', False)):
+            with self.subTest(target=target):
+                new = handler.redirect_request(request, None, 302, 'Found', {}, target)
+                names = {name.lower() for name in new.headers}
+                self.assertEqual('x-auth-key' in names, kept)
+                self.assertEqual('x-auth-user' in names, kept)
+        secure = urllib.request.Request('https://sync.example/users/auth', headers={
+            'x-auth-key': 'k'})
+        downgraded = handler.redirect_request(secure, None, 302, 'Found', {},
+                                              'http://sync.example/users/auth')
+        self.assertNotIn('x-auth-key', {name.lower() for name in downgraded.headers})
+        import urllib.error
+
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            handler.redirect_request(request, None, 302, 'Found', {}, 'file:///etc/hostname')
+        caught.exception.close()
 
     def test_errors(self):
         client = kosync.Client(self.server.url)

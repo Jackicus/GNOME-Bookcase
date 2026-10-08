@@ -132,8 +132,11 @@ def _throttle(url):
 
 def http_get(url, limit=MAX_COVER_BYTES):
     """The body at `url` (redirects followed), at most `limit` bytes; OnlineError otherwise."""
-    _throttle(url)
     host = urllib.parse.urlsplit(url).hostname or url
+    if urllib.parse.urlsplit(url).scheme.lower() not in ('http', 'https'):
+        # A cover address from an answer is never a file on this computer.
+        raise OnlineError(_('Not found'))
+    _throttle(url)
     request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT,
                                                    'Accept': '*/*'})
     try:

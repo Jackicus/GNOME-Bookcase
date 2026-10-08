@@ -489,6 +489,116 @@ class TestComic(FormatsTestCase):
             self.assertEqual(sorted(archive.namelist()), ['pages/p1.png', 'pages/p2.png'])
 
 
+def _zeros(archive, name, size):
+    """A member of `size` zero bytes, written in chunks (a zip bomb's shape: it compresses
+    to a thousandth of that)."""
+    info = zipfile.ZipInfo(name)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    with archive.open(info, 'w', force_zip64=True) as member:
+        chunk = bytes(1 << 20)
+        for _ in range(size >> 20):
+            member.write(chunk)
+
+
+class TestUntrusted(FormatsTestCase):
+    """Book files are untrusted: no entity reaches a local file, no member is inflated past
+    a limit."""
+
+    def test_external_entities_are_never_read(self):
+        secret = self.path('secret.txt')
+        with open(secret, 'w') as file:
+            file.write('SECRET-CONTENT')
+        doctype = (f'<!DOCTYPE x [<!ENTITY leak SYSTEM "file://{secret}">'
+                   '<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;">]>')
+        fb2 = make_fb2().decode('utf-8').replace(
+            '<?xml version="1.0" encoding="utf-8"?>',
+            '<?xml version="1.0" encoding="utf-8"?>' + doctype).replace(
+            'Salt and Ember', 'Salt &leak; &lol2;', 1)
+        path = self.path('x.fb2')
+        with open(path, 'w', encoding='utf-8') as file:
+            file.write(fb2)
+        info = formats.read(path)
+        self.assertNotIn('SECRET', info.title)
+        self.assertNotIn('lollol', info.title)
+
+        book = make_epub(self.path('x.epub'), title='Plain')
+        rewritten = self.path('y.epub')
+        with zipfile.ZipFile(book) as source, zipfile.ZipFile(rewritten, 'w') as target:
+            for member in source.infolist():
+                data = source.read(member)
+                if member.filename.endswith('.opf'):
+                    text = data.decode('utf-8')
+                    text = text.replace('?>', '?>' + doctype, 1).replace(
+                        '>Plain<', '>Plain &leak;&lol2;<')
+                    data = text.encode('utf-8')
+                target.writestr(member, data)
+        try:
+            info = formats.read(rewritten)
+        except FormatError:
+            return  # refusing the file is safe too
+        self.assertNotIn('SECRET', info.title)
+        self.assertNotIn('lollol', info.title)
+
+    def test_an_epub_cover_bomb_is_not_inflated(self):
+        path = self.path('bomb.epub')
+        book = make_epub(self.path('plain.epub'), cover=make_png(2, 2))
+        with zipfile.ZipFile(book) as source, zipfile.ZipFile(
+                path, 'w', zipfile.ZIP_DEFLATED) as target:
+            for member in source.infolist():
+                if member.filename.lower().endswith(('.png', '.jpg', '.gif')):
+                    _zeros(target, member.filename, epub.MAX_COVER + (1 << 20))
+                else:
+                    target.writestr(member, source.read(member))
+        self.assertLess(os.path.getsize(path), 1 << 20)
+        info = formats.read(path)
+        self.assertEqual(info.title, 'A Quiet Harbour')
+        self.assertIsNone(info.cover)
+
+    def test_a_huge_container_is_refused(self):
+        path = self.path('bomb.epub')
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('mimetype', 'application/epub+zip')
+            _zeros(archive, 'META-INF/container.xml', epub.MAX_OPF + (1 << 20))
+        with self.assertRaises(FormatError):
+            formats.read(path)
+
+    def test_a_comic_info_bomb_is_not_inflated(self):
+        path = self.path('bomb.cbz')
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('p1.png', make_png(1, 1))
+            _zeros(archive, 'ComicInfo.xml', comic.MAX_COMIC_INFO + (1 << 20))
+        info = formats.read(path)
+        self.assertEqual(info.cover, make_png(1, 1))
+        self.assertEqual(info.title, 'bomb')
+
+    @unittest.skipUnless(shutil.which('bsdtar'), 'needs bsdtar')
+    def test_bsdtar_output_is_read_no_further_than_the_limit(self):
+        # A CBR's members come through bsdtar: one inflating past the limit gives nothing.
+        path = self.path('big.cbr')
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('p1.png', make_png(1, 1))
+            _zeros(archive, 'p2.png', 4 << 20)
+        tool = shutil.which('bsdtar')
+        self.assertIsNone(comic._extract(tool, path, 'p2.png', limit=1 << 20))
+        self.assertEqual(len(comic._extract(tool, path, 'p2.png', limit=8 << 20)), 4 << 20)
+        self.assertEqual(comic._extract(tool, path, 'p1.png'), make_png(1, 1))
+        self.assertIsNone(comic._extract(tool, path, 'missing.png'))
+
+    def test_writing_a_copy_streams_large_members(self):
+        path = self.path('big.epub')
+        book = make_epub(self.path('plain.epub'))
+        with zipfile.ZipFile(book) as source, zipfile.ZipFile(
+                path, 'w', zipfile.ZIP_DEFLATED) as target:
+            for member in source.infolist():
+                target.writestr(member, source.read(member))
+            _zeros(target, 'OEBPS/padding.bin', 8 << 20)
+        dest = epub.write(path, BookInfo(title='Copied'), dest=self.path('copy.epub'))
+        self.assertEqual(formats.read(dest).title, 'Copied')
+        with zipfile.ZipFile(dest) as archive:
+            self.assertEqual(archive.getinfo('OEBPS/padding.bin').file_size, 8 << 20)
+            self.assertIsNone(archive.testzip())
+
+
 class TestPdf(FormatsTestCase):
 
     def test_pdf(self):

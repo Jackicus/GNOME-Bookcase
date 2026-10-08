@@ -201,10 +201,10 @@ class FinishedTest(unittest.TestCase):
             library.log_session(book_id, 5000, 600, 0.9, 1.0)
             path = library.path
             library.db.execute('UPDATE books SET last_read = 7777')
-            # Back to a version 1 file: no finished or pages column.
+            # Back to a version 1 file: no finished, pages or source_values column.
             library.db.executescript(
                 'ALTER TABLE books DROP COLUMN finished; ALTER TABLE books DROP COLUMN pages;'
-                'PRAGMA user_version = 1;')
+                'ALTER TABLE books DROP COLUMN source_values; PRAGMA user_version = 1;')
             db = sqlite3.connect(path)
             schema.apply(db)
             rows = dict(db.execute('SELECT id, finished FROM books').fetchall())

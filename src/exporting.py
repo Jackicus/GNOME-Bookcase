@@ -10,8 +10,9 @@
     ExportError                                             str() is a sentence for the user
 
 export_copy() copies the book's file in `format` (else its reading format) into dest_dir as
-'Title - Author.ext' (or `name`, a file name with or without the suffix), with ' (2)' when
-taken unless `replace`. An EPUB (or kepub) gets the library's metadata and cover written
+'Title - Author.ext' (or `name`, a file name with or without the suffix, made safe: never a
+path out of dest_dir), with ' (2)' when taken unless `replace` (which never replaces the
+book's own file). An EPUB (or kepub) gets the library's metadata and cover written
 into the copy (formats.epub.write); other formats, and an EPUB that cannot be rewritten
 (DRM, broken), are copied as they are. The library's file is never changed.
 """
@@ -69,6 +70,13 @@ def _free(path):
     return path
 
 
+def _same_file(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.abspath(a) == os.path.abspath(b)
+
+
 def export_copy(library, covers, book_id, dest_dir, format=None, embed=True, name=None,
                 replace=False):
     book = library.book(book_id)
@@ -83,12 +91,17 @@ def export_copy(library, covers, book_id, dest_dir, format=None, embed=True, nam
     suffix = formats.suffix_of(source.path)
     if name is None:
         name = copy_name(book, suffix)
-    elif not name.lower().endswith(suffix):
+    else:
+        # Always one file name in dest_dir: a name with '/' or '..' goes nowhere else.
+        if name.lower().endswith(suffix):
+            name = name[:len(name) - len(suffix)]
         name = safe_name(name, limit=200) + suffix
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(str(dest_dir), name)
     if not replace:
         dest = _free(dest)
+    elif os.path.lexists(dest) and _same_file(dest, source.path):
+        raise ExportError(_('The copy would replace the book’s own file'))
     if embed and source.format in EMBEDDABLE:
         try:
             info = book_info(library, covers, book)

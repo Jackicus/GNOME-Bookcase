@@ -22,10 +22,12 @@ the app starts, when the undo stack is empty) removes them.
 Thumbnails are PNGs at `thumbnails/<width>/<id>-<version>.png`, the cover scaled to that
 width keeping its aspect ratio (GdkPixbuf; never wider than the cover itself). They are
 made in a small thread pool; the callback runs on the main loop through GLib.idle_add, or
-at once when the thumbnail is already there.
+at once when the thumbnail is already there. A cover of more than MAX_PIXELS pixels (a
+decompression bomb, from an untrusted book) gets none.
 """
 
 import concurrent.futures
+import contextlib
 import glob
 import logging
 import os
@@ -47,6 +49,7 @@ except (ImportError, ValueError):  # pragma: no cover - GdkPixbuf comes with GTK
     from gi.repository import GLib
 
 WORKERS = 3
+MAX_PIXELS = 80 * 1000 * 1000  # a cover larger than this gets no thumbnail
 _NAME = re.compile(r'(\d+)-(\d+)\.\w+$')
 
 
@@ -159,10 +162,18 @@ class CoverStore:
         if GdkPixbuf is None:
             return None
         try:
+            _format, cover_width, cover_height = GdkPixbuf.Pixbuf.get_file_info(source)
+            if cover_width * cover_height > MAX_PIXELS:
+                # Decoding it would take gigabytes (a cover from a book is untrusted).
+                log.info('Not making a thumbnail of %s: %s x %s pixels', source,
+                         cover_width, cover_height)
+                return None
             pixbuf = GdkPixbuf.Pixbuf.new_from_file(source)
             if pixbuf.get_width() > width:
                 height = max(1, round(pixbuf.get_height() * width / pixbuf.get_width()))
                 pixbuf = pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR)
+            if not os.path.isdir(self.directory):
+                raise FileNotFoundError(self.directory)  # never made again here
             os.makedirs(os.path.dirname(target), exist_ok=True)
             fd, temporary = tempfile.mkstemp(dir=os.path.dirname(target), prefix='.thumb-')
             os.close(fd)
@@ -170,10 +181,15 @@ class CoverStore:
                 pixbuf.savev(temporary, 'png', [], [])
                 os.replace(temporary, target)
             finally:
-                if os.path.exists(temporary):
+                with contextlib.suppress(OSError):
                     os.unlink(temporary)
         except GLib.Error as error:
             log.info('Cannot make a thumbnail of %s: %s', source, error.message)
+            return None
+        except (FileNotFoundError, NotADirectoryError) as error:
+            # The store's folder went away meanwhile (a test's, or the data folder's,
+            # removed while a pool thread worked): nothing to make it in.
+            log.debug('No thumbnail of %s: %s', source, error)
             return None
         return target
 

@@ -47,7 +47,7 @@ class CatalogDialog(Adw.Dialog):
         self.catalog = catalog
         self.done = done
         self._task = None
-        self.set_title(_('Edit Catalog') if catalog else _('Add Catalog'))
+        self.set_title(_('Edit Catalogue') if catalog else _('Add Catalogue'))
         self.save_button.set_label(_('_Save') if catalog else _('_Add'))
         if catalog is not None:
             self.url_row.set_text(catalog.url)

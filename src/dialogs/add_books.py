@@ -25,6 +25,7 @@ from gettext import ngettext
 
 from gi.repository import Adw, Gio, GLib, Gtk
 
+from ..widgets.util import connect_weak_call
 from . import watch_dialog
 
 log = logging.getLogger(__name__)
@@ -67,8 +68,8 @@ class AddBooksDialog(Adw.Dialog):
         self.set_title({'add': _('Adding Books'), 'scan': _('Reading Folder'),
                         'calibre': _('Linking Calibre Library')}[kind])
         self.progress_label.set_text(_('Looking for books…'))
-        self.cancel_button.connect('clicked', lambda *_args: self.cancel())
-        self.done_button.connect('clicked', lambda *_args: self.close())
+        connect_weak_call(self.cancel_button, 'clicked', self.cancel)
+        connect_weak_call(self.done_button, 'clicked', self.close)
         self.connect('closed', self._on_closed)
         self._pulse = GLib.timeout_add(120, self._on_pulse)
 
@@ -218,7 +219,7 @@ class AddBooksDialog(Adw.Dialog):
             for path, book_id in report.duplicates[:LISTED]:
                 row = Adw.ActionRow(title=GLib.markup_escape_text(os.path.basename(path)))
                 row.set_subtitle(GLib.markup_escape_text(self._book_title(book_id)))
-                row.add_suffix(self._show_button(lambda *_a, i=book_id: self._show_book(i)))
+                row.add_suffix(self._show_button(self._show_book, None, book_id))
                 expander.add_row(row)
             rows.append(expander)
         if report.failed:
@@ -255,10 +256,11 @@ class AddBooksDialog(Adw.Dialog):
         return row
 
     @staticmethod
-    def _show_button(callback, label=None):
+    def _show_button(method, label=None, *args):
+        """A Show button that calls method(*args) (a method of the dialog, held weakly)."""
         button = Gtk.Button(label=label or _('_Show'), use_underline=True,
                             valign=Gtk.Align.CENTER)
-        button.connect('clicked', callback)
+        connect_weak_call(button, 'clicked', method, *args)
         return button
 
     def _book_title(self, book_id):

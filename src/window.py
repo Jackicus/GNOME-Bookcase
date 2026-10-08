@@ -62,13 +62,18 @@ class Window(Adw.ApplicationWindow):
         self._add_drop_target()
         self.sidebar_controller = SidebarController(self, self.sidebar, app)
         self.navigation_view.connect('notify::visible-page', self._on_visible_page)
-        app.library.connect('changed', self._on_library_changed)
+        # The app outlives a closed library window (a reader may stay open, and a new window
+        # is made on the next activation): what the window connected to goes with it.
+        self._handlers = [(app.library, app.library.connect('changed',
+                                                             self._on_library_changed))]
         if app.devices is not None:
             try:
-                app.devices.connect('removed', self._on_device_removed)
+                self._handlers.append((app.devices, app.devices.connect(
+                    'removed', self._on_device_removed)))
             except TypeError:
                 pass
         self.connect('close-request', self._on_close_request)
+        self.connect('unrealize', self._on_unrealize)
         last = self.settings.get_string('last-page')
         self.show_root(last if self.sidebar_controller.has_key(last) else 'home')
         if self.settings.get_boolean('sidebar-hidden'):
@@ -91,6 +96,13 @@ class Window(Adw.ApplicationWindow):
         if self._current_key and not self._current_key.startswith('device:'):
             self.settings.set_string('last-page', self._current_key)
         return False
+
+    def _on_unrealize(self, *_args):
+        for emitter, handler in self._handlers:
+            if emitter.handler_is_connected(handler):
+                emitter.disconnect(handler)
+        self._handlers = []
+        self.sidebar_controller.disconnect()
 
     # -- actions -----------------------------------------------------------------------------
 

@@ -257,6 +257,13 @@ progressbar.book-progress > trough > progress {
   box-shadow: none;
 }
 
+/* The banners over the page (Add to Library, another device's place) take the paper too:
+   a shade of it, so a sepia page under a dark style's banner does not clash. */
+.reader-page banner > revealer > widget {
+  background-color: color-mix(in srgb, var(--reader-fg) 10%, var(--reader-bg));
+  color: var(--reader-fg);
+}
+
 .reader-size-smaller, .reader-size-bigger {
   min-width: 48px;
   font-family: serif;

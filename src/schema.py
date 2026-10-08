@@ -18,7 +18,9 @@ count when known (0 unknown: stats.py estimates it from the file); `cover_versio
 whenever the cover changes (the thumbnail cache keys on it); `source` is the folder kind the
 book came from (library, watched, calibre), `source_key` its key there (a Calibre book id)
 and `source_modified` when the source last changed it, as the source writes it (Calibre's
-last_modified). Two derived columns are kept up to date by library.py: `title_key`
+last_modified); `source_values` what the source last said of the book's details (JSON:
+importing.py merges a rescan field by field with it). Two derived columns are kept up to
+date by library.py: `title_key`
 (titles.title_key(), for finding a book added twice) and `search_text` (the folded title,
 authors, series, tags and publisher, one per line, for search.py's bare words).
 
@@ -43,7 +45,9 @@ for ordering, `color` one of library.COLORS. sessions: a stretch of reading, log
 reader window. folders: `kind` library, watched or calibre.
 """
 
-VERSION = 2
+import sqlite3
+
+VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS books (
@@ -72,6 +76,7 @@ CREATE TABLE IF NOT EXISTS books (
     source TEXT NOT NULL DEFAULT 'library',
     source_key TEXT,
     source_modified TEXT NOT NULL DEFAULT '',
+    source_values TEXT NOT NULL DEFAULT '',
     title_key TEXT NOT NULL DEFAULT '',
     search_text TEXT NOT NULL DEFAULT ''
 );
@@ -197,6 +202,11 @@ UPDATE books SET finished = COALESCE(
     NULLIF(last_read, 0), modified)
 WHERE status = 'finished';
 """,
+    # books.source_values: what the source (Calibre) last said of the book's details, as
+    # JSON, so a rescan changes only the details not edited in Bookcase since.
+    3: """
+ALTER TABLE books ADD COLUMN source_values TEXT NOT NULL DEFAULT '';
+""",
 }
 
 # Each table's key, for undo's inverse operations (library.py).
@@ -229,8 +239,40 @@ def apply(db):
         raise SchemaError(f'library schema {version} is newer than {VERSION}')
     if version == VERSION:
         return
-    if version == 0:
-        steps = SCHEMA
-    else:
-        steps = '\n'.join(MIGRATIONS[step] for step in range(version + 1, VERSION + 1))
-    db.executescript(f'BEGIN IMMEDIATE;\n{steps}\nPRAGMA user_version = {VERSION};\nCOMMIT;')
+    try:
+        # Another process (a second Bookcase, a script) may be upgrading the same file: take
+        # the write lock first, then look again at what it left.
+        db.execute('BEGIN IMMEDIATE')
+        version = db.execute('PRAGMA user_version').fetchone()[0]
+        if version >= VERSION:
+            db.execute('COMMIT')
+            if version > VERSION:
+                raise SchemaError(f'library schema {version} is newer than {VERSION}')
+            return
+        if version == 0:
+            steps = SCHEMA
+        else:
+            steps = '\n'.join(MIGRATIONS[step] for step in range(version + 1, VERSION + 1))
+        # executescript() would commit first, letting go of the lock: one statement at a time.
+        for statement in _statements(f'{steps}\nPRAGMA user_version = {VERSION};'):
+            db.execute(statement)
+        db.execute('COMMIT')
+    except BaseException:
+        # A step that failed leaves the transaction open: nothing of it may stay.
+        if db.in_transaction:
+            db.execute('ROLLBACK')
+        raise
+
+
+def _statements(script):
+    """The SQL statements of a script, whole (a trigger's body with its semicolons too)."""
+    statements, current = [], ''
+    for line in script.splitlines(keepends=True):
+        current += line
+        if sqlite3.complete_statement(current):
+            if current.strip():
+                statements.append(current.strip())
+            current = ''
+    if current.strip():
+        statements.append(current.strip())
+    return statements

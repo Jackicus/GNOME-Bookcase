@@ -319,6 +319,15 @@ class TestNames(unittest.TestCase):
         self.assertEqual(self.name('https://x/get', 'epub', 'attachment; filename="../../x"'),
                          'x.epub')
         self.assertEqual(self.name('https://x/get', 'pdf', title='a/b: c?'), 'a b c.pdf')
+        long = self.name('https://x/get', 'epub', 'attachment; filename="' + '€' * 200 + '"')
+        self.assertLessEqual(len(long.encode()), 255)
+        self.assertTrue(long.endswith('.epub'))
+        for hostile in ('..', '.', '/', '..%2F..%2Fx', '\\..\\x', '\x00.epub'):
+            with self.subTest(hostile=hostile):
+                name = self.name('https://x/get', 'epub',
+                                 f"attachment; filename*=UTF-8''{hostile}")
+                self.assertNotIn('/', name)
+                self.assertFalse(name.startswith('.'))
 
 
 class ServerTestCase(unittest.TestCase):
@@ -383,6 +392,49 @@ class TestClient(ServerTestCase):
             first, second = server.requests
             self.assertIn('Authorization', first[1])
             self.assertNotIn('Authorization', second[1])
+
+    def test_nothing_on_this_computer_is_read(self):
+        secret = self.directory / 'secret.xml'
+        secret.write_text(fx.ATOM_NAVIGATION)
+        routes = {'/to-file': Route('', location=f'file://{secret}'),
+                  '/to-ftp': Route('', location='ftp://127.0.0.1/x')}
+        with CatalogServer(routes) as server:
+            client = opds.Client()
+            for url in (f'file://{secret}', f'FILE://{secret}', 'ftp://127.0.0.1/x',
+                        server.url('/to-file'), server.url('/to-ftp')):
+                with self.subTest(url=url), self.assertRaises(opds.OpdsError):
+                    client.feed(url)
+            acquisition = opds.Acquisition(f'file://{secret}', 'application/epub+zip', 'epub')
+            with self.assertRaises(opds.OpdsError):
+                client.download(acquisition, str(self.directory / 'out'))
+            with self.assertRaises(opds.OpdsError):
+                opds.ThumbnailCache(str(self.directory / 'covers')).fetch(
+                    f'file://{secret}', client)
+            self.assertFalse((self.directory / 'out').exists() and
+                             os.listdir(self.directory / 'out'))
+
+    def test_credentials_follow_neither_a_downgrade_nor_another_port(self):
+        routes = {'/opds': Route(fx.ATOM_NAVIGATION)}
+        with CatalogServer(routes) as server, CatalogServer(routes) as other:
+            client = opds.Client('reader', 's3cret', server.url('/'))
+            client.feed(server.url('/opds'))
+            client.feed(other.url('/opds'))  # same host, another port
+            self.assertIn('Authorization', server.requests[0][1])
+            self.assertNotIn('Authorization', other.requests[0][1])
+            secure = opds.Client('reader', 's3cret',
+                                 f'https://127.0.0.1:{server.port}/')
+            secure.feed(server.url('/opds'))  # https -> http on the same host and port
+            self.assertNotIn('Authorization', server.requests[1][1])
+
+    def test_html_pages_naming_each_other_end(self):
+        routes = {'/a': Route('<html><head><link rel="alternate" type="application/atom+xml"'
+                              ' href="/b"></head></html>', 'text/html'),
+                  '/b': Route('<html><head><link rel="alternate" type="application/atom+xml"'
+                              ' href="/a"></head></html>', 'text/html')}
+        with CatalogServer(routes) as server:
+            with self.assertRaises(opds.NotOpdsError):
+                opds.Client().feed(server.url('/a'))
+            self.assertLessEqual(len(server.requests), opds.MAX_ALTERNATES + 1)
 
     def test_errors(self):
         routes = {'/html': Route('<html><head><title>x</title></head></html>', 'text/html'),
@@ -474,6 +526,29 @@ class TestDownloads(ServerTestCase):
             self.assertEqual(os.listdir(self.directory / 'partial'), [])
             self.assertEqual(opds.find_in_library(library, entry), book_id)
             covers.shutdown()
+
+    def test_a_download_the_library_keeps_in_place_is_not_removed(self):
+        # The library folder holds the downloads folder (a library folder set to the home
+        # folder): the importer adds the file where it is, so it must stay.
+        routes = {'/get/4.epub': Route(self.epub, 'application/epub+zip')}
+        with temporary_library() as library, CatalogServer(routes) as server:
+            root = pathlib.Path(library.path).parent
+            covers = CoverStore(root, library)
+            self.addCleanup(covers.shutdown)
+            importer = Importer(library, covers, root)
+            downloads = opds.Downloads(importer, folder=str(root / 'cache' / 'downloads'))
+            entry = opds.parse(fx.ATOM_BOOKS_PAGE_2, server.url('/opds/new?page=2')).books[0]
+            loop = GLib.MainLoop()
+            finished = []
+            downloads.connect('finished', lambda _d, *args: (finished.append(args), loop.quit()))
+            downloads.start(entry.key, opds.Client(), opds.best_acquisition(entry), entry)
+            GLib.timeout_add_seconds(20, loop.quit)
+            loop.run()
+            book_id = finished[0][1]
+            self.assertTrue(book_id)
+            path = library.files(book_id)[0].path
+            self.assertTrue(os.path.isfile(path))
+            self.assertFalse(library.book(book_id).missing)
 
     def test_failure(self):
         with temporary_library() as library, CatalogServer({}) as server:

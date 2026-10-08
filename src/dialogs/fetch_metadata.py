@@ -30,6 +30,7 @@ from gettext import gettext as _
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from .. import online
+from ..widgets.util import connect_weak, connect_weak_call
 from . import watch_dialog
 from .edit_metadata import format_authors, language_label, texture_from_bytes
 
@@ -213,21 +214,22 @@ class FetchMetadataDialog(Adw.Dialog):
         self.query_author_row.set_text(authors[0] if authors else '')
         self.query_isbn_row.set_text(values.get('isbn', ''))
         for row in (self.query_title_row, self.query_author_row, self.query_isbn_row):
-            row.connect('entry-activated', lambda *_args: self.search())
-        self.search_again_row.connect('activated', lambda *_args: self.search())
-        self.candidate_list.connect('row-activated', self._on_candidate_activated)
-        self.compare_list.connect('row-activated', self._on_compare_activated)
+            connect_weak_call(row, 'entry-activated', self.search)
+        connect_weak_call(self.search_again_row, 'activated', self.search)
+        connect_weak(self.candidate_list, 'row-activated', self._on_candidate_activated)
+        connect_weak(self.compare_list, 'row-activated', self._on_compare_activated)
         self.connect('closed', self._on_closed)
 
     def _add_actions(self):
         group = Gio.SimpleActionGroup()
         self._actions = {}
-        for name, callback in (('search', lambda *_args: self.search()),
-                               ('edit-query', lambda *_args: self.edit_query()),
-                               ('apply', lambda *_args: self.apply()),
-                               ('select-all', lambda *_args: self.select_all())):
+        for name, callback in (('search', lambda dialog: dialog.search()),
+                               ('edit-query', lambda dialog: dialog.edit_query()),
+                               ('apply', lambda dialog: dialog.apply()),
+                               ('select-all', lambda dialog: dialog.select_all())):
             action = Gio.SimpleAction.new(name, None)
-            action.connect('activate', callback)
+            # The dialog held weakly: the action group is the dialog's own.
+            action.connect('activate', _weak_action(self, callback))
             group.add_action(action)
             self._actions[name] = action
         self.insert_action_group('fetch', group)
@@ -382,7 +384,7 @@ class FetchMetadataDialog(Adw.Dialog):
         button.set_tooltip_text(' · '.join(part for part in (
             candidate.title, format_authors(candidate.authors), candidate.published[:4])
             if part))
-        button.connect('clicked', self._on_cover_tile_clicked, candidate, spinner)
+        connect_weak(button, 'clicked', self._on_cover_tile_clicked, candidate, spinner)
         return button
 
     def _on_cover_tile_clicked(self, _button, candidate, spinner):
@@ -454,7 +456,7 @@ class FetchMetadataDialog(Adw.Dialog):
                       margin_end=12)
         check = Gtk.CheckButton(active=field.checked, valign=Gtk.Align.START)
         check.update_property([Gtk.AccessibleProperty.LABEL], [field.label])
-        check.connect('toggled', self._on_check_toggled, field)
+        connect_weak(check, 'toggled', self._on_check_toggled, field)
         box.append(check)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
         heading = Gtk.Label(label=field.label, xalign=0)
@@ -589,3 +591,15 @@ def present_covers(app, parent, values, on_choose, fetch=None):
     dialog.search()
     return dialog
 
+
+
+def _weak_action(dialog, callback):
+    """An action's handler that calls callback(dialog) while the dialog lives."""
+    ref = dialog.weak_ref()
+
+    def activate(*_args):
+        instance = ref()
+        if instance is not None:
+            callback(instance)
+
+    return activate

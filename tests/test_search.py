@@ -162,12 +162,36 @@ class SearchTest(unittest.TestCase):
         nasty = ['(((', ')))', '-', '- -', 'or', 'or or', '(or)', '"', '""', 'title:"',
                  'author:="', ':', '::', '-(', '(a or', 'a or )', '\\', "'", '%_%', 'rating:>',
                  'rating:>=x', 'added:<', 'added:<9999999999d', 'added:1e999d', '(' * 5000,
-                 'published:>=', 'isbn:', 'tag:=', 'a\x00b', 'status:', 'has:']
+                 'published:>=', 'isbn:', 'tag:=', 'a\x00b', 'status:', 'has:',
+                 'rating:"4\n5"', 'added:"<3d\nx"', 'published:">=1999\n"', '"\n"',
+                 '\u200b', 'tag:"\u0301"', "x' OR 1=1 --", 'title:"; DROP TABLE books; --"',
+                 'language:"%"', 'language:_']
         for query in nasty:
             with self.subTest(query=query):
                 where, params = search.to_sql(query, now=self.now)
                 self.library.db.execute(f'SELECT b.id FROM books b WHERE {where}',
                                         params).fetchall()
+
+    def test_values_with_line_breaks_still_search(self):
+        # A pasted value may hold a line break: still a search, never an exception.
+        self.assertEqual(self.find('rating:"4\n"'), {self.harbour})
+        self.assertEqual(self.find('rating:"4\n5"'), set())
+
+    def test_language_is_no_pattern(self):
+        self.assertEqual(self.find('language:en'), {self.harbour, self.fog})
+        self.assertEqual(self.find('language:%'), set())
+        self.assertEqual(self.find('language:_n'), set())
+        self.assertEqual(self.find('language:e_'), set())
+
+    def test_injection_is_only_text(self):
+        for query in ("'; DROP TABLE books; --", 'title:"x\' OR \'1\'=\'1"',
+                      'author:"\\" OR 1=1'):
+            with self.subTest(query=query):
+                where, params = search.to_sql(query, now=self.now)
+                self.assertNotIn('DROP', where)
+                self.assertNotIn("'1'", where)
+                self.assertEqual(self.find(query), set())
+        self.assertEqual(len(self.find('')), 4)
 
     def test_plain_words(self):
         self.assertEqual(search.words('harbour "quiet sea" -fog tag:x or lark'),

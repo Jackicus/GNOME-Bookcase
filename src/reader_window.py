@@ -84,6 +84,8 @@ FINISHED_FRACTION = 0.995
 RETURN_HIDE_TURNS = 3  # pages turned after a jump before the return button goes
 REVEAL_EDGE = 8  # pixels from the top edge that show the bars in fullscreen
 MAX_SCALE_MARKS = 60
+# The page keys a list or a popover uses too, when the keyboard has moved into it.
+NAVIGATION = ('next', 'previous', 'scroll-down', 'scroll-up', 'start', 'end')
 
 
 def color_names():
@@ -195,6 +197,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._annotations = []
         self._selection = None  # the selection or highlight the popover is for
         self._toc_rows = []
+        self._chapter_labels = {}  # href -> the label shown for it, where not the book's
         self._search_rows = []  # [(row, cfi)]
         self._search_index = -1
         self._search_count = 0
@@ -275,7 +278,9 @@ class ReaderWindow(Adw.ApplicationWindow):
         connect_weak(self.progress_scale, 'change-value', self._on_scrub)
         connect_weak(self.progress_button, 'clicked', self._on_progress_clicked)
         connect_weak(self, 'close-request', self._on_close_request)
-        connect_weak(self, 'destroy', self._release_popover)
+        # Disconnected on its first call: a widget is disposed again when it is finalized,
+        # and a Python handler run from the garbage collector's finalizing crashes.
+        self._destroy_handler = connect_weak(self, 'destroy', self._release_popover)
         connect_weak(self, 'notify::fullscreened', self._on_fullscreened)
         connect_weak(self.split_view, 'notify::show-sidebar', self._on_sidebar_shown)
         # The library, the settings and the style manager outlive the window: held weakly,
@@ -353,11 +358,14 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._annotations = self.library.annotations(self.book_id)
         self._refresh_annotation_list()
         self.content_stack.set_visible_child_name('book')
-        self.view.open(path, fmt, location=book.location or None,
-                       fraction=book.progress or None,
+        location, fraction = book.location or None, book.progress or None
+        if (fraction or 0) >= FINISHED_FRACTION and book.status != 'finished':
+            # read to the end, then marked unread or reading again: read again from the start
+            location = fraction = None
+        self.view.open(path, fmt, location=location, fraction=fraction,
                        annotations=self._highlights(), bookmarks=self._bookmarks(),
                        style=self._style())
-        self._clock = reading.SessionClock(book.progress or 0.0, time.time())
+        self._clock = reading.SessionClock(fraction or 0.0, time.time())
         self._update_rate()
 
     def _use_pdf_view(self):
@@ -579,6 +587,7 @@ class ReaderWindow(Adw.ApplicationWindow):
         name = 'scrolled' if self._layout_key_value() else 'paginated'
         if self.layout_group.get_active_name() != name:
             self.layout_group.set_active_name(name)
+        self.two_pages_row.set_sensitive(name == 'paginated')  # scrolling: one column
 
     def _on_layout_changed(self, group, _pspec):
         scrolled = group.get_active_name() == 'scrolled'
@@ -610,6 +619,22 @@ class ReaderWindow(Adw.ApplicationWindow):
                                           'page alone'))
         self._update_layout_group()
         self._update_size_label()
+
+    def _show_fixed_layout_controls(self):
+        """A fixed layout (a comic, a picture book) has pages drawn as they are: the Text and
+        Layout popover keeps the paper only, the text size keys do nothing, nothing reads
+        aloud."""
+        self.typography_button.set_tooltip_text(_('Paper'))
+        for widget in (self.font_group, self.smaller_button.get_parent(),
+                       self.line_height_row.get_parent(), self.layout_group,
+                       self.two_pages_row.get_parent()):
+            widget.set_visible(False)
+        action = self.lookup_action('read-aloud')
+        if action is not None:
+            action.set_enabled(False)
+
+    def _fixed_layout(self):
+        return bool((self._loaded or {}).get('fixedLayout')) and not self.is_pdf
 
     def _on_fit_changed(self, group, _pspec):
         name = group.get_active_name()
@@ -653,6 +678,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             else:
                 self.view.set_fit('auto')
             return
+        if self._fixed_layout():
+            return  # no text to size: the setting is every other book's
         if step == 0:
             self.settings.reset('reader-font-size')
             return
@@ -669,14 +696,27 @@ class ReaderWindow(Adw.ApplicationWindow):
         if 1 < len(self._section_fractions) <= MAX_SCALE_MARKS:
             for fraction in self._section_fractions[1:]:
                 scale.add_mark(min(1.0, fraction), Gtk.PositionType.BOTTOM, None)
-        if loaded.get('dir') == 'rtl':
-            scale.set_inverted(True)
+        if loaded.get('fixedLayout') and not self.is_pdf:
+            self._show_fixed_layout_controls()
+        rtl = loaded.get('dir') == 'rtl'
+        scale.set_inverted(rtl)
+        # The arrows turn left and right: in a right-to-left book, left is forward.
+        self.prev_button.set_tooltip_text(_('Next Page') if rtl else _('Previous Page'))
+        self.next_button.set_tooltip_text(_('Previous Page') if rtl else _('Next Page'))
         self._find_imported_highlights()
+
+    def _comic(self):
+        return self.file is not None and (self.file.format or '').lower() in ('cbz', 'cbr')
 
     def _on_toc(self, _view, toc):
         while (row := self.toc_list.get_first_child()) is not None:
             self.toc_list.remove(row)
         self._toc_rows = []
+        if self._comic():
+            # A comic's contents are its pictures' file names ("012.jpg"): pages read better.
+            toc = [{**item, 'label': _('Page {}').format(number)}
+                   for number, item in enumerate(toc, 1)]
+            self._chapter_labels = {item['href']: item['label'] for item in toc}
 
         def add(items, depth):
             for item in items:
@@ -699,8 +739,8 @@ class ReaderWindow(Adw.ApplicationWindow):
             self._select_toc(self._place)
 
     def _on_relocated(self, _view, place):
-        if place.get('fraction') is None:
-            return  # before the first layout
+        if place.get('fraction') is None or self._closed:
+            return  # before the first layout, or after closing (saved then)
         previous = self._place
         self._place = place
         fraction = place['fraction']
@@ -716,18 +756,21 @@ class ReaderWindow(Adw.ApplicationWindow):
         self._update_title()
         self._select_toc(place)
         self._set_bookmark_state(place.get('bookmark'))
-        if place.get('jumpedFrom') and previous is not None:
+        if place.get('jumpedFrom') and previous is not None \
+                and place['jumpedFrom'] != place.get('cfi'):  # not to the page shown
             self._show_return(place['jumpedFrom'], previous)
         elif place.get('reason') in ('page', 'scroll', 'snap') and self._return_cfi:
             self._turns_since_jump += 1
             if self._turns_since_jump >= RETURN_HIDE_TURNS:
                 self._hide_return()
-        if place.get('atEnd') and fraction >= 0.5:
+        # Reaching the end, not opening there (a book marked unread or reading again stays so).
+        if place.get('atEnd') and fraction >= 0.5 and previous is not None:
             self._mark_finished()
         self._sync.relocated(place)
 
     def _on_view_error(self, _view, message):
         log.warning('the book could not be opened: %s', message)
+        self._clock = None  # no reading session in a book that did not open
         self._show_status('dialog-warning-symbolic', _('This Book Cannot Be Opened'),
                           _('The file may be damaged, or in a format Bookcase cannot read'),
                           [(_('Open in Another App'), False, self._launch_file)])
@@ -834,7 +877,8 @@ class ReaderWindow(Adw.ApplicationWindow):
         self.set_title(title)
         self.window_title.set_title(title)
         chapter = (self._place or {}).get('chapter') or {}
-        self.window_title.set_subtitle(chapter.get('label') or '')
+        label = self._chapter_labels.get(chapter.get('href'), chapter.get('label'))
+        self.window_title.set_subtitle(label or '')
 
     # -- the return button -----------------------------------------------------------------
 
@@ -921,11 +965,12 @@ class ReaderWindow(Adw.ApplicationWindow):
             if book is not None:
                 self.book = book
                 self._update_title()
-                self._keep_banner.set_revealed(book.source == OPENED)
+                self._keep_banner.set_revealed(book.source == OPENED and not self._keeping)
 
     def _build_keep_banner(self):
         """A book opened without adding (library.OPENED: from Files, or Open File…)
         offers Add to Library over the page (app.keep_book)."""
+        self._keeping = False  # Add to Library clicked
         self._keep_banner = Adw.Banner(
             title=_('This book is not in your library'), button_label=_('_Add to Library'),
             revealed=self.book is not None and self.book.source == OPENED, use_markup=False,
@@ -936,6 +981,9 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _keep_book(self):
         keep = getattr(self.app, 'keep_book', None)
         if keep is not None:
+            # gone at once, not when the copy is made: a second click would add it twice
+            self._keeping = True
+            self._keep_banner.set_revealed(False)
             keep(self.book_id)
 
     def _refresh_annotation_list(self):
@@ -1097,7 +1145,9 @@ class ReaderWindow(Adw.ApplicationWindow):
         start = place.get('start') or place.get('cfi')
         if not start:
             return
-        chapter = (place.get('chapter') or {}).get('label') or self.book.title
+        chapter = place.get('chapter') or {}
+        chapter = self._chapter_labels.get(chapter.get('href'), chapter.get('label')) \
+            or self.book.title
         try:
             self.library.add_annotation(self.book_id, 'bookmark', start, text=chapter,
                                         position=place.get('fraction') or 0.0)
@@ -1124,7 +1174,7 @@ class ReaderWindow(Adw.ApplicationWindow):
 
     def _toggle_read_aloud(self):
         if self._read_aloud is None or self.content_stack.get_visible_child_name() != 'book' \
-                or self.view is not self.book_view:
+                or self.view is not self.book_view or self._fixed_layout():
             return False
         self._read_aloud.toggle()
         return True
@@ -1411,10 +1461,26 @@ class ReaderWindow(Adw.ApplicationWindow):
             return False
         if typing and name in ('leave-fullscreen', 'copy'):
             return False  # the search entry's stop-search, its own copy
+        if name == 'leave-fullscreen' and focus is not None \
+                and focus.get_ancestor(Gtk.Popover) is not None:
+            return False  # Escape closes the popover first
+        if not mods and name in NAVIGATION and self._navigating(focus):
+            return False  # the arrows move through a list or a popover reached by Tab
         if self.content_stack.get_visible_child_name() != 'book' and name not in (
                 'fullscreen', 'leave-fullscreen', 'close', 'info'):
             return False
         return self._run_key(name, lower) is not False
+
+    def _navigating(self, focus):
+        """Whether the keyboard is moving through the sidebar or a popover: the focus there,
+        and shown (it was reached with the keyboard, not left there by a click)."""
+        if focus is None or not self.get_focus_visible():
+            return False
+        if focus.get_ancestor(Gtk.Popover) is not None:
+            return True
+        sidebar = self.split_view.get_sidebar()
+        return self.split_view.get_show_sidebar() and (
+            focus is sidebar or focus.is_ancestor(sidebar))
 
     def _copy_selection(self):
         """Ctrl+C: the selected text to the clipboard; False when nothing is selected."""
@@ -1559,10 +1625,17 @@ class ReaderWindow(Adw.ApplicationWindow):
     def _go_to_location(self):
         if self._place is None:
             return
-        dialog = Adw.AlertDialog(heading=_('Go to Location'),
-                                 body=_('A percentage of the book, from 0 to 100'))
+        pages = self._place.get('pages') if self.is_pdf else None  # a PDF goes by its pages
+        if pages:
+            body = _('A page number, from 1 to {}').format(pages)
+            text = str(self._place.get('page') or 1)
+        else:
+            body = _('A percentage of the book, from 0 to 100')
+            text = str(int((self._place.get('fraction') or 0) * 100))
+        dialog = Adw.AlertDialog(heading=_('Go to Page') if pages else _('Go to Location'),
+                                 body=body)
         entry = Gtk.Entry(input_purpose=Gtk.InputPurpose.NUMBER, activates_default=True,
-                          text=str(int((self._place.get('fraction') or 0) * 100)))
+                          text=text)
         dialog.set_extra_child(entry)
         dialog.add_response('cancel', _('Cancel'))
         dialog.add_response('go', _('Go'))
@@ -1576,16 +1649,26 @@ class ReaderWindow(Adw.ApplicationWindow):
             window.set_dialog_open(False) if window is not None else None
             if window is None or answer != 'go':
                 return
-            try:
-                percent = float(entry.get_text().strip().rstrip('%').replace(',', '.'))
-            except ValueError:
-                return
-            window.view.go_to_fraction(max(0.0, min(100.0, percent)) / 100)
+            window._go_to_entered(entry.get_text(), pages)
 
         dialog.connect('response', response)
         self.set_dialog_open(True)
         dialog.present(self)
         entry.grab_focus()
+
+    def _go_to_entered(self, text, pages=None):
+        """Go where the Go to Location dialog says: a page of `pages` (a PDF), else a
+        percentage. False when the text is no number."""
+        try:
+            number = float(text.strip().rstrip('%').replace(',', '.'))
+        except ValueError:
+            return False
+        if pages:
+            page = max(1, min(int(pages), round(number)))
+            self.view.go_to(pdf_location.location(page))
+        else:
+            self.view.go_to_fraction(max(0.0, min(100.0, number)) / 100)
+        return True
 
     def _show_details(self):
         get_window = getattr(self.app, 'window', None)
@@ -1605,7 +1688,8 @@ class ReaderWindow(Adw.ApplicationWindow):
     def toast(self, text, undo=False):
         """A toast in this window; with Undo, app.undo() puts the last change back."""
         toast = Adw.Toast(title=text, timeout=5 if undo else 2)
-        if undo:
+        if undo:  # high priority: it replaces the toast before, as the app's do
+            toast.set_priority(Adw.ToastPriority.HIGH)
             toast.set_button_label(_('Undo'))
             app = self.app
             toast.connect('button-clicked', lambda *_args: app.undo())
@@ -1658,6 +1742,9 @@ class ReaderWindow(Adw.ApplicationWindow):
         """Take the selection popover off the view, which a popover does not leave on its
         own: a view finalized with one still attached frees it twice. On close, and on
         destroy for a window that is never closed (tests)."""
+        handler, self._destroy_handler = self._destroy_handler, 0
+        if handler and self.handler_is_connected(handler):
+            self.disconnect(handler)
         popover = self._selection_popover
         if popover is not None and popover.get_parent() is not None:
             popover.unparent()

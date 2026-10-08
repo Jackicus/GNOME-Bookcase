@@ -263,6 +263,19 @@ class TestCovers(unittest.TestCase):
             online.fetch_cover('https://x/c', fetch=lambda url: b'<html>' + bytes(300))
 
 
+class TestOnlyTheWeb(unittest.TestCase):
+    def test_a_local_address_is_never_fetched(self):
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix='.png') as file:
+            file.write(b'\x89PNG\r\n\x1a\n' + bytes(400))
+            file.flush()
+            for url in (f'file://{file.name}', f'FILE://{file.name}', 'ftp://127.0.0.1/a.png',
+                        'data:image/png;base64,iVBORw0KGgo='):
+                with self.subTest(url=url), self.assertRaises(online.OnlineError):
+                    online.fetch_cover(url)
+
+
 class TestAsync(unittest.TestCase):
     def wait(self, predicate):
         from tests.gtk import wait_for

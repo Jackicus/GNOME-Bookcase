@@ -122,6 +122,43 @@ class BookTest(unittest.TestCase):
             for name in first.namelist():
                 self.assertEqual(first.read(name), second.read(name), name)
 
+    def test_large_members_are_streamed_and_large_documents_kept(self):
+        src = make_epub(self.directory / 'book.epub', chapters=1)
+        big = self.directory / 'big.epub'
+        with zipfile.ZipFile(src) as source, zipfile.ZipFile(
+                big, 'w', zipfile.ZIP_DEFLATED) as target:
+            for member in source.infolist():
+                data = source.read(member)
+                if member.filename == 'OEBPS/chapter1.xhtml':
+                    # A content document past MAX_DOCUMENT: copied as it is.
+                    data = data.replace(b'</body>', b'<!--' + b' ' * kepub.MAX_DOCUMENT
+                                        + b'--></body>')
+                target.writestr(member, data)
+            target.writestr('OEBPS/padding.bin', bytes(4 << 20))
+        dest = kepub.convert(big, self.directory / 'big.kepub.epub')
+        with zipfile.ZipFile(big) as original, zipfile.ZipFile(dest) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertEqual(archive.getinfo('OEBPS/padding.bin').file_size, 4 << 20)
+            self.assertEqual(archive.read('OEBPS/chapter1.xhtml'),
+                             original.read('OEBPS/chapter1.xhtml'))
+        self.assertFalse(kepub.is_kepub(dest))
+
+    def test_the_package_is_parsed_without_entities(self):
+        secret = self.directory / 'secret.txt'
+        secret.write_text('SECRET')
+        src = make_epub(self.directory / 'book.epub', chapters=1)
+        evil = self.directory / 'evil.epub'
+        with zipfile.ZipFile(src) as source, zipfile.ZipFile(evil, 'w') as target:
+            for member in source.infolist():
+                data = source.read(member)
+                if member.filename == 'META-INF/container.xml':
+                    data = data.replace(b'?>', b'?><!DOCTYPE c [<!ENTITY x SYSTEM "file://'
+                                        + str(secret).encode() + b'">]>', 1)
+                target.writestr(member, data)
+        dest = kepub.convert(evil, self.directory / 'evil.kepub.epub')
+        with zipfile.ZipFile(dest) as archive:
+            self.assertTrue(spans(etree.fromstring(archive.read('OEBPS/chapter1.xhtml'))))
+
     def test_kepub_name(self):
         self.assertEqual(kepub.kepub_name('A.epub'), 'A.kepub.epub')
         self.assertEqual(kepub.kepub_name('A.kepub.epub'), 'A.kepub.epub')

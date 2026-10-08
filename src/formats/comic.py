@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import zipfile
 
 from lxml import etree
@@ -26,6 +27,7 @@ from . import BookInfo, FormatError, image_type
 
 IMAGE_SUFFIXES = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp')
 MAX_IMAGE = 64 * 1024 * 1024
+MAX_COMIC_INFO = 4 * 1024 * 1024
 TIMEOUT = 60
 
 
@@ -66,7 +68,7 @@ def _read_cbz(path):
             info = BookInfo()
             front = None
             comic_info = _find(names, 'comicinfo.xml')
-            if comic_info:
+            if comic_info and archive.getinfo(comic_info).file_size <= MAX_COMIC_INFO:
                 front = _comic_info(archive.read(comic_info), info)
             cover = pages[front] if front is not None and front < len(pages) else pages[0]
             if archive.getinfo(cover).file_size <= MAX_IMAGE:
@@ -105,7 +107,7 @@ def _read_cbr(path):
     front = None
     comic_info = _find(names, 'comicinfo.xml')
     if comic_info:
-        data = _extract(tool, path, comic_info)
+        data = _extract(tool, path, comic_info, MAX_COMIC_INFO)
         if data:
             front = _comic_info(data, info)
     cover = pages[front] if front is not None and front < len(pages) else pages[0]
@@ -114,15 +116,29 @@ def _read_cbr(path):
     return info
 
 
-def _extract(tool, path, name):
+def _extract(tool, path, name, limit=MAX_IMAGE):
+    """A member's bytes through bsdtar, or None (also for one larger than `limit`: what
+    a RAR inflates to is read no further)."""
     # bsdtar takes member names as patterns: escape the pattern characters.
     pattern = re.sub(r'([\\*?\[])', r'\\\1', name)
     try:
-        result = subprocess.run([tool, '-xOf', path, pattern], capture_output=True,
-                                timeout=TIMEOUT)
-    except (subprocess.SubprocessError, OSError):
+        process = subprocess.Popen([tool, '-xOf', path, pattern], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL)
+    except OSError:
         return None
-    return result.stdout if result.returncode == 0 else None
+    timer = threading.Timer(TIMEOUT, process.kill)
+    timer.start()
+    try:
+        data = process.stdout.read(limit + 1)
+        if len(data) > limit:
+            process.kill()
+            return None
+        process.stdout.read()  # nothing more: to the end, so bsdtar exits
+    finally:
+        timer.cancel()
+        process.stdout.close()
+        returncode = process.wait()
+    return data if returncode == 0 else None
 
 
 def _comic_info(data, info):

@@ -14,7 +14,7 @@ from tests import ROOT  # noqa: F401
 from bookcase import schema
 from bookcase.formats import BookInfo
 from bookcase.library import Book, Library, LibraryError, format_of
-from tests.support import add_book, make_epub, make_png, temporary_library
+from tests.support import add_book, make_epub, make_png, snapshot, temporary_library
 
 
 class Recorder:
@@ -672,6 +672,128 @@ class MergeTest(unittest.TestCase):
             self.assertEqual(library.book(opened).source, 'opened')
             self.assertEqual(library.files(opened)[0].path, '/invented/harbour.epub')
             self.assertEqual(library.count(), 1)
+
+
+class UndoExactTest(unittest.TestCase):
+    """Each undoable change of the second round, undone, leaves every row as it was."""
+
+    def _undone(self, library, change, label):
+        before = snapshot(library)
+        change()
+        self.assertNotEqual(snapshot(library), before)
+        self.assertEqual(library.undo(), label)
+        self.assertEqual(snapshot(library), before)
+
+    def _books(self, library):
+        keep = add_book(library, 'A Quiet Harbour', ('Ada Lark',), tags=['Sea'],
+                        identifiers={'isbn': '9780000000002'})
+        other = add_book(library, 'A Quiet Harbour', ('Ada Lark', 'Ben Ross'), fmt='pdf',
+                         tags=['Coast', 'Sea'], description='<p>Tides.</p>',
+                         series='Saltmarsh', series_index=2.0, language='en',
+                         identifiers={'google': 'abc'}, publisher='Lantern House')
+        third = add_book(library, 'A quiet harbour', (), fmt='mobi', published='2019')
+        library.update_book(other, rating=8)
+        library.set_progress(other, 0.4, 'epubcfi(/6/4)')
+        library.set_status([third], 'finished')
+        library.add_annotation(other, 'highlight', 'epubcfi(/6/4!/2)', text='tide')
+        library.add_annotation(third, 'bookmark', 'epubcfi(/6/8)')
+        library.log_session(other, 1000.0, 60, 0.3, 0.4)
+        shelf = library.add_shelf('Holiday')
+        library.add_to_shelf(shelf, [other, third, keep])
+        return keep, other, third, shelf
+
+    def test_merge(self):
+        with temporary_library() as library:
+            keep, other, third, _shelf = self._books(library)
+            self._undone(library, lambda: library.merge_books(keep, [other, third]),
+                         'Merge Books')
+
+    def test_add_to_library_of_an_opened_book(self):
+        with temporary_library() as library:
+            add_book(library, 'Lantern Hill')
+            info = BookInfo(title='A Quiet Harbour', authors=['Ada Lark'], format='epub')
+            opened = library.add_opened(info, '/invented/harbour.epub', hash='h1', size=10)
+            library.set_progress(opened, 0.5, 'epubcfi(/6/2)')
+            library.add_annotation(opened, 'highlight', 'epubcfi(/6/2!/4)', text='lamps')
+            self._undone(library, lambda: library.keep_book(
+                opened, path='/invented/Books/harbour.epub'), 'Add to Library')
+            self._undone(library, lambda: library.keep_book(opened, source='watched'),
+                         'Add to Library')
+
+    def test_shelves(self):
+        with temporary_library() as library:
+            keep, other, third, shelf = self._books(library)
+            smart = library.add_shelf('Sea', 'tag:sea')
+            self._undone(library, lambda: library.add_shelf('New'), 'Add Shelf')
+            self._undone(library, lambda: library.update_shelf(smart, name='Coast',
+                                                               query='tag:coast'),
+                         'Edit Shelf')
+            self._undone(library, lambda: library.move_shelf(smart, 0), 'Move Shelf')
+            second = library.add_shelf('Later')
+            self._undone(library, lambda: library.add_to_shelf(second, [keep, third]),
+                         'Add to Shelf')
+            self._undone(library, lambda: library.remove_from_shelf(shelf, [other, third]),
+                         'Remove from Shelf')
+            self._undone(library, lambda: library.remove_shelf(shelf), 'Remove Shelf')
+            self._undone(library, lambda: library.remove_books([other]), 'Remove Book')
+
+    def test_setting_an_annotation_location_is_no_undo_step(self):
+        with temporary_library() as library:
+            book = add_book(library, 'A Quiet Harbour')
+            note = library.add_annotation(book, 'highlight', '', text='lamps', position=0.3)
+            library.update_annotation(note, note='later')
+            label = library.undo_label
+            library.set_annotation_location(note, 'epubcfi(/6/4!/2)', 0.35)
+            self.assertEqual(library.undo_label, label)
+            self.assertEqual(library.undo(), 'Edit Note')  # the note goes, the place stays
+            found = library.annotation(note)
+            self.assertEqual((found.note, found.location, found.position),
+                             ('', 'epubcfi(/6/4!/2)', 0.35))
+
+    def test_undo_keeps_a_name_a_worker_took_up_since(self):
+        # An edit makes the author 'Cy Moor' and the tag 'Night'; a worker's import then
+        # gives them to a new book. Undoing the edit must not take them from that book.
+        with temporary_library() as library:
+            book = add_book(library, 'A Quiet Harbour')
+            library.update_book(book, authors=['Cy Moor'], tags=['Night'], series='Dusk')
+            worker = library.open_worker()
+            try:
+                imported = add_book(worker, 'Lantern Hill', ('Cy Moor',), tags=['Night'],
+                                    series='Dusk')
+            finally:
+                worker.close()
+            self.assertEqual(library.undo(), 'Edit Book')
+            self.assertEqual(library.book(book).authors, ('Ada Lark',))
+            found = library.book(imported)
+            self.assertEqual((found.authors, found.tags, found.series),
+                             (('Cy Moor',), ('Night',), 'Dusk'))
+            self.assertEqual(library.count(query='author:moor'), 1)
+            self.assertEqual([group.name for group in library.authors()],
+                             ['Ada Lark', 'Cy Moor'])
+
+    def test_undo_still_drops_the_names_it_made(self):
+        with temporary_library() as library:
+            book = add_book(library, 'A Quiet Harbour')
+            before = snapshot(library)
+            library.update_book(book, authors=['Cy Moor'], tags=['Night'], series='Dusk')
+            library.undo()
+            self.assertEqual(snapshot(library), before)
+
+
+
+class UnreadStartsOverTest(unittest.TestCase):
+
+    def test_marking_unread_forgets_the_place_and_undo_brings_it_back(self):
+        with temporary_library() as library:
+            book_id = library.add_book(BookInfo(title='Tides', authors=['Ada Lark']),
+                                       '/invented/tides.epub', hash='h1', size=1)
+            library.set_progress(book_id, 0.4, 'epubcfi(/6/8!/4/2)')
+            library.set_status([book_id], 'unread')
+            book = library.book(book_id)
+            self.assertEqual((book.status, book.progress, book.location), ('unread', 0.0, ''))
+            library.undo()
+            book = library.book(book_id)
+            self.assertEqual((book.progress, book.location), (0.4, 'epubcfi(/6/8!/4/2)'))
 
 
 if __name__ == '__main__':

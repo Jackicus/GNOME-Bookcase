@@ -5,7 +5,7 @@ using Gtk 4.0;
 using Adw 1;
 
 // Discover: the online catalogues as cards (pages/discover.py fills them), each opening its
-// books (pages/catalog.py), and Add Catalog… for a server of one's own.
+// books (pages/catalog.py), and Add Catalogue… for a server of one's own.
 template $BookcaseDiscoverPage: Adw.NavigationPage {
   title: _("Discover");
   tag: "discover";
@@ -16,7 +16,7 @@ template $BookcaseDiscoverPage: Adw.NavigationPage {
       [end]
       Button add_button {
         icon-name: "list-add-symbolic";
-        tooltip-text: _("Add Catalog…");
+        tooltip-text: _("Add Catalogue");
         action-name: "discover.add";
       }
     }
@@ -44,8 +44,6 @@ template $BookcaseDiscoverPage: Adw.NavigationPage {
                 label: _("Free books from online catalogues, and books from your own server: Calibre-Web, Kavita, Komga or Calibre’s content server.");
                 xalign: 0;
                 wrap: true;
-                margin-start: 6;
-                margin-end: 6;
 
                 styles [
                   "dimmed",
@@ -68,7 +66,7 @@ template $BookcaseDiscoverPage: Adw.NavigationPage {
               }
 
               Button {
-                label: _("_Add Catalog…");
+                label: _("_Add Catalogue…");
                 use-underline: true;
                 halign: center;
                 margin-top: 6;
@@ -97,7 +95,7 @@ template $BookcaseDiscoverPage: Adw.NavigationPage {
             halign: center;
 
             Button {
-              label: _("_Add Catalog…");
+              label: _("_Add Catalogue…");
               use-underline: true;
               action-name: "discover.add";
 

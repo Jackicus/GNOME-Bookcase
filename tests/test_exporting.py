@@ -70,6 +70,29 @@ class TestExport(unittest.TestCase):
             exporting.export_copy(self.library, self.covers, self.book_id, self.out,
                                   format='pdf')
 
+    def test_a_name_never_leaves_the_folder(self):
+        for name in ('../../escaped.epub', '../escaped', '/tmp/escaped.epub', '..', '.epub'):
+            with self.subTest(name=name):
+                path = exporting.export_copy(self.library, self.covers, self.book_id,
+                                             self.out, name=name, embed=False)
+                self.assertEqual(pathlib.Path(path).parent, self.out)
+                self.assertTrue(path.endswith('.epub'))
+        self.assertFalse((self.root / 'escaped.epub').exists())
+        self.assertFalse((self.out.parent / 'escaped.epub').exists())
+
+    def test_replace_never_writes_over_the_books_own_file(self):
+        original = self.library.files(self.book_id)[0]
+        before = pathlib.Path(original.path).read_bytes()
+        folder = pathlib.Path(original.path).parent
+        for embed in (True, False):
+            with self.subTest(embed=embed), self.assertRaises(exporting.ExportError):
+                exporting.export_copy(self.library, self.covers, self.book_id, folder,
+                                      name=pathlib.Path(original.path).name, replace=True,
+                                      embed=embed)
+        self.assertEqual(pathlib.Path(original.path).read_bytes(), before)
+        self.assertEqual(sorted(p.name for p in folder.iterdir()),
+                         sorted([pathlib.Path(original.path).name, 'A Quiet Harbour.mobi']))
+
     def test_missing_file(self):
         for file in self.library.files(self.book_id):
             pathlib.Path(file.path).unlink()

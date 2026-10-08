@@ -156,6 +156,129 @@ class ReaderWindowTest(unittest.TestCase):
         self.assertEqual(keys[(Gdk.KEY_g, control | int(Gdk.ModifierType.SHIFT_MASK))],
                          'search-previous')
 
+    def open_pdf(self, pages=None, location=None, progress=None, status=None):
+        from bookcase.widgets import pdf_view
+
+        if not pdf_view.available():
+            self.skipTest('Poppler or pycairo is not available')
+        book_id = self.add('A Quiet Harbour.pdf')
+        if location is not None:
+            self.library.set_progress(book_id, progress, location)
+        if status is not None:
+            self.library.set_status([book_id], status)
+        window = self.open(book_id)
+        self.assertTrue(wait_for(lambda: window._place is not None, 3))
+        return window
+
+    def test_closing_lets_go_of_the_destroy_signal(self):
+        # A Python handler run again when the window is finalized (by the garbage
+        # collector) crashed the app.
+        window = self.open(self.add('missing.epub', write=False))
+        self.assertTrue(window.handler_is_connected(window._destroy_handler))
+        handler = window._destroy_handler
+        window.close()
+        self.assertEqual(window._destroy_handler, 0)
+        self.assertFalse(window.handler_is_connected(handler))
+
+    def test_nothing_is_saved_after_closing(self):
+        window = self.open_pdf()
+        window.close()
+        window._on_relocated(window.view, {'fraction': 0.5, 'cfi': 'page:3'})
+        self.assertEqual(window._save_source, 0)
+        self.assertNotEqual(self.library.book(window.book_id).location, 'page:3')
+
+    def test_opening_at_the_end_does_not_mark_the_book_finished(self):
+        # read to the last page, then marked as reading again by the user
+        window = self.open_pdf(location='page:4', progress=0.9, status='reading')
+        self.assertTrue(window._place['atEnd'])
+        pump()
+        self.assertEqual(self.library.book(window.book_id).status, 'reading')
+        window.view.start()
+        self.assertTrue(wait_for(lambda: window._place['page'] == 1, 3))
+        window.view.end()  # reaching the end does
+        self.assertTrue(wait_for(
+            lambda: self.library.book(window.book_id).status == 'finished', 3))
+
+    def test_a_book_read_to_its_end_and_marked_unread_opens_at_its_start(self):
+        window = self.open_pdf(location='page:4', progress=1.0, status='unread')
+        self.assertEqual(window._place['page'], 1)
+        pump()
+        self.assertNotEqual(self.library.book(window.book_id).status, 'finished')
+
+    def test_a_finished_book_opens_where_it_was_left(self):
+        window = self.open_pdf(location='page:4', progress=1.0, status='finished')
+        self.assertEqual(window._place['page'], 4)
+
+    def test_a_pdf_goes_to_a_page_and_a_failed_book_logs_no_session(self):
+        window = self.open_pdf()
+        self.assertTrue(window._go_to_entered('3', pages=4))
+        self.assertTrue(wait_for(lambda: window._place['page'] == 3, 3))
+        self.assertTrue(window._go_to_entered('99', pages=4))  # the last page
+        self.assertTrue(wait_for(lambda: window._place['page'] == 4, 3))
+        self.assertFalse(window._go_to_entered('three', pages=4))
+        window._on_view_error(window.view, 'broken')
+        self.assertIsNone(window._clock)
+
+    def test_arrows_move_through_the_sidebar_reached_by_tab(self):
+        from gi.repository import Gdk
+
+        window = self.open_pdf()
+        window._show_sidebar('contents')
+        row = window.toc_list.get_row_at_index(0)
+        row.grab_focus()
+        window.set_focus_visible(False)  # a click left it there: the arrows read on
+        self.assertTrue(window._on_key(None, Gdk.KEY_Down, 0, 0))
+        window.set_focus_visible(True)  # Tab took it there: the list's
+        self.assertFalse(window._on_key(None, Gdk.KEY_Down, 0, 0))
+        self.assertFalse(window._on_key(None, Gdk.KEY_space, 0, 0))
+        control = Gdk.ModifierType.CONTROL_MASK
+        self.assertTrue(window._on_key(None, Gdk.KEY_d, 0, control))  # shortcuts still work
+
+    def test_right_to_left_books_and_fixed_layouts(self):
+        window = self.open(self.add('missing.epub', write=False))
+        window._on_loaded(window.view, {'dir': 'rtl', 'sectionFractions': []})
+        self.assertTrue(window.progress_scale.get_inverted())
+        self.assertEqual(window.prev_button.get_tooltip_text(), 'Next Page')
+        self.assertEqual(window.next_button.get_tooltip_text(), 'Previous Page')
+
+        settings = self.app.settings
+        self.addCleanup(settings.reset, 'reader-font-size')
+        window._on_loaded(window.view, {'dir': 'ltr', 'fixedLayout': True})
+        self.assertFalse(window.font_group.get_visible())
+        size = settings.get_int('reader-font-size')
+        window._change_font_size(1)  # a comic has no text size: other books keep theirs
+        self.assertEqual(settings.get_int('reader-font-size'), size)
+
+    def test_a_comic_names_its_pages_not_its_files(self):
+        from bookcase.widgets import book_view
+
+        with mock.patch.object(book_view, 'available', return_value=False):
+            window = self.open(self.add('A Quiet Harbour.cbz'))
+        toc = [{'label': '001.png', 'href': '001.png'}, {'label': '002.png', 'href': '002.png'}]
+        window._on_toc(window.view, toc)
+        self.assertEqual(window.toc_list.get_row_at_index(1).get_child().get_label(), 'Page 2')
+        window._place = {'fraction': 0.5, 'chapter': {'label': '002.png', 'href': '002.png'}}
+        window._update_title()
+        self.assertEqual(window.window_title.get_subtitle(), 'Page 2')
+
+    def test_add_to_library_goes_at_once(self):
+        from bookcase.library import OPENED
+
+        path = self.directory / 'opened.epub'
+        info = BookInfo(title='A Quiet Harbour', authors=['Ada Lark'], format='epub')
+        book_id = self.library.add_opened(info, str(path), hash='o', size=1)
+        self.assertEqual(self.library.book(book_id).source, OPENED)
+        kept = []
+        self.app.keep_book = kept.append
+        self.addCleanup(delattr, self.app, 'keep_book')
+        window = self.open(book_id)
+        self.assertTrue(window._keep_banner.get_revealed())
+        window._keep_book()
+        self.assertEqual(kept, [book_id])
+        self.assertFalse(window._keep_banner.get_revealed())
+        window._on_library_changed(self.library, 'books')  # not back while it is copied
+        self.assertFalse(window._keep_banner.get_revealed())
+
     def test_typography_follows_the_settings(self):
         window = self.open(self.add('missing.epub', write=False))
         settings = self.app.settings
@@ -168,6 +291,7 @@ class ReaderWindowTest(unittest.TestCase):
         self.assertEqual(settings.get_int('reader-font-size'), 23)
         settings.set_boolean('reader-scrolled', True)
         self.assertEqual(window.layout_group.get_active_name(), 'scrolled')
+        self.assertFalse(window.two_pages_row.get_sensitive())  # one column when scrolling
         window._theme_chips['sepia'].set_active(True)
         self.assertEqual(settings.get_string('reader-theme'), 'sepia')
         pump()

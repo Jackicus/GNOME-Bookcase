@@ -21,6 +21,7 @@ belongs-to-collection, and updates dcterms:modified. The source file is never to
 import datetime
 import os
 import posixpath
+import shutil
 import tempfile
 import uuid
 import zipfile
@@ -43,7 +44,17 @@ MIMETYPE = b'application/epub+zip'
 # Identifier schemes recognised in 'scheme:value' identifiers (EPUB 3 has no opf:scheme).
 SCHEMES = ('isbn', 'uuid', 'google', 'amazon', 'asin', 'goodreads', 'openlibrary', 'doi',
            'calibre', 'mobi-asin', 'issn')
-MAX_OPF = 16 * 1024 * 1024
+MAX_OPF = 16 * 1024 * 1024  # the package document, container.xml, a cover page
+MAX_COVER = 64 * 1024 * 1024
+
+
+def read_member(archive, name, limit=MAX_OPF):
+    """A member's bytes, refusing (FormatError) one that says it is larger than `limit`:
+    zipfile reads no more than a member says, so a zip bomb never inflates past it.
+    KeyError when there is no such member."""
+    if archive.getinfo(name).file_size > limit:
+        raise FormatError(f'{name} is too large')
+    return archive.read(name)
 
 
 def _parser():
@@ -66,7 +77,8 @@ def _open(path):
 def opf_path(archive):
     """The package document's name inside the archive."""
     try:
-        container = etree.fromstring(archive.read('META-INF/container.xml'), _parser())
+        container = etree.fromstring(read_member(archive, 'META-INF/container.xml'),
+                                     _parser())
     except KeyError:
         container = None
     if container is not None:
@@ -82,14 +94,13 @@ def opf_path(archive):
 
 def _read_opf(archive):
     name = opf_path(archive)
-    if archive.getinfo(name).file_size > MAX_OPF:
-        raise FormatError('The package document is too large')
+    data = read_member(archive, name)
     try:
-        root = etree.fromstring(archive.read(name), _parser())
+        root = etree.fromstring(data, _parser())
     except etree.XMLSyntaxError:
         # A broken OPF: lxml's recovering parser keeps what it can.
-        root = etree.fromstring(archive.read(name), etree.XMLParser(
-            resolve_entities=False, no_network=True, recover=True))
+        root = etree.fromstring(data, etree.XMLParser(
+            resolve_entities=False, no_network=True, huge_tree=False, recover=True))
     if root is None or etree.QName(root).localname != 'package':
         raise FormatError('Not an EPUB: the package document is broken')
     return name, root
@@ -132,8 +143,8 @@ def read(path):
             cover = find_cover(archive, root, name)
             if cover:
                 try:
-                    data = archive.read(cover)
-                except KeyError:
+                    data = read_member(archive, cover, MAX_COVER)
+                except (KeyError, FormatError):
                     data = None
                 if image_type(data):
                     info.cover = data
@@ -277,8 +288,8 @@ def cover_item(root):
 
 def _image_on_page(archive, page):
     try:
-        data = archive.read(page)
-    except KeyError:
+        data = read_member(archive, page)
+    except (KeyError, FormatError):
         return None
     try:
         document = etree.fromstring(data, _parser())
@@ -318,8 +329,8 @@ def _protected(archive):
     if 'META-INF/encryption.xml' not in names:
         return False
     try:
-        root = etree.fromstring(archive.read('META-INF/encryption.xml'), _parser())
-    except etree.XMLSyntaxError:
+        root = etree.fromstring(read_member(archive, 'META-INF/encryption.xml'), _parser())
+    except (etree.XMLSyntaxError, FormatError):
         return True
     for method in root.iter('{http://www.w3.org/2001/04/xmlenc#}EncryptionMethod'):
         if method.get('Algorithm') not in _FONT_ALGORITHMS:
@@ -554,9 +565,14 @@ def _copy_archive(source, dest, replacements, added):
                                       if member.compress_type == zipfile.ZIP_STORED
                                       else zipfile.ZIP_DEFLATED)
                 data = replacements.get(member.filename)
-                if data is None:
-                    data = source.read(member.filename)
-                target.writestr(copy, data)
+                if data is not None:
+                    target.writestr(copy, data)
+                    continue
+                # Streamed: a large (or bomb-like) member is never held in memory whole.
+                large = member.file_size >= zipfile.ZIP64_LIMIT
+                with source.open(member) as reader, \
+                        target.open(copy, 'w', force_zip64=large) as writer:
+                    shutil.copyfileobj(reader, writer, 1 << 20)
             for name, data in added.items():
                 member = zipfile.ZipInfo(name, date_time=_now_tuple())
                 member.compress_type = zipfile.ZIP_STORED

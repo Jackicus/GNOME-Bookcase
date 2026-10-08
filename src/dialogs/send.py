@@ -13,9 +13,10 @@ choice when there are several, with its free space), for a Kobo the Kobo EPUB sw
 `send-kepub` setting), and each book with what will be sent ("EPUB → Kobo EPUB", "PDF") or
 why it cannot be. Send copies the books in a thread (devices.Device.send(), with a library
 connection of its own), showing progress; Cancel stops it between chunks, and the books
-sent so far stay. The dialog closes when done, with a toast ("Sent 3 books to Kobo Clara"),
-and tells the monitor the device's books changed. Each copy sent is remembered for reading
-sync (app.sync.remember_copy: KOReader on the device names the book by the copy's hash).
+sent so far stay; unplugging the e-reader stops it too. The dialog closes when done, with a
+toast ("Sent 3 books to Kobo Clara"), and tells the monitor the device's books changed.
+Each copy sent is remembered for reading sync (app.sync.remember_copy: KOReader on the
+device names the book by the copy's hash).
 
 Send to Kindle by e-mail (mail.py) is a destination beside the devices once it is set up
 (mail.KindleDestination, listed last): each book shows what Amazon gets (EPUB, PDF, TXT) or
@@ -59,6 +60,7 @@ class SendDialog(Adw.Dialog):
         self.sending = False
         self._closed = False
         self._choosing = False
+        self._device_gone = False  # unplugged while sending
         self._build()
         monitor = getattr(app, 'devices', None)
         if monitor is not None:
@@ -143,6 +145,20 @@ class SendDialog(Adw.Dialog):
     def _on_devices_changed(self, *_args):
         if not self.sending:
             self._update_devices()
+        elif self.device is not None and self.device.kind != 'email' and not self._present():
+            # Unplugged while sending: the books left would each fail; stop at once.
+            self._device_gone = True
+            self.cancellable.cancel()
+            self.cancel_button.set_sensitive(False)
+            self.progress_title.set_text(_('{device} was disconnected').format(
+                device=self.device.name))
+
+    def _present(self):
+        """Whether the device being sent to is still connected."""
+        monitor = getattr(self.app, 'devices', None)
+        if monitor is None:
+            return True
+        return any(device.id == self.device.id for device in monitor.devices())
 
     def _update_devices(self):
         monitor = getattr(self.app, 'devices', None)
@@ -367,7 +383,10 @@ class SendDialog(Adw.Dialog):
         if monitor is not None and sent and device.kind != 'email':
             monitor.books_changed(device.id)
         name = device.account.kindle if device.kind == 'email' else device.name
-        self.app.toast(result_text(name, total, sent, failed, cancelled))
+        if self._device_gone:
+            self.app.toast(gone_text(name, sent))
+        else:
+            self.app.toast(result_text(name, total, sent, failed, cancelled))
         if not self._closed:
             self.force_close()
         return GLib.SOURCE_REMOVE
@@ -384,6 +403,16 @@ class SendDialog(Adw.Dialog):
         self._closed = True
         if self.cancellable is not None:
             self.cancellable.cancel()
+
+
+def gone_text(device_name, sent):
+    """The toast after the device was unplugged while books were sent to it."""
+    if not sent:
+        return _('{device} was disconnected before a book was sent').format(
+            device=device_name)
+    return ngettext('{device} was disconnected after {count} book was sent',
+                    '{device} was disconnected after {count} books were sent',
+                    len(sent)).format(device=device_name, count=len(sent))
 
 
 def result_text(device_name, total, sent, failed, cancelled):

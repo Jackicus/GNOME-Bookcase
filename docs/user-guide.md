@@ -196,11 +196,13 @@ note, copy it (or press Ctrl+C), look it up. The paper colours apply too: Sepia 
 page, Dark and Black turn it light-on-dark (pictures included, as in other PDF readers'
 night mode). A PDF locked with a password asks for it. Your place is saved by page.
 
-Comics (CBZ and CBR) open in the reader like any book; a CBR is copied into a CBZ the
-first time it is opened (this needs `bsdtar`, from libarchive). **Plain text** opens in the
-reader too: it is set as a book, with its paragraphs, and with contents made from lines
-that look like headings ("Chapter 1", "CHAPTER IV", a line in capitals). The copies made
-for reading are kept in `~/.cache/bookcase/converted`; your files are never changed.
+Comics (CBZ and CBR) open in the reader like any book, a page or two at a time; the
+contents list their pages, and the header button keeps only the paper colours. A CBR is
+copied into a CBZ the first time it is opened (this needs `bsdtar`, from libarchive).
+**Plain text** opens in the reader too: it is set as a book, with its paragraphs, and with
+contents made from lines that look like headings ("Chapter 1", "CHAPTER IV", a line in
+capitals). The copies made for reading are kept in `~/.cache/bookcase/converted`; your
+files are never changed.
 
 **Open With…** in the reader's menu opens the book's file in another app.
 
@@ -221,14 +223,20 @@ for reading are kept in `~/.cache/bookcase/converted`; your files are never chan
 | Ctrl+D | Bookmark this page |
 | Ctrl+B | Highlights and bookmarks |
 | Ctrl++ Ctrl+− Ctrl+0 | Larger, smaller, reset text size |
-| Ctrl+J | Go to a location (a percentage of the book) |
+| Ctrl+J | Go to a location (a percentage of the book; a PDF's page number) |
 | Ctrl+I | Book details |
 | Ctrl+Shift+S | Read aloud, pause, play again |
 | F11, Escape | Fullscreen, leave fullscreen |
 | Ctrl+W | Close the book |
 
+When you move into the sidebar or a popover with Tab, the arrow keys, Space, Home and End
+work there (moving through the contents, say) instead of turning pages; click the page to
+read on.
+
 Reading progress is saved as you go; the book is marked as reading when you open it, and
-**Mark as Finished** on its menu or details page files it under Finished.
+as finished when you reach its end (with Undo), or with **Mark as Finished** on its menu or
+details page. A finished book opens where you left it; one you read to the end and then
+marked unread or reading again starts over from the beginning.
 
 ## Editing details
 
@@ -400,7 +408,7 @@ folder like any book you add, and a notice says "Added “Title”" with **Read*
 are for sale, on loan or protected by DRM are shown with what they are, and cannot be
 downloaded in Bookcase.
 
-**Add Catalog…** (the + button) takes a catalogue's address, and a user name and password
+**Add Catalogue…** (the + button) takes a catalogue's address, and a user name and password
 for a server that asks for them. The password is kept in your keyring, sent only to that
 server, and never written to Bookcase's settings. Your own server's address is usually:
 
@@ -424,8 +432,9 @@ opened read-only: Bookcase never changes a Calibre library, so you can keep usin
 beside it, or stop.
 
 When Calibre changes a book, Bookcase takes the change the next time it reads the library:
-when it starts, or with *Read Again* in Preferences. A book you edit in Bookcase keeps your
-edits there; they are not written back to Calibre. Preferences lists linked libraries;
+when it starts, or with *Read Again* in Preferences. Details you edited in Bookcase win: a
+title, a series, tags or a cover you changed here stay as you made them, and only the details
+you left alone follow Calibre. Your edits are not written back to Calibre. Preferences lists linked libraries;
 removing one there stops Bookcase reading it (the Calibre library itself is untouched).
 
 ## Removing books

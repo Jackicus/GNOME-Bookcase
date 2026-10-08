@@ -127,6 +127,7 @@ class HomePage(Adw.NavigationPage):
         connect_weak(self.tip_banner, 'button-clicked', self._on_tip_dismissed)
         self._compact = False
         self._menu_ids = []
+        self._shown = None  # what the rows were made from (_plan_key)
         self.book_actions = BookActions(self, self._get_menu_ids)
         connect_weak(self.compact_breakpoint, 'apply', self._on_compact_apply)
         connect_weak(self.compact_breakpoint, 'unapply', self._on_compact_unapply)
@@ -156,47 +157,61 @@ class HomePage(Adw.NavigationPage):
         library = app().library
         if library.count() == 0:
             self._clear()
+            self._shown = None
             self.stack.set_visible_child_name('empty')
             self._was_empty = True
             self._look_for_sources()
             return
         self.stack.set_visible_child_name('home')
         self._maybe_show_tip()
+        plan = self._plan(library)
+        # A page turn in a reader saves its place ('progress') every second or so: the rows
+        # are only made again when what they show has changed.
+        shown = (self._compact, _plan_key(plan))
+        if shown == self._shown:
+            return
+        self._shown = shown
         large, small = (LARGE_COMPACT, SMALL_COMPACT) if self._compact else (LARGE, SMALL)
         adjustment = self.scroller.get_vadjustment()
         scrolled = adjustment.get_value()
         self._clear()
+        for key, title, show_all_key, more, books in plan:
+            row = self._add_row(key, title, show_all_key, more)
+            if key == 'reading':
+                row.add_css_class('continue-reading')
+                for book, subtitle in books:
+                    button = row.add_tile(book, large, subtitle)
+                    connect_weak(button, 'clicked', self._on_read_clicked)
+                    self._add_menu(button)
+            else:
+                self._fill(row, [book for book, _subtitle in books], small)
+        GLib.idle_add(lambda: (adjustment.set_value(scrolled), GLib.SOURCE_REMOVE)[1])
 
+    def _plan(self, library):
+        """The rows to show: [(key, title, Show All's key, more, [(book, subtitle)])]."""
+        plan = []
         reading = library.continue_reading(limit=ROW_LIMIT)
         if reading:
-            row = self._add_row('reading', _('Continue Reading'), 'status:reading',
-                                library.count(status='reading') > len(reading))
-            row.add_css_class('continue-reading')
-            for book in reading:
-                button = row.add_tile(book, large,
-                                      progress_text(book, minutes_left(library, book)))
-                connect_weak(button, 'clicked', self._on_read_clicked)
-                self._add_menu(button)
-
+            plan.append(('reading', _('Continue Reading'), 'status:reading',
+                         library.count(status='reading') > len(reading),
+                         [(book, progress_text(book, minutes_left(library, book)))
+                          for book in reading]))
         recent = library.recently_added(limit=ROW_LIMIT)
         if recent:
-            row = self._add_row('recent', _('Recently Added'), 'all',
-                                library.count() > len(recent))
-            self._fill(row, recent, small)
-
+            plan.append(('recent', _('Recently Added'), 'all', library.count() > len(recent),
+                         [(book, None) for book in recent]))
         shelves = sorted(library.shelves(), key=lambda shelf: shelf.query is None)
         shown = 0
         for shelf in shelves:
             if shown >= SHELF_ROWS:
                 break
             books = library.books(shelf=shelf.id, sort='added', limit=ROW_LIMIT)
-            if not books:
-                continue
-            row = self._add_row(f'shelf:{shelf.id}', shelf.name, f'shelf:{shelf.id}',
-                                library.count(shelf=shelf.id) > len(books))
-            self._fill(row, books, small)
-            shown += 1
-        GLib.idle_add(lambda: (adjustment.set_value(scrolled), GLib.SOURCE_REMOVE)[1])
+            if books:
+                shown += 1
+                plan.append((f'shelf:{shelf.id}', shelf.name, f'shelf:{shelf.id}',
+                             library.count(shelf=shelf.id) > len(books),
+                             [(book, None) for book in books]))
+        return plan
 
     # -- the welcome ---------------------------------------------------------------------------
 
@@ -401,3 +416,13 @@ class HomePage(Adw.NavigationPage):
         self._menu_ids = [button.book_id]
         self.book_actions.update()
         popup_menu(button, book_menu(app().library), x, y)
+
+
+def _plan_key(plan):
+    """What a plan's rows show, to compare with the rows made last: a tile shows its book's
+    title, authors, cover, reading state, progress (to the percent) and subtitle."""
+    return [(key, title, show_all_key, more,
+             [(book.id, book.title, book.authors, book.cover_version, book.has_cover,
+               book.status, round(book.progress, 2), book.missing, subtitle)
+              for book, subtitle in books])
+            for key, title, show_all_key, more, books in plan]

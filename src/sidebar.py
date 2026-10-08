@@ -144,12 +144,13 @@ class SidebarController:
         self.sidebar.setup_drop_target(Gdk.DragAction.COPY, [BookIds.__gtype__])
         self.sidebar.connect('drop-enter', self._on_drop_enter)
         self.sidebar.connect('drop', self._on_drop)
-        self.library.connect('changed', self._on_changed)
+        self._handlers = [(self.library, self.library.connect('changed', self._on_changed))]
         devices = getattr(app, 'devices', None)
         if devices is not None:
             for signal in ('added', 'removed'):
                 try:
-                    devices.connect(signal, self._on_devices_changed)
+                    self._handlers.append((devices, devices.connect(
+                        signal, self._on_devices_changed)))
                 except TypeError:
                     log.warning('the device monitor has no %r signal', signal)
 
@@ -308,6 +309,14 @@ class SidebarController:
         if self._refresh_pending is not None:
             GLib.source_remove(self._refresh_pending)
             self._refresh_pending = None
+
+    def disconnect(self):
+        """Stop following the library and the devices (the window is going)."""
+        self.cancel_refresh()
+        for emitter, handler in self._handlers:
+            if emitter.handler_is_connected(handler):
+                emitter.disconnect(handler)
+        self._handlers = []
 
     def refresh_now(self):
         if self._refresh_pending is not None:

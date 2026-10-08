@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # SPDX-FileCopyrightText: 2026 Jack Tully
 
-"""The Discover page, a catalogue's page, a book's sheet and the Add Catalog dialog, over a
+"""The Discover page, a catalogue's page, a book's sheet and the Add Catalogue dialog, over a
 temporary library and invented feeds given to them directly (nothing is fetched)."""
 
 import unittest

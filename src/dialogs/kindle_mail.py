@@ -27,6 +27,7 @@ from gettext import gettext as _
 from gi.repository import Adw, GLib, Gtk
 
 from .. import mail, passwords
+from ..widgets.util import connect_weak, connect_weak_call
 from . import watch_dialog
 
 log = logging.getLogger(__name__)
@@ -131,11 +132,11 @@ class KindleSetupDialog(Adw.Dialog):
     def _build(self):
         header = Adw.HeaderBar(show_start_title_buttons=False, show_end_title_buttons=False)
         cancel = Gtk.Button(label=_('_Cancel'), use_underline=True)
-        cancel.connect('clicked', lambda *_args: self.close())
+        connect_weak_call(cancel, 'clicked', self.close)
         header.pack_start(cancel)
         self.save_button = Gtk.Button(label=_('_Save'), use_underline=True, sensitive=False)
         self.save_button.add_css_class('suggested-action')
-        self.save_button.connect('clicked', lambda *_args: self.save())
+        connect_weak_call(self.save_button, 'clicked', self.save)
         header.pack_end(self.save_button)
         self.set_default_widget(self.save_button)
 
@@ -187,18 +188,17 @@ class KindleSetupDialog(Adw.Dialog):
         self.approve_row.add_suffix(Gtk.Image(icon_name='adw-external-link-symbolic',
                                               accessible_role=Gtk.AccessibleRole.PRESENTATION))
         self.approve_row.set_tooltip_text(_('Open in the browser'))
-        self.approve_row.connect('activated',
-                                 lambda *_args: open_uri(self, mail.APPROVED_LIST_URL))
+        connect_weak_call(self.approve_row, 'activated', self._open_approved_list)
         approve.add(self.approve_row)
         page.add(approve)
 
         buttons = Adw.PreferencesGroup()
         self.test_row = Adw.ButtonRow(title=_('Send a _Test'), use_underline=True,
                                       start_icon_name='mail-send-symbolic')
-        self.test_row.connect('activated', lambda *_args: self.send_test())
+        connect_weak_call(self.test_row, 'activated', self.send_test)
         self.remove_row = Adw.ButtonRow(title=_('_Remove Account'), use_underline=True)
         self.remove_row.add_css_class('destructive-action')
-        self.remove_row.connect('activated', lambda *_args: self.remove())
+        connect_weak_call(self.remove_row, 'activated', self.remove)
         buttons.add(self.test_row)
         buttons.add(self.remove_row)
         page.add(buttons)
@@ -209,12 +209,12 @@ class KindleSetupDialog(Adw.Dialog):
         self.set_child(view)
 
         for row in (self.kindle_row, self.sender_row, self.server_row, self.username_row):
-            row.connect('changed', self._on_changed)
-        self.password_row.connect('changed', self._on_password_changed)
-        self.port_row.connect('notify::value', self._on_changed)
-        self.security_row.connect('notify::selected', self._on_changed)
-        self.provider_row.connect('notify::selected', self._on_provider_selected)
-        self.sender_row.connect('changed', self._on_sender_changed)
+            connect_weak(row, 'changed', self._on_changed)
+        connect_weak(self.password_row, 'changed', self._on_password_changed)
+        connect_weak(self.port_row, 'notify::value', self._on_changed)
+        connect_weak(self.security_row, 'notify::selected', self._on_changed)
+        connect_weak(self.provider_row, 'notify::selected', self._on_provider_selected)
+        connect_weak(self.sender_row, 'changed', self._on_sender_changed)
 
     # -- the values --------------------------------------------------------------------------
 
@@ -356,6 +356,9 @@ class KindleSetupDialog(Adw.Dialog):
                              else _('Could not send the test: {error}').format(error=error))
 
         run_in_thread(lambda: mail.send_test(values, password, smtp=smtp), done)
+
+    def _open_approved_list(self):
+        open_uri(self, mail.APPROVED_LIST_URL)
 
     def save(self):
         values, password = self.values(), self.password()

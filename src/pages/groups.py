@@ -17,8 +17,9 @@ import logging
 from gettext import gettext as _
 from gettext import ngettext
 
-from gi.repository import Adw, Gio, GObject, Gtk, Pango
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
+from ..titles import fold
 from ..widgets.cover import Cover
 from ..widgets.util import connect_weak
 from . import PageListener, app
@@ -41,14 +42,16 @@ KINDS = {
 
 
 class GroupItem(GObject.Object):
-    """A group (library.Group) in the page's model; `name` is a property for the filter."""
+    """A group (library.Group) in the page's model; `key`, its name folded for case and
+    accents (titles.fold), is a property for the filter."""
 
     __gtype_name__ = 'BookcaseGroupItem'
 
     name = GObject.Property(type=str, default='')
+    key = GObject.Property(type=str, default='')
 
     def __init__(self, group):
-        super().__init__(name=group.name)
+        super().__init__(name=group.name, key=fold(group.name))
         self.group = group
 
 
@@ -205,8 +208,9 @@ class GroupsPage(Adw.NavigationPage):
         self.empty_page.set_description(empty_description(kind))
         self.search_bar.set_key_capture_widget(self)
         self._names = []
+        self._first_fill = None  # the idle that fills a page shown before its layout
         self._store = Gio.ListStore(item_type=GroupItem)
-        expression = Gtk.PropertyExpression.new(GroupItem, None, 'name')
+        expression = Gtk.PropertyExpression.new(GroupItem, None, 'key')
         self._filter = Gtk.StringFilter(expression=expression, ignore_case=True,
                                         match_mode=Gtk.StringFilterMatchMode.SUBSTRING)
         self._filtered = Gtk.FilterListModel(model=self._store, filter=self._filter)
@@ -219,6 +223,22 @@ class GroupsPage(Adw.NavigationPage):
         self.listener = PageListener(self, CHANGE_KINDS, GroupsPage.refresh)
 
     def refresh(self):
+        if not self._names and self.get_height() == 0 and self._first_fill is not False:
+            # Not laid out yet: a grid with no height would make a tile for every group it
+            # might show (a thousand authors), so the groups come once it has its size.
+            if self._first_fill is None:
+                ref = self.weak_ref()
+
+                def fill():
+                    page = ref()
+                    if page is not None:
+                        page._first_fill = False
+                        if page.get_mapped():
+                            page.refresh()
+                    return GLib.SOURCE_REMOVE
+
+                self._first_fill = GLib.idle_add(fill)
+            return
         library = app().library
         groups = {'authors': library.authors, 'series': library.series,
                   'tags': library.tags}[self.kind]()
@@ -259,11 +279,11 @@ class GroupsPage(Adw.NavigationPage):
     def search(self, query):
         self.search_bar.set_search_mode(True)
         self.search_entry.set_text(query)
-        self._filter.set_search(query.strip())
+        self._filter.set_search(fold(query.strip()))
 
     @Gtk.Template.Callback()
     def on_search_changed(self, entry):
-        self._filter.set_search(entry.get_text().strip())
+        self._filter.set_search(fold(entry.get_text().strip()))
 
     @Gtk.Template.Callback()
     def on_stop_search(self, entry):

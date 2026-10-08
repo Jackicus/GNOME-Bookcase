@@ -21,6 +21,7 @@ from gettext import ngettext
 from gi.repository import Adw, GLib, Gtk
 
 from ..library import LibraryError
+from ..widgets.util import connect_weak, connect_weak_call
 from . import watch_dialog
 
 log = logging.getLogger(__name__)
@@ -67,14 +68,14 @@ class ShelfDialog(Adw.Dialog):
             chip.add_css_class('pill')
             chip.add_css_class('shelf-example')
             chip.set_tooltip_text(_('Add “{}” to the search').format(example))
-            chip.connect('clicked', self._on_example, example)
+            connect_weak(chip, 'clicked', self._on_example, example)
             self.example_chips.append(chip)
-        self.cancel_button.connect('clicked', lambda *_args: self.close())
-        self.apply_button.connect('clicked', lambda *_args: self.apply())
-        self.name_row.connect('changed', self._on_changed)
-        self.name_row.connect('entry-activated', lambda *_args: self.apply())
-        self.query_row.connect('changed', self._on_query_changed)
-        self.query_row.connect('entry-activated', lambda *_args: self.apply())
+        connect_weak_call(self.cancel_button, 'clicked', self.close)
+        connect_weak_call(self.apply_button, 'clicked', self.apply)
+        connect_weak(self.name_row, 'changed', self._on_changed)
+        connect_weak_call(self.name_row, 'entry-activated', self.apply)
+        connect_weak(self.query_row, 'changed', self._on_query_changed)
+        connect_weak_call(self.query_row, 'entry-activated', self.apply)
         self.connect('closed', self._on_closed)
         self.set_default_widget(self.apply_button)
         self._on_changed()

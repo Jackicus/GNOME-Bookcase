@@ -150,7 +150,6 @@ def _settings():
         'enable-html5-local-storage': False,
         'enable-html5-database': False,
         'enable-back-forward-navigation-gestures': False,
-        'enable-hyperlink-auditing': False,
         'enable-page-cache': False,
         'enable-webgl': False,
         'enable-webaudio': False,
@@ -439,6 +438,8 @@ class BookView(Adw.Bin):
             log.warning('the reader page sent a message that is not JSON')
             return
         kind = message.pop('type', '')
+        if self._book is None and kind != 'ready':
+            return  # closed: what the page still says is about nothing open
         if kind == 'ready':
             if self._book is not None:
                 self._send_open()

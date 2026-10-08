@@ -76,7 +76,7 @@ FORMAT_GROUPS = {
     'txt': ('txt',),
 }
 NOTHING = '0'
-_COMPARISON = re.compile(r'^(>=|<=|>|<|=)?\s*(.*)$')
+_COMPARISON = re.compile(r'^(>=|<=|>|<|=)?\s*(.*)$', re.S)
 _RELATIVE = re.compile(r'^(\d+(?:\.\d+)?)\s*([dwmy])$')
 _DATE = re.compile(r'^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$')
 
@@ -245,7 +245,9 @@ def _term(field, value, quoted, now):
         return _text_match('b.publisher', value)
     if field == 'language':
         code = value.lstrip('=').strip().lower()
-        return 'lower(b.language) = ? OR lower(b.language) LIKE ?', [code, code + '-%']
+        escaped = code.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        return ("lower(b.language) = ? OR lower(b.language) LIKE ? ESCAPE '\\'",
+                [code, escaped + '-%'])
     if field == 'format':
         return ('EXISTS (SELECT 1 FROM files f WHERE f.book_id = b.id AND f.format = ?)',
                 [value.lstrip('=').strip().lower().lstrip('.')])

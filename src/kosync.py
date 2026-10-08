@@ -264,6 +264,34 @@ def default_device_name():
 # -- the HTTP client -----------------------------------------------------------------------
 
 
+def _origin(url):
+    parts = urllib.parse.urlsplit(url)
+    return (parts.scheme.lower(), (parts.hostname or '').lower(),
+            parts.port or {'http': 80, 'https': 443}.get(parts.scheme.lower()))
+
+
+class _KeyRedirect(urllib.request.HTTPRedirectHandler):
+    """Redirects keep the account's name and key only on the server's own host (or its
+    move to https there); anywhere else they go without them."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urljoin(req.full_url, newurl)
+        if urllib.parse.urlsplit(target).scheme.lower() not in ('http', 'https'):
+            raise urllib.error.HTTPError(target, code, msg, headers, fp)
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        old, moved = _origin(req.full_url), _origin(new.full_url)
+        if moved != old and not (moved[1] == old[1] and moved[0] == 'https'):
+            for name in list(new.headers):
+                if name.lower() in ('x-auth-user', 'x-auth-key'):
+                    del new.headers[name]
+        return new
+
+
+_OPENER = urllib.request.build_opener(_KeyRedirect())
+
+
 class Client:
     """One account on one kosync server. Every method blocks (call it from a thread) and
     raises SyncError."""
@@ -273,7 +301,7 @@ class Client:
         self.username = username
         self.key = key
         self.timeout = timeout
-        self._open = opener or urllib.request.urlopen
+        self._open = opener or _OPENER.open
 
     def _request(self, method, path, body=None, auth=True, timeout=None):
         headers = {'Accept': ACCEPT, 'User-Agent': USER_AGENT}
@@ -416,6 +444,8 @@ class Store:
             try:
                 with open(self.path, encoding='utf-8') as file:
                     loaded = json.load(file)
+                if not isinstance(loaded, dict):
+                    raise ValueError('not a JSON object')
                 for key in self.data:
                     if isinstance(loaded.get(key), dict):
                         self.data[key] = loaded[key]
@@ -429,6 +459,8 @@ class Store:
         try:
             with open(temporary, 'w', encoding='utf-8') as file:
                 json.dump(self.data, file)
+                file.flush()
+                os.fsync(file.fileno())  # a crash leaves the old file or the new, whole
             os.replace(temporary, self.path)
         except OSError as error:
             log.warning('cannot write %s: %s', self.path, error)

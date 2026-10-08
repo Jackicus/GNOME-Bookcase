@@ -21,6 +21,9 @@ its sibling (Retain, by the same author, on the same stack).
   `obj.connect(signal, self._method)`: the cycle through C keeps the widget alive for ever.
   Follow a widget's lifetime with a GObject weak reference (`obj.weak_ref()`), not `weakref`:
   PyGObject drops a widget's Python wrapper while the widget lives and makes a new one.
+- A widget is disposed again when it is finalized, and `destroy` is emitted again then: a
+  Python handler on a window's own `destroy` that runs from the garbage collector crashed
+  the reader (reader_window.py disconnects it on its first call).
 - A Python subclass of `Gtk.TextChildAnchor` crashes on insert (GTK builds the anchor's
   segment in `gtk_text_child_anchor_new`, which `g_object_new` skips): use a plain anchor and
   hang a Python attribute on it; PyGObject keeps it alive through a toggle reference.
@@ -46,6 +49,11 @@ its sibling (Retain, by the same author, on the same stack).
   and lets keys through to an entry (the search bar) that has the focus. Without WebKit, or
   with `BOOKCASE_NO_WEBKIT=1` (CI: bubblewrap cannot start in the container), no view is
   made, and the tests that need one skip.
+- An `Adw.Toast` with `timeout` 0 stays until closed, and a toast of normal priority waits
+  behind the one shown: app.toast gives every toast a timeout, and an Undo toast high
+  priority (it replaces the one before; Undo puts back the newest change).
+- An application accelerator runs in the capture phase, before a focused entry sees the key:
+  app.undo (Ctrl+Z) hands the key to a focused text field's own `text.undo`.
 - In headless screenshots the accent colour is green (no Settings portal), so the accent and
   the success colour look alike there; on a desktop they differ.
 
@@ -63,5 +71,7 @@ its sibling (Retain, by the same author, on the same stack).
   is under it. A book tile's title reserves two lines (widgets/book_tile.py), so minimum and
   natural agree. `set_size_request` counts CSS margins: a margin a size depends on goes in
   the widget's `margin-*` properties instead.
+- `Gtk.ListBox.remove_all()` removes the placeholder too: a list with a placeholder removes
+  its rows one by one.
 - A wrapping label in a fixed-width tile has `max-width-chars` and `width-chars` 1, or its
   natural width (the whole text on one line) widens the tile.

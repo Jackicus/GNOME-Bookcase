@@ -24,7 +24,7 @@ catalogue's filters (OPDS facets) are menus under the header bar and reload the 
 Books already in the library carry a mark, kept up to date while the page is shown.
 
 Errors replace the content with a status page: no connection (Try Again), sign-in
-required (Sign In…, the catalogue's dialog), not a catalogue (Edit Catalog…), anything
+required (Sign In…, the catalogue's dialog), not a catalogue (Edit Catalogue…), anything
 else. A download ends in a toast, wherever the user is: "Added “Title”" with Read.
 """
 
@@ -287,7 +287,7 @@ class CatalogPage(Adw.NavigationPage):
         menu = Gio.Menu()
         menu.append(_('_Refresh'), 'catalog.refresh')
         menu.append(_('Open in _Browser'), 'catalog.web')
-        menu.append(_('_Edit Catalog…'), 'catalog.edit')
+        menu.append(_('_Edit Catalogue…'), 'catalog.edit')
         self.more_button.set_menu_model(menu)
         group.lookup_action('web').set_enabled(False)
 
@@ -459,7 +459,7 @@ class CatalogPage(Adw.NavigationPage):
         elif isinstance(error, opds.NotOpdsError):
             self._show_message('dialog-question-symbolic', _('Not a Catalogue'),
                                _('Nothing at this address is a book catalogue (OPDS)'),
-                               _('_Edit Catalog…'), self._on_edit)
+                               _('_Edit Catalogue…'), self._on_edit)
         elif isinstance(error, opds.OfflineError):
             self._show_message('network-offline-symbolic', _('No Connection'), str(error),
                                _('_Try Again'), self.load)

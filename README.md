@@ -73,12 +73,13 @@ It fits right in: light and dark styles, your accent colour, and windows down to
   </tr>
   <tr>
     <td><img src="data/screenshots/stats-light.png" alt="Statistics: this year's reading goal as a ring, the books finished, the streak and a year of reading days"></td>
-    <td></td>
+    <td><img src="data/screenshots/discover-light.png" alt="Discover: the new arrivals of an online catalogue, ready to download"></td>
   </tr>
 </table>
 
 The screenshots show an invented demo library (`scripts/demo_library.py`): the books, their
-authors and their covers are made up, apart from five public-domain classics.
+authors and their covers are made up, apart from five public-domain classics; so is the
+catalogue in Discover (`scripts/demo_catalog.py`).
 
 ## Bookcase and Calibre
 

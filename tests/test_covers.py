@@ -8,6 +8,7 @@ import os
 import pathlib
 import struct
 import unittest
+import zlib
 
 from gi.repository import GLib
 
@@ -87,6 +88,39 @@ class TestThumbnails(CoversTestCase):
         self.assertEqual(png_size(path), (20, 30))
         # Never wider than the cover.
         self.assertEqual(png_size(self.covers.thumbnail_path(self.book_id, 400)), (40, 60))
+
+    def test_a_huge_cover_gets_no_thumbnail(self):
+        # A valid one-bit PNG of 20000 x 20000 pixels: 6 MB of zeros to zlib, 1.6 GB once
+        # decoded. Its header is enough to refuse it.
+        def chunk(kind, data):
+            body = kind + data
+            return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body))
+
+        side = 20000
+        row = b'\x00' + bytes((side + 7) // 8)
+        bomb = (b'\x89PNG\r\n\x1a\n'
+                + chunk(b'IHDR', struct.pack('>IIBBBBB', side, side, 1, 0, 0, 0, 0))
+                + chunk(b'IDAT', zlib.compress(row * side, 9)) + chunk(b'IEND', b''))
+        self.assertLess(len(bomb), 1_000_000)
+        self.covers.save(self.book_id, bomb)
+        self.assertIsNone(self.covers.thumbnail_path(self.book_id, 100))
+        self.assertFalse((self.root / 'thumbnails' / '100').exists())
+
+    def test_a_thumbnail_made_after_the_store_is_gone_is_quiet(self):
+        # A pool thread still making a thumbnail when the data folder is removed (a test's
+        # teardown, the app's shutdown): no error, no traceback, the folder not made again.
+        self.covers.save(self.book_id, make_png(40, 60))
+        book = self.library.book(self.book_id)
+        source = self.covers.path(book)
+        directory = self.root / 'gone'
+        store = CoverStore(directory, self.library)
+        store.path = lambda _book: source  # the cover read before the folder went
+        os.rmdir(store.covers_dir)
+        os.rmdir(directory)
+        with self.assertLogs('bookcase.covers', 'DEBUG') as logs:
+            store._make_thumbnail(book, 20, (book.id, book.cover_version, 20))
+        self.assertFalse(directory.exists())
+        self.assertEqual([record.levelname for record in logs.records], ['DEBUG'])
 
     def test_load_thumbnail(self):
         self.covers.save(self.book_id, make_png(40, 60))

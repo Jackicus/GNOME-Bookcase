@@ -67,12 +67,11 @@ template $BookcaseBooksPage: Adw.NavigationPage {
       Revealer filter_revealer {
         transition-type: slide_down;
 
-        child: ScrolledWindow {
-          hscrollbar-policy: external;
-          vscrollbar-policy: never;
-
-          child: Box filter_box {
-            spacing: 6;
+        // A wrap box: in a narrow window the chips take a second line, none hidden.
+        child: Adw.WrapBox filter_box {
+            child-spacing: 6;
+            line-spacing: 6;
+            align: 0.5;
             margin-start: 12;
             margin-end: 12;
             margin-top: 6;
@@ -133,7 +132,6 @@ template $BookcaseBooksPage: Adw.NavigationPage {
                 "flat",
               ]
             }
-          };
         };
       }
 

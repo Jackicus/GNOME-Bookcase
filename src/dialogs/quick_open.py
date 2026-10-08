@@ -19,6 +19,7 @@ from gettext import gettext as _
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 from ..titles import fold
+from ..widgets.util import connect_weak
 
 LIMIT = 8
 ICONS = {'book': 'library-symbolic', 'author': 'avatar-default-symbolic',
@@ -78,7 +79,8 @@ class QuickOpenDialog(Adw.Dialog):
         self.list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         self.list.add_css_class('navigation-sidebar')
         self.list.update_property([Gtk.AccessibleProperty.LABEL], [_('Results')])
-        self.list.connect('row-activated', lambda _list, row: self._go(row.result))
+        # Connected weakly: a closed dialog must be able to go.
+        connect_weak(self.list, 'row-activated', self._on_row_activated)
         self.scrolled = scrolled = Gtk.ScrolledWindow(child=self.list, vexpand=True,
                                                       hscrollbar_policy=Gtk.PolicyType.NEVER)
         self.empty = Adw.StatusPage(icon_name='edit-find-symbolic', title=_('Go To'),
@@ -92,12 +94,24 @@ class QuickOpenDialog(Adw.Dialog):
         view.add_top_bar(header)
         self.set_child(view)
         self.set_focus(self.entry)
-        self.entry.connect('search-changed', lambda _entry: self.update())
-        self.entry.connect('activate', lambda _entry: self.activate_selected())
-        self.entry.connect('stop-search', lambda _entry: self.close())
+        connect_weak(self.entry, 'search-changed', self._on_search_changed)
+        connect_weak(self.entry, 'activate', self._on_entry_activate)
+        connect_weak(self.entry, 'stop-search', self._on_stop_search)
         keys = Gtk.EventControllerKey()
-        keys.connect('key-pressed', self._on_key)
+        connect_weak(keys, 'key-pressed', self._on_key)
         self.entry.add_controller(keys)
+
+    def _on_row_activated(self, _list, row):
+        self._go(row.result)
+
+    def _on_search_changed(self, _entry):
+        self.update()
+
+    def _on_entry_activate(self, _entry):
+        self.activate_selected()
+
+    def _on_stop_search(self, _entry):
+        self.close()
 
     def update(self):
         text = self.entry.get_text()

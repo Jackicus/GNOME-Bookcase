@@ -305,5 +305,88 @@ class TestLink(CalibreTestCase):
             covers.shutdown()
 
 
+    def test_a_rescan_keeps_what_was_edited_in_bookcase(self):
+        with temporary_library() as library:
+            covers = CoverStore(pathlib.Path(library.path).parent, library)
+            importer = Importer(library, covers, self.directory / 'Books')
+            importer.link_calibre(self.calibre.folder)
+            book_id = library.find_by_source_key('calibre', str(self.first))
+            # The title is edited in Bookcase; Calibre then changes the title and the rating.
+            library.update_book(book_id, title='My Own Title')
+            self.calibre.db.execute("UPDATE books SET title = 'The Lamp Keeper', "
+                                    "last_modified = '2026-02-01 00:00:00+00:00' WHERE id = ?",
+                                    (self.first,))
+            self.calibre.db.execute('UPDATE ratings SET rating = 4 WHERE id IN '
+                                    '(SELECT rating FROM books_ratings_link WHERE book = ?)',
+                                    (self.first,))
+            report = importer.link_calibre(self.calibre.folder)
+            self.assertEqual(report.updated, [book_id])
+            book = library.book(book_id)
+            self.assertEqual(book.title, 'My Own Title')  # the edit stays
+            self.assertEqual(book.rating, 4)  # what was not edited follows Calibre
+            # Edited back to what Calibre says, the title follows Calibre again.
+            library.update_book(book_id, title='The Lamp Keeper')
+            self.calibre.db.execute("UPDATE books SET title = 'The Lamp Keeper II', "
+                                    "last_modified = '2026-03-01 00:00:00+00:00' WHERE id = ?",
+                                    (self.first,))
+            importer.link_calibre(self.calibre.folder)
+            self.assertEqual(library.book(book_id).title, 'The Lamp Keeper II')
+            covers.shutdown()
+
+    def test_a_book_merged_with_a_calibre_book_is_in_calibre(self):
+        with temporary_library() as library:
+            covers = CoverStore(pathlib.Path(library.path).parent, library)
+            importer = Importer(library, covers, self.directory / 'Books')
+            importer.link_calibre(self.calibre.folder)
+            linked = library.find_by_source_key('calibre', str(self.first))
+            own = importer.add([make_epub(self.directory / 'own.epub', title='Own Book')])
+            own_id = own.added[0]
+            self.assertTrue(library.in_calibre(linked))
+            self.assertFalse(library.in_calibre(own_id))
+            library.merge_books(own_id, [linked])
+            self.assertEqual(library.book(own_id).source, 'library')
+            self.assertTrue(library.in_calibre(own_id))  # its Calibre files: not to trash
+            covers.shutdown()
+
+    def test_a_book_calibre_renamed_follows_its_files(self):
+        # Calibre moves a book's folder and renames its files when its title changes.
+        with temporary_library() as library:
+            covers = CoverStore(pathlib.Path(library.path).parent, library)
+            importer = Importer(library, covers, self.directory / 'Books')
+            importer.link_calibre(self.calibre.folder)
+            book_id = library.find_by_source_key('calibre', str(self.first))
+            note = library.add_annotation(book_id, 'highlight', 'epubcfi(/6/4!/2)', text='lamp')
+            library.set_progress(book_id, 0.3, 'epubcfi(/6/4)')
+            hashes = {file.format: file.hash for file in library.files(book_id)}
+            old = self.calibre.folder / 'Cara Moss' / f'The Lantern Keeper ({self.first})'
+            new = self.calibre.folder / 'Cara Moss' / f'The Lamp Keeper ({self.first})'
+            old.rename(new)
+            for suffix in ('epub', 'mobi'):
+                (new / f'The Lantern Keeper - Cara Moss.{suffix}').rename(
+                    new / f'The Lamp Keeper - Cara Moss.{suffix}')
+            self.calibre.db.execute(
+                "UPDATE books SET title = 'The Lamp Keeper', path = ?, "
+                "last_modified = '2026-02-01 00:00:00+00:00' WHERE id = ?",
+                (f'Cara Moss/The Lamp Keeper ({self.first})', self.first))
+            self.calibre.db.execute("UPDATE data SET name = 'The Lamp Keeper - Cara Moss' "
+                                    'WHERE book = ?', (self.first,))
+            before = self.database_digest()
+
+            report = importer.link_calibre(self.calibre.folder)
+            self.assertEqual(self.database_digest(), before)  # read, never written
+            self.assertEqual(report.missing, [])
+            self.assertEqual(len(report.moved), 2)
+            book = library.book(book_id)
+            self.assertFalse(book.missing)
+            self.assertEqual(book.title, 'The Lamp Keeper')
+            self.assertEqual(set(book.formats), {'epub', 'mobi'})
+            files = library.files(book_id)
+            self.assertEqual(len(files), 2)
+            self.assertTrue(all(file.path.startswith(str(new)) for file in files))
+            self.assertEqual({file.format: file.hash for file in files}, hashes)
+            self.assertEqual([a.id for a in library.annotations(book_id)], [note])
+            self.assertEqual(book.progress, 0.3)
+            covers.shutdown()
+
 if __name__ == '__main__':
     unittest.main()

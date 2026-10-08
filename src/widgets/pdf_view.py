@@ -1140,6 +1140,11 @@ class PdfView(Adw.Bin):
             outline = Gsk.RoundedRect()
             outline.init_from_rect(rect, 0)
             snapshot.append_outset_shadow(outline, shadow, 0, 1, 0, 4)
+            # The marks blend with the page as the EPUB's highlights do (multiply on light
+            # paper, screen on dark), so the text under them keeps its colour.
+            marked = self._has_marks(index)
+            if marked:
+                snapshot.push_blend(Gsk.BlendMode.SCREEN if dark else Gsk.BlendMode.MULTIPLY)
             if self._matrix is not None:
                 snapshot.push_color_matrix(*self._matrix)
             cached = self._cache.get(index)
@@ -1151,8 +1156,18 @@ class PdfView(Adw.Bin):
                 snapshot.append_color(paper, rect)
             if self._matrix is not None:
                 snapshot.pop()
-            self._draw_marks(snapshot, index, x, y, w / self._sizes[index][0], dark)
+            if marked:
+                snapshot.pop()  # the bottom: the page; the top: its marks
+                self._draw_marks(snapshot, index, x, y, w / self._sizes[index][0], dark)
+                snapshot.pop()
         self._request(shown, target)
+
+    def _has_marks(self, index):
+        selection = self._selection
+        return bool(self._annotations.get(index) or self._hits.get(index)
+                    or (self._current_hit is not None and self._current_hit[0] == index)
+                    or (selection is not None and selection['index'] == index
+                        and selection['rects']))
 
     def _draw_marks(self, snapshot, index, x, y, scale, dark):
         def boxes(rects, color):

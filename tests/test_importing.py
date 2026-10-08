@@ -240,6 +240,88 @@ class TestScan(ImporterTestCase):
         self.assertEqual(self.library.files(book_id)[0].path, str(watched / 'x.epub'))
 
 
+def _tree(folder):
+    """{path: (sha256, size, mtime_ns)} of every file under folder."""
+    found = {}
+    for directory, _folders, files in os.walk(folder):
+        for name in files:
+            path = os.path.join(directory, name)
+            status = os.stat(path)
+            with open(path, 'rb') as file:
+                digest = hashlib.sha256(file.read()).hexdigest()
+            found[path] = (digest, status.st_size, status.st_mtime_ns)
+    return found
+
+
+class TestUsersFilesAreTheirs(ImporterTestCase):
+    """Nothing Bookcase does to its library moves, renames, rewrites or deletes a book file
+    the user keeps: adding copies, watched folders are read in place, a merge, a removal
+    or an undo touch rows only."""
+
+    def test_add_scan_open_merge_remove_and_undo_leave_the_files_alone(self):
+        watched = self.root / 'watched'
+        watched.mkdir()
+        make_epub(self.source / 'harbour.epub', title='A Quiet Harbour')
+        make_mobi(self.source / 'harbour.mobi', title='A Quiet Harbour')
+        make_epub(watched / 'lantern.epub', title='Lantern Hill', authors=('Ben Ross',))
+        make_epub(watched / 'lantern copy.epub', title='Lantern Hill', authors=('Ben Ross',),
+                  cover=make_png(3, 3))
+        make_epub(self.source / 'opened.epub', title='Opened Once', authors=('Cy Moor',))
+        user_files = {**_tree(self.source), **_tree(watched)}
+
+        self.importer.add([self.source / 'harbour.epub', self.source / 'harbour.mobi'])
+        self.importer.scan(watched)
+        opened = self.importer.open_in_place(self.source / 'opened.epub')
+        self.library.add_annotation(opened, 'highlight', 'epubcfi(/6/2)', text='kept')
+        self.importer.add([self.source / 'opened.epub'])  # Add to Library: a copy
+        for copy in (str(watched / 'lantern.epub'), str(watched / 'lantern copy.epub')):
+            if self.library.find_file(copy) is None:  # the importer took it for a duplicate
+                self.library.add_book(BookInfo(title='Lantern Hill', authors=['Ben Ross'],
+                                               format='epub'), copy, hash=partial_md5(copy),
+                                      size=os.path.getsize(copy), source='watched')
+        groups = self.library.duplicates()
+        self.assertTrue(groups)
+        for group in groups:
+            self.library.merge_books(group[0], group[1:])
+        self.library.remove_books(self.library.book_ids())
+        while self.library.can_undo():
+            self.library.undo()
+
+        self.assertEqual({**_tree(self.source), **_tree(watched)}, user_files)
+        copies = _tree(self.books)
+        self.assertEqual(len(copies), 3)  # the harbour's two formats and the opened book
+
+    def test_an_unmounted_watched_folder_marks_missing_and_keeps_everything(self):
+        watched = self.root / 'drive' / 'books'
+        watched.mkdir(parents=True)
+        make_epub(watched / 'one.epub', title='One')
+        make_epub(watched / 'two.epub', title='Two')
+        report = self.importer.scan(watched)
+        one = report.added[0]
+        self.library.add_annotation(one, 'highlight', 'epubcfi(/6/2)', text='kept')
+        self.library.set_progress(one, 0.4, 'epubcfi(/6/2)')
+        shelf = self.library.add_shelf('Drive')
+        self.library.add_to_shelf(shelf, report.added)
+        files = _tree(watched)
+
+        (self.root / 'drive').rename(self.root / 'away')  # unmounted
+        report = self.importer.scan(watched)
+        self.assertEqual(len(report.missing), 2)
+        self.assertEqual(self.library.count(), 2)
+        self.assertTrue(all(book.missing for book in self.library.books()))
+        self.assertEqual(len(self.library.annotations(one)), 1)
+        self.assertEqual(self.library.book(one).progress, 0.4)
+        self.assertEqual(self.library.shelf(shelf).count, 2)
+        self.assertFalse(watched.exists())  # the scan made nothing where the drive was
+
+        (self.root / 'away').rename(self.root / 'drive')  # back
+        report = self.importer.scan(watched)
+        self.assertEqual((report.added, report.missing), ([], []))
+        self.assertFalse(any(book.missing for book in self.library.books()))
+        self.assertEqual(len(self.library.annotations(one)), 1)
+        self.assertEqual(_tree(watched), files)
+
+
 class TestOpenInPlace(ImporterTestCase):
 
     def test_open_then_add(self):
@@ -264,6 +346,43 @@ class TestOpenInPlace(ImporterTestCase):
         self.assertTrue(path.startswith(str(self.books)))
         self.assertEqual(source.read_bytes(), before)
         self.assertEqual(self.library.count(), 1)
+
+    @unittest.skipUnless(shutil.which('bsdtar'), 'needs bsdtar')
+    def test_an_opened_cbr_kept_is_its_cbz_copy(self):
+        path = self.source / 'Night Ferry.cbr'
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('01.png', make_png(2, 3))
+        before = path.read_bytes()
+        book_id = self.importer.open_in_place(path)
+        self.importer.add([path])
+        file = self.library.files(book_id)[0]
+        self.assertEqual(file.format, 'cbz')
+        self.assertTrue(file.path.endswith('.cbz'))
+        self.assertEqual((file.hash, file.size),
+                         (partial_md5(file.path), os.path.getsize(file.path)))
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_keep_on_the_main_library_after_a_copy_made_elsewhere(self):
+        # What the app's Add to Library does: the copy in a thread, the undo step on the
+        # main library.
+        source = make_epub(self.source / 'harbour.epub')
+        book_id = self.importer.open_in_place(source)
+        worker = self.library.open_worker()
+        try:
+            copy = Importer(worker, self.covers.with_library(worker),
+                            self.books).copy_into_library(book_id)
+        finally:
+            worker.close()
+        self.assertTrue(copy[0].startswith(str(self.books)))
+        self.assertEqual(self.library.book(book_id).source, 'opened')  # nothing changed yet
+        path, file_hash, size, fmt = copy
+        self.assertTrue(self.library.keep_book(book_id, path=path, hash=file_hash, size=size,
+                                               format=fmt))
+        self.assertEqual(self.library.undo_label, 'Add to Library')
+        self.assertEqual(self.library.files(book_id)[0].path, path)
+        self.library.undo()
+        self.assertEqual(self.library.files(book_id)[0].path, str(source))
+        self.assertEqual(self.library.book(book_id).source, 'opened')
 
     def test_open_a_book_in_the_library(self):
         source = make_epub(self.source / 'harbour.epub')

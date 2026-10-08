@@ -39,6 +39,7 @@ from .. import online
 from ..titles import authors_sort, fold, title_sort
 from ..widgets.cover import Cover
 from ..widgets.rating import Rating
+from ..widgets.util import connect_weak, connect_weak_call
 from . import watch_dialog
 
 log = logging.getLogger(__name__)
@@ -236,46 +237,47 @@ class EditMetadataDialog(Adw.Dialog):
         group = Gio.SimpleActionGroup()
         self._actions = {}
         for name, callback in (
-                ('cancel', lambda *_args: self.force_close()),
-                ('save', lambda *_args: self._on_save()),
-                ('previous', lambda *_args: self.step(-1)),
-                ('next', lambda *_args: self.step(1)),
-                ('find-metadata', lambda *_args: self.find_metadata()),
-                ('choose-cover', lambda *_args: self.choose_cover()),
-                ('paste-cover', lambda *_args: self.paste_cover()),
-                ('find-cover', lambda *_args: self.find_cover()),
-                ('remove-cover', lambda *_args: self.set_cover(None))):
+                ('cancel', lambda dialog: dialog.force_close()),
+                ('save', lambda dialog: dialog._on_save()),
+                ('previous', lambda dialog: dialog.step(-1)),
+                ('next', lambda dialog: dialog.step(1)),
+                ('find-metadata', lambda dialog: dialog.find_metadata()),
+                ('choose-cover', lambda dialog: dialog.choose_cover()),
+                ('paste-cover', lambda dialog: dialog.paste_cover()),
+                ('find-cover', lambda dialog: dialog.find_cover()),
+                ('remove-cover', lambda dialog: dialog.set_cover(None))):
             action = Gio.SimpleAction.new(name, None)
-            action.connect('activate', callback)
+            # The dialog held weakly: the action group is the dialog's own.
+            action.connect('activate', _weak_action(self, callback))
             group.add_action(action)
             self._actions[name] = action
         self.insert_action_group('edit', group)
 
     def _connect_rows(self):
-        self.title_row.connect('changed', self._on_title_changed)
-        self.authors_row.connect('changed', self._on_authors_changed)
+        connect_weak(self.title_row, 'changed', self._on_title_changed)
+        connect_weak(self.authors_row, 'changed', self._on_authors_changed)
         for row in (self.sort_title_row, self.author_sort_row, self.series_row,
                     self.publisher_row):
-            row.connect('changed', self._on_changed)
-        self.series_index_row.connect('notify::value', self._on_changed)
-        self.published_row.connect('changed', self._on_published_changed)
-        self.isbn_row.connect('changed', self._on_isbn_changed)
-        self.language_row.connect('notify::selected', self._on_changed)
-        self.stars.connect('notify::value', self._on_changed)
-        self.description_view.get_buffer().connect('changed', self._on_changed)
-        self.tags_row.connect('changed', self._on_tag_text_changed)
-        self.tags_row.connect('apply', self._on_tag_apply)
-        self.tags_row.connect('entry-activated', self._on_tag_apply)
-        self.calendar.connect('day-selected', self._on_day_selected)
-        self.calendar_popover.connect('show', self._on_calendar_shown)
-        self.bulk_series_row.connect('changed', self._on_bulk_series_changed)
+            connect_weak(row, 'changed', self._on_changed)
+        connect_weak(self.series_index_row, 'notify::value', self._on_changed)
+        connect_weak(self.published_row, 'changed', self._on_published_changed)
+        connect_weak(self.isbn_row, 'changed', self._on_isbn_changed)
+        connect_weak(self.language_row, 'notify::selected', self._on_changed)
+        connect_weak(self.stars, 'notify::value', self._on_changed)
+        connect_weak(self.description_view.get_buffer(), 'changed', self._on_changed)
+        connect_weak(self.tags_row, 'changed', self._on_tag_text_changed)
+        connect_weak(self.tags_row, 'apply', self._on_tag_apply)
+        connect_weak(self.tags_row, 'entry-activated', self._on_tag_apply)
+        connect_weak(self.calendar, 'day-selected', self._on_day_selected)
+        connect_weak(self.calendar_popover, 'show', self._on_calendar_shown)
+        connect_weak(self.bulk_series_row, 'changed', self._on_bulk_series_changed)
         for row in (self.bulk_authors_row, self.bulk_publisher_row, self.bulk_add_tags_row,
                     self.bulk_remove_tags_row):
-            row.connect('changed', self._on_changed)
+            connect_weak(row, 'changed', self._on_changed)
         for row in (self.bulk_language_row, self.bulk_rating_row, self.bulk_status_row):
-            row.connect('notify::selected', self._on_changed)
-        self.bulk_number_row.connect('notify::active', self._on_changed)
-        self.bulk_start_row.connect('notify::value', self._on_changed)
+            connect_weak(row, 'notify::selected', self._on_changed)
+        connect_weak(self.bulk_number_row, 'notify::active', self._on_changed)
+        connect_weak(self.bulk_start_row, 'notify::value', self._on_changed)
 
     # -- one book ----------------------------------------------------------------------------
 
@@ -563,7 +565,7 @@ class EditMetadataDialog(Adw.Dialog):
         remove.set_tooltip_text(_('Remove “{}”').format(tag))
         remove.add_css_class('flat')
         remove.add_css_class('circular')
-        remove.connect('clicked', lambda *_args, tag=tag: self.remove_tag(tag))
+        connect_weak_call(remove, 'clicked', self.remove_tag, tag)
         box.append(remove)
         return box
 
@@ -603,7 +605,7 @@ class EditMetadataDialog(Adw.Dialog):
             button = Gtk.Button(label=name)
             button.add_css_class('pill')
             button.add_css_class('tag-suggestion')
-            button.connect('clicked', self._on_suggestion, name)
+            connect_weak(button, 'clicked', self._on_suggestion, name)
             self.suggestion_box.append(button)
         self.suggestions_row.set_visible(bool(matches))
 
@@ -631,7 +633,7 @@ class EditMetadataDialog(Adw.Dialog):
             remove = Gtk.Button(icon_name='user-trash-symbolic', valign=Gtk.Align.CENTER)
             remove.set_tooltip_text(_('Remove Identifier'))
             remove.add_css_class('flat')
-            remove.connect('clicked', self._on_remove_identifier, key)
+            connect_weak(remove, 'clicked', self._on_remove_identifier, key)
             row.add_suffix(remove)
             self.identifiers_group.add(row)
             self._identifier_rows.append(row)
@@ -893,7 +895,7 @@ class EditMetadataDialog(Adw.Dialog):
         alert.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED)
         alert.set_default_response('save')
         alert.set_close_response('cancel')
-        alert.connect('response', self._on_close_response)
+        connect_weak(alert, 'response', self._on_close_response)
         alert.present(self)
 
     def _on_close_response(self, _alert, response):
@@ -937,3 +939,15 @@ def present(app, parent, book_ids, siblings=None):
     if dialog.single:
         dialog.title_row.grab_focus()
     return dialog
+
+
+def _weak_action(dialog, callback):
+    """An action's handler that calls callback(dialog) while the dialog lives."""
+    ref = dialog.weak_ref()
+
+    def activate(*_args):
+        instance = ref()
+        if instance is not None:
+            callback(instance)
+
+    return activate

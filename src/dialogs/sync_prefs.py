@@ -20,7 +20,7 @@ from gettext import gettext as _
 from gi.repository import Adw, GLib, Gtk
 
 from .. import kosync
-from ..widgets.util import connect_weak
+from ..widgets.util import connect_weak, connect_weak_call
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class SyncPage(Adw.PreferencesPage):
 
     def __init__(self, app):
         super().__init__(name='sync', title=_('Sync'),
-                         icon_name='emblem-synchronizing-symbolic')
+                         icon_name='view-refresh-symbolic')
         self.app = app
         self.sync = getattr(app, 'sync', None)
         self.settings = app.settings
@@ -55,7 +55,7 @@ class SyncPage(Adw.PreferencesPage):
         self.password_row = Adw.PasswordEntryRow(title=_('Password'))
         for row in (self.server_row, self.username_row, self.password_row):
             self.form.add(row)
-        self.password_row.connect('entry-activated', lambda *_args: self.sign_in())
+        connect_weak_call(self.password_row, 'entry-activated', self.sign_in)
         self.username_row.connect('entry-activated',
                                   lambda *_args: self.password_row.grab_focus())
 
@@ -64,10 +64,10 @@ class SyncPage(Adw.PreferencesPage):
         self.sign_in_button = Gtk.Button(label=_('_Sign In'), use_underline=True)
         self.sign_in_button.add_css_class('pill')
         self.sign_in_button.add_css_class('suggested-action')
-        self.sign_in_button.connect('clicked', lambda *_args: self.sign_in())
+        connect_weak_call(self.sign_in_button, 'clicked', self.sign_in)
         self.create_button = Gtk.Button(label=_('_Create Account'), use_underline=True)
         self.create_button.add_css_class('pill')
-        self.create_button.connect('clicked', lambda *_args: self.sign_in(create=True))
+        connect_weak_call(self.create_button, 'clicked', self.sign_in, create=True)
         buttons.append(self.sign_in_button)
         buttons.append(self.create_button)
         self.form.add(buttons)
@@ -84,7 +84,7 @@ class SyncPage(Adw.PreferencesPage):
                                               accessible_role=Gtk.AccessibleRole.PRESENTATION))
         self.sign_out_button = Gtk.Button(label=_('Sign _Out'), use_underline=True,
                                           valign=Gtk.Align.CENTER)
-        self.sign_out_button.connect('clicked', lambda *_args: self.sign_out())
+        connect_weak_call(self.sign_out_button, 'clicked', self.sign_out)
         self.account_row.add_suffix(self.sign_out_button)
         self.account.add(self.account_row)
         self.test_row = Adw.ActionRow(title=_('Connection'))
@@ -92,7 +92,7 @@ class SyncPage(Adw.PreferencesPage):
         self.test_row.add_suffix(self.test_spinner)
         self.test_button = Gtk.Button(label=_('_Test'), use_underline=True,
                                       valign=Gtk.Align.CENTER)
-        self.test_button.connect('clicked', lambda *_args: self.test())
+        connect_weak_call(self.test_button, 'clicked', self.test)
         self.test_row.add_suffix(self.test_button)
         self.account.add(self.test_row)
         self.add(self.account)
@@ -102,11 +102,11 @@ class SyncPage(Adw.PreferencesPage):
             title=_('Match Books By'),
             subtitle=_('The same as KOReader’s setting; content is its default'),
             model=Gtk.StringList.new([_('Content'), _('File Name')]))
-        self.method_row.connect('notify::selected', self._on_method_selected)
+        connect_weak(self.method_row, 'notify::selected', self._on_method_selected)
         options.add(self.method_row)
         self.device_row = Adw.EntryRow(title=_('This Computer’s Name'),
                                        show_apply_button=True)
-        self.device_row.connect('apply', self._on_device_name)
+        connect_weak(self.device_row, 'apply', self._on_device_name)
         options.add(self.device_row)
         self.add(options)
 

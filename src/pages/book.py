@@ -94,6 +94,12 @@ def published_text(published):
     return parts[0] if parts and parts[0] else (published or '')
 
 
+def home_path(path):
+    """'~/Books/Ada Lark/Salt Roads.epub' for a path in the home folder, else the path."""
+    home = GLib.get_home_dir().rstrip('/')
+    return '~' + path[len(home):] if home and path.startswith(home + '/') else path
+
+
 def size_text(size):
     return GLib.format_size(size) if size else ''
 
@@ -370,10 +376,12 @@ class BookPage(Adw.NavigationPage):
             title = book_file.format.upper()
             if book_file.size:
                 title = f'{title} · {size_text(book_file.size)}'
-            row = Adw.ActionRow(title=title, subtitle=book_file.path, use_markup=False,
+            # The path as Files would say it (~ for the home folder); Copy Path copies it whole.
+            shown = home_path(book_file.path)
+            row = Adw.ActionRow(title=title, subtitle=shown, use_markup=False,
                                 subtitle_selectable=True, subtitle_lines=2)
             if book_file.missing:
-                row.set_subtitle(_('Missing: {path}').format(path=book_file.path))
+                row.set_subtitle(_('Missing: {path}').format(path=shown))
                 icon = Gtk.Image(icon_name='dialog-warning-symbolic',
                                  tooltip_text=_('This file cannot be found'))
                 icon.add_css_class('warning')

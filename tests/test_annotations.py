@@ -8,7 +8,7 @@ import unittest
 
 from tests import ROOT  # noqa: F401
 from bookcase import annotations
-from tests.support import add_book, temporary_library
+from tests.support import add_book, snapshot, temporary_library
 
 CLIPPINGS = """\ufeffThe Quiet Harbour (Lark, Ada)
 - Your Highlight on page 12 | Location 180-183 | Added on Monday, 3 March 2025 10:12:01
@@ -133,6 +133,7 @@ class ClippingsTest(unittest.TestCase):
             chosen = {groups[1].key: other}
             plan = annotations.import_plan(library, groups, chosen)
             self.assertEqual(sorted(plan), [harbour, other])
+            before = snapshot(library)
             self.assertEqual(annotations.import_clippings(library, plan), 2)
             added = library.annotations(harbour)
             self.assertEqual(len(added), 2)
@@ -142,9 +143,11 @@ class ClippingsTest(unittest.TestCase):
             self.assertEqual(library.annotations(other)[0].note, 'A note on its own.')
             # Importing the same file again adds nothing.
             self.assertEqual(annotations.import_plan(library, groups, chosen), {})
+            library.set_annotation_location(first.id, 'epubcfi(/6/4!/4/8)', 0.2)  # found
             self.assertEqual(library.undo(), 'Import Highlights')
             self.assertEqual(len(library.annotations(harbour)), 1)
             self.assertEqual(library.annotations(other), [])
+            self.assertEqual(snapshot(library), before)
 
 
 if __name__ == '__main__':

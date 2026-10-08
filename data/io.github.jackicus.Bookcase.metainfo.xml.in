@@ -71,35 +71,54 @@
   <screenshots>
     <screenshot type="default" environment="gnome">
       <caption>Home: the books you are reading, and what was added lately</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/home-light.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/home-light.png</image>
     </screenshot>
     <screenshot environment="gnome">
       <caption>Reading a novel, two pages side by side</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/reader-light.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/reader-light.png</image>
     </screenshot>
     <screenshot environment="gnome">
       <caption>A book's details: its series, progress and highlights</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/book-light.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/book-light.png</image>
     </screenshot>
     <screenshot environment="gnome">
       <caption>The whole library as covers, in the dark style</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/library-dark.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/library-dark.png</image>
     </screenshot>
     <screenshot environment="gnome">
       <caption>Reading at night</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/reader-dark.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/reader-dark.png</image>
     </screenshot>
     <screenshot environment="gnome">
       <caption>A Kobo plugged in: what is on it, and what to send</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.1.0/data/screenshots/device-light.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/device-light.png</image>
     </screenshot>
     <screenshot environment="gnome">
       <caption>Reading goals and statistics: the year's goal, the books finished, the streak</caption>
-      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/main/data/screenshots/stats-light.png</image>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/stats-light.png</image>
+    </screenshot>
+    <screenshot environment="gnome">
+      <caption>Discover: free books from online catalogues, and from your own server</caption>
+      <image type="source" width="1100" height="760">https://raw.githubusercontent.com/Jackicus/GNOME-Bookcase/v0.2.0/data/screenshots/discover-light.png</image>
     </screenshot>
   </screenshots>
 
   <releases>
+    <release version="0.2.0" date="2026-10-08">
+      <description>
+        <p>Bookcase reads everything it keeps, and finds more.</p>
+        <ul>
+          <li>PDFs open in the reader, with zoom, spreads, contents, search and highlights; so do text files and CBR comics</li>
+          <li>Statistics: a yearly reading goal, streaks and a year of reading at a glance</li>
+          <li>Look up a word or a name without leaving the book, and have it read aloud</li>
+          <li>Discover free books in online catalogues, or your own Calibre-Web, Kavita or Komga</li>
+          <li>Reading positions synced with KOReader devices</li>
+          <li>Send to Kindle by e-mail, Kindle highlights in, highlights out as Markdown</li>
+          <li>Find details for many books at once, find and merge duplicates</li>
+          <li>A welcome that finds your Calibre library and folders of books, and books read without adding them</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-08">
       <description>
         <p>The first release.</p>

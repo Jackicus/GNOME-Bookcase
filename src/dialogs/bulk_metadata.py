@@ -28,6 +28,7 @@ from gettext import ngettext
 from gi.repository import Adw, GLib, Gtk
 
 from .. import bulk_metadata, online
+from ..widgets.util import connect_weak, connect_weak_call
 from . import watch_dialog
 
 log = logging.getLogger(__name__)
@@ -101,12 +102,12 @@ class BulkMetadataDialog(Adw.Dialog):
 
         header = Adw.HeaderBar(show_start_title_buttons=False, show_end_title_buttons=False)
         cancel = Gtk.Button(label=_('_Cancel'), use_underline=True)
-        cancel.connect('clicked', lambda *_args: self.close())
+        connect_weak_call(cancel, 'clicked', self.close)
         header.pack_start(cancel)
         self.review_button = Gtk.Button(label=_('_Review'), use_underline=True,
                                         sensitive=False)
         self.review_button.add_css_class('suggested-action')
-        self.review_button.connect('clicked', lambda *_args: self.review())
+        connect_weak_call(self.review_button, 'clicked', self.review)
         header.pack_end(self.review_button)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=12,
@@ -121,7 +122,7 @@ class BulkMetadataDialog(Adw.Dialog):
         self.note_label.add_css_class('dimmed')
         self.stop_button = Gtk.Button(label=_('_Stop'), use_underline=True,
                                       halign=Gtk.Align.START)
-        self.stop_button.connect('clicked', lambda *_args: self.stop())
+        connect_weak_call(self.stop_button, 'clicked', self.stop)
         self.books_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE, margin_top=6)
         self.books_list.add_css_class('boxed-list')
         for child in (self.progress_label, self.progress_bar, self.note_label,
@@ -140,7 +141,7 @@ class BulkMetadataDialog(Adw.Dialog):
         review_header = Adw.HeaderBar(show_end_title_buttons=False)
         self.apply_button = Gtk.Button(label=_('_Apply'), use_underline=True)
         self.apply_button.add_css_class('suggested-action')
-        self.apply_button.connect('clicked', lambda *_args: self.apply())
+        connect_weak_call(self.apply_button, 'clicked', self.apply)
         review_header.pack_end(self.apply_button)
         self.review_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24,
                                   margin_top=12, margin_bottom=24, margin_start=12,
@@ -150,7 +151,7 @@ class BulkMetadataDialog(Adw.Dialog):
             title=_('Replace Existing Details'),
             subtitle=_('Off: only empty fields are filled. Titles and authors are never '
                        'changed.'))
-        self.replace_row.connect('notify::active', lambda *_args: self._fill_review())
+        connect_weak_call(self.replace_row, 'notify::active', self._fill_review)
         options.add(self.replace_row)
         self.review_box.append(options)
         self.update_group = Adw.PreferencesGroup()
@@ -344,7 +345,7 @@ class BulkMetadataDialog(Adw.Dialog):
         check = Gtk.CheckButton(valign=Gtk.Align.CENTER,
                                 active=self.book_checks.get(lookup.book_id, False))
         check.update_property([Gtk.AccessibleProperty.LABEL], [book.title])
-        check.connect('toggled', self._on_book_toggled, lookup.book_id)
+        connect_weak(check, 'toggled', self._on_book_toggled, lookup.book_id)
         row.add_prefix(check)
         row.book_id = lookup.book_id
         row.group_rows = {}
@@ -358,7 +359,7 @@ class BulkMetadataDialog(Adw.Dialog):
                 valign=Gtk.Align.CENTER,
                 active=self.group_checks[lookup.book_id].get(group, True))
             group_check.update_property([Gtk.AccessibleProperty.LABEL], [names[group]])
-            group_check.connect('toggled', self._on_group_toggled, lookup.book_id, group)
+            connect_weak(group_check, 'toggled', self._on_group_toggled, lookup.book_id, group)
             child.add_prefix(group_check)
             child.set_activatable_widget(group_check)
             if group == 'cover' and lookup.cover:

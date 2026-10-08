@@ -11,7 +11,7 @@ import unittest
 from bookcase import bulk_metadata
 from tests.dialog_support import fake_app
 from tests.gtk import requires_gtk, wait_for
-from tests.support import add_book, temporary_library
+from tests.support import add_book, snapshot, temporary_library
 from tests.test_dialogs_fetch import PNG
 from tests.test_online import ISBN, OL_BOOKS, OL_EDITION, OL_SEARCH, OL_WORK, Server
 
@@ -102,6 +102,29 @@ class BulkMetadataTest(unittest.TestCase):
             self.assertFalse(library.book(one).has_cover)
             self.assertEqual(library.book(two).series, '')
             self.assertFalse(library.can_undo())
+
+    def test_apply_and_undo_put_back_every_row(self):
+        from bookcase.covers import CoverStore
+
+        with temporary_library() as library:
+            covers = CoverStore(library.path.parent, library)
+            one = add_book(library, 'A Quiet Harbour', ('Ada Lark',), tags=['Old'],
+                           publisher='Mine', identifiers={'isbn': '9780000000002'})
+            two = add_book(library, 'A Quiet Harbour', ('Ada Lark',))
+            covers.save(one, PNG)
+            fetch = server()
+            lookups = [bulk_metadata.run_lookup(bulk_metadata.Lookup.of(library.book(id_)),
+                                                fetch=fetch) for id_ in (one, two)]
+            selection = {one: set(bulk_metadata.GROUPS), two: set(bulk_metadata.GROUPS)}
+            before = snapshot(library)
+            cover_before = covers.data(one)
+            self.assertEqual(bulk_metadata.apply(library, covers, lookups, selection,
+                                                 replace=True), 2)
+            self.assertNotEqual(snapshot(library), before)
+            self.assertEqual(library.undo(), 'Find Metadata')
+            self.assertEqual(snapshot(library), before)
+            self.assertEqual(covers.data(one), cover_before)
+            self.assertIsNone(covers.data(two))
 
     def test_queue_runs_and_cancels(self):
         with temporary_library() as library:

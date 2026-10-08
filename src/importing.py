@@ -15,6 +15,8 @@
     importer.scan_async(folder, progress=None, done=None) -> Job
     importer.link_calibre_async(path, progress=None, done=None) -> Job
     importer.open_in_place(path) -> book id  a file from outside, read without adding it
+    importer.copy_into_library(book_id) -> (path, hash, size, format)   a copy in the
+                                             library folder, the library unchanged
     describe(report) -> str                  one sentence for a toast
 
 `progress(done, total, path)` is called after each file and `cancelled()` asked before each;
@@ -44,8 +46,9 @@ link_calibre(path): adds the folder as 'calibre' and its books in place (no copi
 writing metadata.db): one book per Calibre book with its formats, Calibre's metadata,
 rating and cover.jpg, keyed by Calibre's id (source_key) with Calibre's last_modified
 (source_modified). Run again, it is the rescan: a book whose last_modified changed gets
-Calibre's metadata (and cover) again, new formats are added, and the files of books gone
-from Calibre are marked missing.
+Calibre's metadata (and cover) again, new formats are added, a file Calibre renamed (it
+renames a book's folder when its title or author changes) is followed to its new path, and
+the files of books gone from Calibre are marked missing.
 
 Threads: Importer methods are blocking. The UI runs them through the *_async helpers,
 which run the work in a thread on a worker Library (`library.open_worker()`, closed after)
@@ -60,6 +63,7 @@ they return has cancel(): the work stops before the next file (what was added st
 import contextlib
 import dataclasses
 import hashlib
+import json
 import logging
 import os
 import re
@@ -73,7 +77,7 @@ from gi.repository import GLib
 
 from . import calibre, formats
 from .formats import FormatError, comic
-from .library import OPENED, READING_ORDER
+from .library import OPENED, READING_ORDER, LibraryError
 
 log = logging.getLogger(__name__)
 
@@ -186,6 +190,22 @@ class Job:
         return self._event.is_set()
 
 
+
+SOURCE_FIELDS = ('title', 'authors', 'series', 'series_index', 'tags', 'publisher',
+                 'published', 'language', 'description', 'identifiers', 'rating')
+
+
+def source_values(book, cover):
+    """A book's details as JSON-ready values, for comparing what the library holds with what
+    a source last said: lists for tuples, the cover as its MD5."""
+    values = {}
+    for field in SOURCE_FIELDS:
+        value = getattr(book, field)
+        values[field] = list(value) if isinstance(value, tuple) else value
+    values['cover'] = hashlib.md5(cover).hexdigest() if cover else ''
+    return values
+
+
 class Importer:
 
     def __init__(self, library, covers, library_folder):
@@ -285,10 +305,10 @@ class Importer:
         if copy:
             files = self.library.files(book_id)
             source = files[0].path if files and not files[0].missing else path
-            destination, _hash, _size, _format = self._place(
-                source, book, formats.format_of(source), True, '')
+            destination, file_hash, size, format = self.copy_into_library(book_id, source)
             try:
-                self.library.keep_book(book_id, path=destination)
+                self.library.keep_book(book_id, path=destination, hash=file_hash, size=size,
+                                       format=format)
             except BaseException:
                 self._unplace(source, destination)
                 raise
@@ -296,6 +316,25 @@ class Importer:
             self.library.keep_book(book_id, source=self._source_of(path))
         report.added.append(book_id)
         return True
+
+    def copy_into_library(self, book_id, source=None):
+        """Copy a book's file (`source`, else its reading file) into the library folder as
+        Author/Title.ext (a CBR as a CBZ when bsdtar is there), changing nothing in the
+        library: (path, hash, size, format) of the copy. For a book opened without adding,
+        the caller then makes it the book's file with Library.keep_book(book_id, path=…,
+        hash=…, size=…, format=…), an undo step on the library it is called on (so the
+        copy can be made in a thread and kept on the main library). Raises OSError,
+        FormatError, or LibraryError when the book has no file to copy."""
+        book = self.library.book(book_id)
+        if source is None:
+            found = self.library.reading_file(book_id) if book is not None else None
+            if found is None:
+                raise LibraryError(_('The book’s file cannot be found'))
+            source = found.path
+        os.makedirs(self.library_folder, exist_ok=True)
+        self.library.add_folder(self.library_folder, 'library')
+        return self._place(source, book, formats.format_of(source), True,
+                           partial_md5(source))
 
     def open_in_place(self, path):
         """The id of the book to read a file from outside in, without adding it: the
@@ -475,7 +514,21 @@ class Importer:
         if book.rating:
             self.library.update_book(book_id, rating=book.rating)
         self._calibre_cover(book_id, book)
+        self._remember_source(book_id)
         report.added.append(book_id)
+
+    def _remember_source(self, book_id, kept=None):
+        """Keep what Calibre said of the book, as the library holds it (`kept`: the details
+        Calibre said that the book does not hold, edited in Bookcase; 'cover' as bytes): the
+        next rescan changes only the details that still agree with it."""
+        values = source_values(self.library.book(book_id), self.covers.data(book_id))
+        for field, value in (kept or {}).items():
+            if field == 'cover':
+                value = hashlib.md5(value).hexdigest()
+            elif isinstance(value, tuple):
+                value = list(value)
+            values[field] = value
+        self.library.update_book(book_id, source_values=json.dumps(values, sort_keys=True))
 
     def _calibre_cover(self, book_id, book):
         if book.cover_path:
@@ -492,25 +545,57 @@ class Importer:
         if back:
             self.library.set_missing(back, False)
         current = self.library.book(book_id)
+        calibre_paths = set(book.files.values())
         for format, path in book.files.items():
-            if path not in known and format not in current.formats:
+            if path in known:
+                continue
+            # Calibre renames a book's folder and files when its title or author changes:
+            # the file of that format it no longer lists follows it to the new path.
+            renamed = next((file for file in known.values() if file.format == format
+                            and file.path not in calibre_paths), None)
+            if renamed is not None:
+                self.library.set_file_path(renamed.id, path, hash=partial_md5(path),
+                                           size=os.path.getsize(path))
+                report.moved.append(renamed.id)
+            elif format not in current.formats:
                 self.library.add_file(book_id, path, hash=partial_md5(path),
                                       size=os.path.getsize(path), format=format)
                 report.merged.append(book_id)
         if current.source_modified == book.last_modified:
             return
+        # Field by field: Calibre's change is taken where the book still says what Calibre
+        # last said (a detail edited in Bookcase since keeps the edit). A book linked before
+        # Bookcase remembered (no source_values) takes everything, as it always did.
+        try:
+            before = json.loads(current.source_values) if current.source_values else None
+        except ValueError:
+            before = None
+        now = source_values(current, self.covers.data(book_id))
+
+        def unedited(field):
+            return before is None or now.get(field) == before.get(field)
+
         info = book.info
         identifiers = {k: v for k, v in info.identifiers.items() if k != 'uuid'}
-        self.library.update_book(
-            book_id, title=info.title, authors=info.authors, series=info.series,
-            series_index=info.series_index, tags=info.tags, publisher=info.publisher,
-            published=info.published, language=info.language, description=info.description,
-            identifiers=identifiers, rating=book.rating, source_modified=book.last_modified)
+        fresh = {'title': info.title, 'authors': info.authors, 'series': info.series,
+                 'series_index': info.series_index, 'tags': info.tags,
+                 'publisher': info.publisher, 'published': info.published,
+                 'language': info.language, 'description': info.description,
+                 'identifiers': identifiers, 'rating': book.rating}
+        changes = {field: value for field, value in fresh.items() if unedited(field)}
+        self.library.update_book(book_id, source_modified=book.last_modified, **changes)
+        cover = None
         if book.cover_path:
             with contextlib.suppress(OSError), open(book.cover_path, 'rb') as file:
-                data = file.read()
-                if data != self.covers.data(book_id):
-                    self._save_cover(book_id, data)
+                cover = file.read()
+        if cover is not None and unedited('cover') and cover != self.covers.data(book_id):
+            self._save_cover(book_id, cover)
+        # Remember what Calibre says, not what the book now holds: a detail kept as edited
+        # remembers Calibre's value, so the edit is still told from it at the next rescan.
+        kept = {field: fresh[field] for field in fresh if field not in changes}
+        if cover is not None and not unedited('cover'):
+            kept['cover'] = cover
+        self._remember_source(book_id, kept)
         report.updated.append(book_id)
 
     def _mark_gone_calibre(self, folder, seen, report):

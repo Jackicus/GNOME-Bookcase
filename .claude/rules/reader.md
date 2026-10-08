@@ -57,7 +57,9 @@ paths:
   (paginated); Ctrl+wheel is the window's (text size).
 - Keys never reach the page: the view is non-focusable and the window's key controller runs
   in the capture phase (`shortcuts.READER`), leaving plain keys to a focused entry; Adw.Dialogs
-  over the window call `set_dialog_open()` so their text box gets its keys.
+  over the window call `set_dialog_open()` so their text box gets its keys. With the focus
+  visible (reached by Tab) in the sidebar or a popover, the plain page keys (arrows, Space,
+  Home, End…) are the focused widget's, and Escape in a popover closes it first.
 - The paginator hides the running head on a chapter's first page (by design). The footer's
   percentage shows only while the window's bars are hidden (`show_progress`).
 - Footnotes: foliate-js's `FootnoteHandler` renders into a second `foliate-view`, which must
@@ -68,8 +70,10 @@ paths:
   `relocated.bookmark` says which is on screen.
 - Progress: `library.set_progress()` 1 s after the last relocation and on close (it also moves
   an unread book to reading); sessions via `reading.SessionClock`, logged on close and when
-  the reader returns after 5 idle minutes; reaching the end (`atEnd`) marks the book finished
-  once per window, with an Undo toast.
+  the reader returns after 5 idle minutes; reaching the end (`atEnd`, not the opening
+  relocation) marks the book finished once per window, with an Undo toast. A book at its end
+  that is not finished (marked unread or reading again) opens at its start. Nothing is
+  saved after closing (the view's late messages are dropped).
 - Web process death: reload in an idle, at the last CFI (more than 3 in a minute: an error
   page). Tests: `terminate_web_process()`.
 - Paper themes live in `reading.THEMES` and in style.css's `.reader-page.theme-*` (a test checks

@@ -9,6 +9,7 @@
     make_epub(path, title='A Quiet Harbour', authors=('Ada Lark',), cover=make_png(4, 6))
     make_png(4, 6, (200, 40, 40))           # a PNG's bytes; path=… also writes it there
     make_paged_pdf(path, pages=6)           # a PDF with text, an outline and links (pycairo)
+    snapshot(library)                       # every row of every table, to compare after undo
 
 The EPUBs are valid (mimetype first and stored, container.xml, an OPF, a nav document and an
 NCX, XHTML chapters of invented filler text); the PNGs are built with zlib and struct, no GTK.
@@ -44,6 +45,16 @@ def temporary_library():
     finally:
         library.close()
         shutil.rmtree(directory, ignore_errors=True)
+
+
+def snapshot(library):
+    """Every row of every table of a library, by table (sorted, the columns by name): two
+    snapshots are equal when undo put everything back exactly."""
+    tables = [row[0] for row in library.db.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
+    return {table: sorted((dict(row) for row in library.db.execute(f'SELECT * FROM {table}')),
+                          key=lambda row: sorted(row.items(), key=str))
+            for table in tables}
 
 
 def add_book(library, title, authors=('Ada Lark',), path=None, fmt='epub', **fields):

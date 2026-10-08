@@ -91,6 +91,8 @@ MAX_FEED_BYTES = 16 * 1024 * 1024
 MAX_BOOK_BYTES = 2 * 1024 * 1024 * 1024
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 CHUNK = 64 * 1024
+WEB_SCHEMES = ('http', 'https')
+MAX_ALTERNATES = 3  # HTML pages followed to the feed they name
 CACHE_SECONDS = 600
 CACHE_SIZE = 64
 RETRY_DELAY = 1.0  # seconds before asking a 502 or 504 again
@@ -1011,6 +1013,9 @@ class _Redirect(urllib.request.HTTPRedirectHandler):
     host."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urljoin(req.full_url, newurl)
+        if urllib.parse.urlsplit(target).scheme.lower() not in WEB_SCHEMES:
+            raise urllib.error.HTTPError(target, code, msg, headers, fp)
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is not None:
             new.remove_header('Authorization')
@@ -1093,6 +1098,10 @@ class Client:
         """A Response with an open stream (the caller reads and closes it)."""
         if url.startswith('data:'):
             return Response(url, *_data_url(url))
+        if urllib.parse.urlsplit(url).scheme.lower() not in WEB_SCHEMES:
+            # A feed's link to file:// or ftp:// is never followed: a catalogue reads
+            # nothing on this computer.
+            raise OpdsError(_('This address is not a book catalogue'))
         request = urllib.request.Request(url, headers={
             'User-Agent': self.user_agent,
             'Accept': accept or '*/*',
@@ -1129,7 +1138,7 @@ class Client:
         response.data = data
         return response
 
-    def feed(self, url, refresh=False):
+    def feed(self, url, refresh=False, _alternates=0):
         with self._lock:
             cached = self._cache.get(url)
         if cached is not None and not refresh and time.monotonic() - cached[0] < CACHE_SECONDS:
@@ -1141,9 +1150,9 @@ class Client:
             feed = parse(response.data, response.url, response.content_type)
         except NotOpdsError:
             alternate = _html_alternate(response.data, response.url)
-            if alternate is None or alternate == url:
+            if alternate is None or alternate == url or _alternates >= MAX_ALTERNATES:
                 raise
-            return self.feed(alternate, refresh)
+            return self.feed(alternate, refresh, _alternates + 1)
         with self._lock:
             self._cache[url] = (time.monotonic(), feed)
             self._cache.move_to_end(url)
@@ -1275,7 +1284,9 @@ def _disposition_name(value):
 def _safe(name):
     name = re.sub(r'[\x00-\x1f/\\:*?"<>|]+', ' ', name)
     name = ' '.join(name.split()).strip(' .')
-    return name[:120]
+    while len(name.encode('utf-8', 'surrogateescape')) > 120:  # bytes: names hold 255
+        name = name[:-1]
+    return name.rstrip(' .')
 
 
 def download_name(response, acquisition, title=''):
@@ -1481,10 +1492,14 @@ class Downloads(GObject.Object):
 
         def done(report):
             self._tasks.pop(key, None)
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
+            library = getattr(self.importer, 'library', None)
+            if library is None or library.closed or library.find_file(path) is None:
+                # The download only, never a file the library now reads in place (a
+                # library folder holding the cache folder adds it where it is).
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
             self.reports[key] = report
             ids = (list(report.added) + list(report.merged)
                    + [book for _path, book in report.duplicates])

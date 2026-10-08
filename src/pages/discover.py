@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Jack Tully
 
 """Discover: the online catalogues (OPDS) as cards, each opening its first page
-(pages/catalog.py), and Add Catalog… (dialogs/add_catalog.py).
+(pages/catalog.py), and Add Catalogue… (dialogs/add_catalog.py).
 
     page = DiscoverPage()               # the root page of the 'discover' sidebar item
     page.open_catalog(catalog_id)       # pushes the catalogue's page

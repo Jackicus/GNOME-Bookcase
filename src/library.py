@@ -63,7 +63,8 @@ keeps their place and highlights, but no list, count, search or group shows them
 
     library.add_opened(info, path, hash=…, size=…)   # its id; no undo step
     library.opened_ids()                    # {book id}
-    library.keep_book(book_id, source='library', path=None)   # undoable 'Add to Library'
+    library.keep_book(book_id, source='library', path=None, hash=None, size=None,
+                      format=None)          # undoable 'Add to Library'
     library.authors() / series() / tags()   # [Group(id, name, sort, count)], books only
     library.publishers() / languages()      # [str]
 
@@ -126,7 +127,9 @@ belongs to it (the longest match), whenever it is added or found again:
     library.remove_folder(folder_id, remove_books=False)   # undoable; with remove_books,
                                             # the books with no file elsewhere go too
     library.folder_files(folder_id)         # [BookFile] under it, for a rescan
-    library.set_file_path(file_id, path)    # a moved file found again (not undoable)
+    library.in_calibre(book_id)             # a file of it is in a linked Calibre library
+    library.set_file_path(file_id, path, hash=None, size=None)   # a moved file found
+                                            # again (not undoable)
     library.set_missing(file_ids, missing=True)            # not undoable
 
 Undo:
@@ -182,16 +185,23 @@ TABLE_KINDS = {
     'shelves': 'shelves', 'shelf_books': 'shelves', 'annotations': 'annotations',
     'sessions': 'progress', 'folders': 'folders',
 }
+# What keeps undo from deleting a name row (made by the step it puts back) that a book uses.
+NAME_IN_USE = {
+    'authors': ' AND NOT EXISTS (SELECT 1 FROM book_authors WHERE author_id = authors.id)',
+    'series': ' AND NOT EXISTS (SELECT 1 FROM books WHERE series_id = series.id)',
+    'tags': ' AND NOT EXISTS (SELECT 1 FROM book_tags WHERE tag_id = tags.id)',
+}
 # Fields update_book() writes straight to a books column.
 COLUMN_FIELDS = ('title', 'sort_title', 'author_sort', 'series_index', 'publisher', 'published',
                  'language', 'description', 'rating', 'status', 'has_cover', 'source_key',
-                 'source_modified')
+                 'source_modified', 'source_values')
 EDITABLE = set(COLUMN_FIELDS) | {'authors', 'series', 'tags', 'identifiers'}
 
 BOOK_SELECT = ('SELECT b.id, b.uuid, b.title, b.sort_title, b.author_sort, s.name AS series, '
                'b.series_index, b.publisher, b.published, b.language, b.description, b.rating, '
                'b.added, b.modified, b.status, b.progress, b.location, b.last_read, '
-               'b.has_cover, b.cover_version, b.source, b.source_key, b.source_modified '
+               'b.has_cover, b.cover_version, b.source, b.source_key, b.source_modified, '
+               'b.source_values '
                'FROM books b LEFT JOIN series s ON s.id = b.series_id')
 
 
@@ -258,6 +268,7 @@ class Book:
     source: str = 'library'  # the folder kind it came from
     source_key: str | None = None  # its key in the source (a Calibre book id)
     source_modified: str = ''  # when the source last changed it, as the source says
+    source_values: str = ''  # what the source last said of its details (JSON)
 
     @property
     def author(self):
@@ -461,6 +472,10 @@ class Library(GObject.Object):
                 action, table = op[0], op[1]
                 if action == 'delete':
                     where = ' AND '.join(f'{column} = ?' for column in op[2])
+                    # An author, series or tag made by this step may have been taken up
+                    # since by a change that is no undo step (a worker's import): it stays
+                    # while a book uses it (an unused one goes at the next start).
+                    where += NAME_IN_USE.get(table, '')
                     self.db.execute(f'DELETE FROM {table} WHERE {where}', list(op[2].values()))
                 elif action == 'insert':
                     row = op[2]
@@ -669,7 +684,8 @@ class Library(GObject.Object):
                 progress=row[15], location=row[16], last_read=row[17],
                 has_cover=bool(row[18]), cover_version=row[19],
                 missing=missing,
-                source=row[20], source_key=row[21], source_modified=row[22])
+                source=row[20], source_key=row[21], source_modified=row[22],
+                source_values=row[23])
             books.append(book)
         return books
 
@@ -1029,7 +1045,9 @@ class Library(GObject.Object):
                 if status == 'finished':  # its date; a book already finished keeps its own
                     self._update('books', f'id IN ({marks}) AND status != ?',
                                  chunk + ['finished'], {'finished': now})
-                values = {'status': status, **({'finished': 0} if status == 'unread' else {})}
+                # Unread starts the book over: no place kept to open at (undo puts it back).
+                values = {'status': status, **({'finished': 0, 'progress': 0.0, 'location': ''}
+                                               if status == 'unread' else {})}
                 self._update('books', f'id IN ({marks})', chunk, values)
 
     def finished(self, since=None, until=None):
@@ -1248,18 +1266,30 @@ class Library(GObject.Object):
                 self._update('files', 'folder_id = ?', [folder_id], {'folder_id': None})
             self._delete('folders', 'id = ?', [folder_id])
 
+    def in_calibre(self, book_id):
+        """Whether a file of the book lies in a linked Calibre library (a book linked from
+        one, or another book a Calibre book was merged into): such a file is Calibre's, never
+        to be trashed by Bookcase."""
+        return self.db.execute(
+            "SELECT 1 FROM files f JOIN folders d ON d.id = f.folder_id "
+            "WHERE f.book_id = ? AND d.kind = 'calibre' LIMIT 1", (_id(book_id),)
+        ).fetchone() is not None
+
     def folder_files(self, folder_id):
         return [_file(row) for row in self.db.execute(
             'SELECT * FROM files WHERE folder_id = ? ORDER BY path', (_id(folder_id),))]
 
-    def set_file_path(self, file_id, path):
+    def set_file_path(self, file_id, path, hash=None, size=None):
         path = str(path)
         other = self.db.execute('SELECT id FROM files WHERE path = ?', (path,)).fetchone()
         if other and other[0] != file_id:
             raise LibraryError(_('This file is already in the library'))
-        if self._update('files', 'id = ?', [file_id], {
-                'path': path, 'missing': 0, 'folder_id': self._folder_for(path)},
-                record=False):
+        values = {'path': path, 'missing': 0, 'folder_id': self._folder_for(path)}
+        if hash is not None:
+            values['hash'] = hash
+        if size is not None:
+            values['size'] = size
+        if self._update('files', 'id = ?', [file_id], values, record=False):
             self._touch('books')
 
     def set_missing(self, file_ids, missing=True):
@@ -1284,10 +1314,12 @@ class Library(GObject.Object):
         return {row[0] for row in self.db.execute('SELECT id FROM books WHERE source = ?',
                                                   (OPENED,))}
 
-    def keep_book(self, book_id, source='library', path=None):
+    def keep_book(self, book_id, source='library', path=None, hash=None, size=None,
+                  format=None):
         """Add a book opened without adding to the library (undoable 'Add to Library'): its
         source becomes `source`, its 'added' now, and with `path` (a copy made in the
-        library folder) its file is that copy. False when it was not an opened book."""
+        library folder) its file is that copy (with the copy's `hash`, `size` and `format`
+        when given: a CBR copied as a CBZ). False when it was not an opened book."""
         row = self.db.execute('SELECT source FROM books WHERE id = ?', (book_id,)).fetchone()
         if row is None or row['source'] != OPENED:
             return False
@@ -1300,8 +1332,11 @@ class Library(GObject.Object):
                 first = self.db.execute('SELECT id FROM files WHERE book_id = ? ORDER BY id '
                                         'LIMIT 1', (book_id,)).fetchone()
                 if first is not None:
-                    self._update('files', 'id = ?', [first[0]], {
-                        'path': path, 'missing': 0, 'folder_id': self._folder_for(path)})
+                    values = {'path': path, 'missing': 0, 'folder_id': self._folder_for(path)}
+                    for name, value in (('hash', hash), ('size', size), ('format', format)):
+                        if value is not None:
+                            values[name] = value
+                    self._update('files', 'id = ?', [first[0]], values)
             self._update('books', 'id = ?', [book_id], {'source': source, 'added': time.time()})
             self._touch('books')
         return True

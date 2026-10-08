@@ -68,7 +68,7 @@ def _text(element):
 
 
 def parse(data):
-    parser = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=True,
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=False,
                              recover=True)
     try:
         root = etree.fromstring(data, parser)

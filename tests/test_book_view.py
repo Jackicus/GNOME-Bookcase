@@ -120,6 +120,32 @@ class SchemeTest(unittest.TestCase):
             self.assertIsNone(request.data, uri)
 
 
+@requires_gtk
+class ClosedViewTest(unittest.TestCase):
+    """What the page still says after the view is closed is dropped: a late relocation
+    saved the closed window's place over a newer one."""
+
+    def test_messages_after_closing_are_dropped(self):
+        from bookcase.widgets.book_view import BookView
+
+        class Message:
+            def __init__(self, text):
+                self.text = text
+
+            def to_string(self):
+                return self.text
+
+        view = BookView()
+        heard = []
+        view.connect('relocated', lambda _view, place: heard.append(place))
+        view._book = {'token': 't', 'location': ''}
+        view._on_message(None, Message('{"type": "relocated", "fraction": 0.5, "cfi": "a"}'))
+        self.assertEqual(len(heard), 1)
+        view._book = None  # closed
+        view._on_message(None, Message('{"type": "relocated", "fraction": 0.6, "cfi": "b"}'))
+        self.assertEqual(len(heard), 1)
+
+
 def _epub_with(path, addition):
     """make_epub()'s book with `addition` after its first chapter's heading."""
     plain = make_epub(path.with_name('plain-' + path.name), chapters=2)

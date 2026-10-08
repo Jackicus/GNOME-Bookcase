@@ -61,6 +61,9 @@ log = logging.getLogger(__name__)
 RESOURCE_PATH = '/io/github/jackicus/Bookcase'
 RESCAN_DELAY_S = 3
 MAX_OPEN = 8  # reader windows opened at once from Files
+TOAST_TIMEOUT_S = 5
+UNDO_TIMEOUT_S = 8
+ERROR_TIMEOUT_S = 10
 
 
 def default_data_dir(profile='default'):
@@ -99,6 +102,20 @@ def book_files(gio_files):
     return paths, refused
 
 
+def text_undo(window):
+    """Undo the typing in the text field that has the focus in `window`, if one has: True
+    when there was one (whether or not it had anything to undo)."""
+    focus = window.get_focus() if window is not None else None
+    while focus is not None and not isinstance(focus, (Gtk.Text, Gtk.TextView)):
+        if not isinstance(focus, Gtk.Editable):
+            return False
+        focus = focus.get_delegate() if focus.get_delegate() is not focus else None
+    if focus is None or not focus.get_editable():
+        return False
+    focus.activate_action('text.undo', None)
+    return True
+
+
 class Application(Adw.Application):
     """The app. `demo` is true under --demo: the library is build/demo's."""
 
@@ -120,6 +137,7 @@ class Application(Adw.Application):
         self.importer = None
         self.devices = None  # devices.DeviceMonitor, when it could start
         self._rescan_source = None
+        self._undo_toast = None  # the Undo toast shown, while it is
         self.add_main_option('demo', 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
                              _('Show an invented library (build/demo), not yours'), None)
         self.add_main_option('debug', 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
@@ -270,24 +288,57 @@ class Application(Adw.Application):
         thread.start()
         return thread
 
-    def keep_book(self, book_id):
+    def keep_book(self, book_id, done=None):
         """Add a book opened without adding to the library: copied into the library folder
-        (as Add Books does) with its place and highlights; a toast with Undo says so."""
+        in a thread (Importer.copy_into_library, which changes nothing in the library), then
+        made the book's file on the main library (Library.keep_book, the undo step), so the
+        toast's Undo puts back this and nothing else. `done(ok)` is called at the end."""
         book = self.library.book(book_id)
-        book_file = self.library.reading_file(book_id)
-        if book is None or book_file is None:
+        if book is None or self.library.reading_file(book_id) is None:
             self.toast(_('The book’s file cannot be found'))
             return None
+        library, covers, folder = self.library, self.covers, self.library_folder()
 
-        def done(report):
-            if report.added:
-                self.toast(_('“{title}” was added to your library').format(title=book.title),
-                           undo=True)
-            elif report.failed:
+        def work():
+            from .importing import Importer
+
+            worker = library.open_worker()
+            try:
+                importer = Importer(worker, covers.with_library(worker), folder)
+                result = importer.copy_into_library(book_id)
+            except Exception as error:
+                log.info('copying book %s into the library: %s', book_id, error)
+                result = error
+            finally:
+                worker.close()
+            GLib.idle_add(finish, result)
+
+        def finish(result):
+            ok = False
+            if isinstance(result, Exception):
                 self.toast(_('Could not add “{title}”: {error}').format(
-                    title=book.title, error=report.failed[0][1]))
+                    title=book.title, error=result))
+            elif self.library is not None:
+                path, file_hash, size, file_format = result
+                try:
+                    ok = self.library.keep_book(book_id, path=path, hash=file_hash,
+                                                size=size, format=file_format)
+                except Exception as error:
+                    log.warning('keeping book %s: %s', book_id, error)
+                    self.toast(_('Could not add “{title}”: {error}').format(
+                        title=book.title, error=error))
+                if ok:
+                    self.toast(_('“{title}” was added to your library').format(
+                        title=book.title), undo=True)
+                else:
+                    _remove_quietly(path)  # the copy is nobody's
+            if done is not None:
+                done(ok)
+            return GLib.SOURCE_REMOVE
 
-        return self.importer.add_async([book_file.path], copy=True, done=done)
+        thread = threading.Thread(target=work, name='bookcase-keep', daemon=True)
+        thread.start()
+        return thread
 
     def do_shutdown(self):
         if self._rescan_source is not None:
@@ -474,10 +525,14 @@ class Application(Adw.Application):
         return add_books.present_link_calibre(self, self.window(), path)
 
     def on_undo(self, *_args):
-        self.undo()
+        # Ctrl+Z is an application accelerator, run before a focused entry sees the key:
+        # in an entry (a search, a dialog's field) it undoes the typing, not a library change.
+        if not text_undo(self.get_active_window()):
+            self.undo()
 
     def undo(self):
         """Put the newest change back and say what it was; False when there was none."""
+        self._dismiss_undo_toast()
         label = self.library.undo()
         if label is None:
             return False
@@ -536,18 +591,38 @@ class Application(Adw.Application):
 
     # -- messages ----------------------------------------------------------------------------
 
-    def toast(self, text, undo=False, timeout=0):
-        """Show a toast on the library window; with `undo`, an Undo button (app.undo)."""
+    def toast(self, text, undo=False, timeout=None):
+        """Show a toast on the library window; with `undo`, an Undo button (app.undo).
+
+        A toast goes after TOAST_TIMEOUT_S (UNDO_TIMEOUT_S with Undo) unless `timeout` says
+        otherwise (0: until closed). An Undo toast is shown at once, and replaces the one
+        before it: Undo puts back the newest change, which is the one the newest Undo toast
+        is about."""
         window = self.window()
         if window is None:
             log.info('toast without a window: %s', text)
             return None
+        if timeout is None:
+            timeout = UNDO_TIMEOUT_S if undo else TOAST_TIMEOUT_S
         toast = Adw.Toast(title=GLib.markup_escape_text(text), timeout=timeout)
         if undo:
             toast.set_button_label(_('Undo'))
             toast.set_action_name('app.undo')
+            toast.set_priority(Adw.ToastPriority.HIGH)
+            self._dismiss_undo_toast()
+            self._undo_toast = toast
+            toast.connect('dismissed', self._on_undo_toast_dismissed)
         window.add_toast(toast)
         return toast
+
+    def _on_undo_toast_dismissed(self, toast):
+        if self._undo_toast is toast:
+            self._undo_toast = None
+
+    def _dismiss_undo_toast(self):
+        toast, self._undo_toast = self._undo_toast, None
+        if toast is not None:
+            toast.dismiss()
 
     def report(self, error, context=None):
         """Tell the user an error in a sentence and log the rest."""
@@ -563,7 +638,14 @@ class Application(Adw.Application):
             message = f'{context}: {message}'
         log.warning('reported: %s', message,
                     exc_info=not isinstance(error, (LibraryError, GLib.Error, OSError)))
-        self.toast(message)
+        self.toast(message, timeout=ERROR_TIMEOUT_S)
+
+
+def _remove_quietly(path):
+    try:
+        os.remove(path)
+    except OSError as error:
+        log.info('removing %s: %s', path, error)
 
 
 def _demo_dir():

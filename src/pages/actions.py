@@ -15,8 +15,8 @@ shelf id), new-shelf, remove-from-shelf (on a manual shelf's page), mark-reading
 mark-finished, mark-unread, send, export, show-in-files, remove, trash, select-all (when the
 page gives `select_all`). Each change goes through the library's undoable methods and toasts
 with Undo; Move to Trash asks first (and trashes the books' files through Gio, recoverable,
-then removes the books); the books of a linked Calibre library are never trashed (their
-files are Calibre's).
+then removes the books); a book with a file in a linked Calibre library (linked from it, or
+merged with one) is never trashed: its files are Calibre's.
 """
 
 import logging
@@ -108,17 +108,10 @@ class BookActions:
 
     def __init__(self, widget, get_ids, shelf_id=None, select_all=None, details=None):
         self._widget = widget.weak_ref()
-        # get_ids is usually a method of the widget, which holds this through its action
-        # group: held weakly, so the widget can go.
-        owner = getattr(get_ids, '__self__', None)
-        if owner is not None and hasattr(owner, 'weak_ref'):
-            owner_ref, function = owner.weak_ref(), get_ids.__func__
-
-            def get_ids():
-                instance = owner_ref()
-                return function(instance) if instance is not None else []
-
-        self.get_ids = get_ids
+        # get_ids and details are usually methods of the widget, which holds this through
+        # its action group: held weakly, so the widget can go.
+        self.get_ids = _weakly(get_ids, [])
+        details = _weakly(details, None)
         self.shelf_id = shelf_id
         self.group = Gio.SimpleActionGroup()
         for name in self.NAMES:
@@ -160,16 +153,20 @@ class BookActions:
         self.group.lookup_action('add-to-shelf').set_enabled(some)
         self.group.lookup_action('remove-from-shelf').set_enabled(
             some and self.shelf_id is not None)
-        self.group.lookup_action('details').set_enabled(len(ids) == 1)
-        self.group.lookup_action('show-in-files').set_enabled(
-            len(ids) == 1 and not books[0].missing)
-        self.group.lookup_action('read').set_enabled(some and not all(b.missing for b in books))
+        # A book gone from the library (removed elsewhere, still selected) acts on nothing.
+        one = len(ids) == 1 and len(books) == 1
+        self.group.lookup_action('details').set_enabled(one)
+        self.group.lookup_action('show-in-files').set_enabled(one and not books[0].missing)
+        # Reading, sending and exporting need a file: not when every book's is missing.
+        some_file = some and not all(book.missing for book in books)
+        for name in ('read', 'send', 'export'):
+            self.group.lookup_action(name).set_enabled(some_file)
         statuses = {book.status for book in books}
         self.group.lookup_action('mark-reading').set_enabled(some and statuses != {'reading'})
         self.group.lookup_action('mark-finished').set_enabled(some and statuses != {'finished'})
         self.group.lookup_action('mark-unread').set_enabled(some and statuses != {'unread'})
         self.group.lookup_action('trash').set_enabled(
-            some and all(book.source != 'calibre' and not book.missing for book in books))
+            some and all(trashable(library, book) for book in books))
 
     # -- the actions -------------------------------------------------------------------------
 
@@ -252,6 +249,20 @@ class BookActions:
 
     def trash(self, ids):
         confirm_trash(self._window(), ids)
+
+
+def _weakly(function, gone):
+    """`function`, holding the GObject it is a method of weakly (`gone` once that went)."""
+    owner = getattr(function, '__self__', None)
+    if owner is None or not hasattr(owner, 'weak_ref'):
+        return function
+    owner_ref, unbound = owner.weak_ref(), function.__func__
+
+    def call(*args):
+        instance = owner_ref()
+        return unbound(instance, *args) if instance is not None else gone
+
+    return call
 
 
 # -- the actions, for any caller ---------------------------------------------------------------
@@ -365,9 +376,21 @@ def _run_export(ids, folder):
     threading.Thread(target=work, name='bookcase-export', daemon=True).start()
 
 
+def trashable(library, book):
+    """Whether Move to Trash may trash a book's files: never a file in a linked Calibre
+    library (a Calibre book's, or one merged into another book), which is Calibre's."""
+    return book.source != 'calibre' and not book.missing and not library.in_calibre(book.id)
+
+
 def confirm_trash(window, ids):
-    """Move to Trash…: ask, then trash every file of the books and remove them."""
+    """Move to Trash…: ask, then trash every file of the books and remove them. A book with
+    a file in a Calibre library is refused, with a toast that says why."""
     library = app().library
+    books = [library.book(book_id) for book_id in ids]
+    if any(book is not None and library.in_calibre(book.id) for book in books):
+        app().toast(_('Books from a Calibre library cannot be moved to the trash: their files '
+                      'are Calibre’s. Remove them from the library instead.'))
+        return None
     title = _title(library, ids)
     if title is not None:
         heading = _('Move “{title}” to the Trash?').format(title=title)
@@ -397,8 +420,11 @@ def confirm_trash(window, ids):
 
 def trash_books(ids):
     library = app().library
+    ids = [book_id for book_id in ids if not library.in_calibre(book_id)]  # Calibre's files
     failed = 0
-    with library.undoable(_('Move to Trash')):
+    # No undo step: the files are in the system's trash (the confirmation said so), and
+    # Ctrl+Z would only bring the books back without them.
+    with library.undoable(None):
         trashed = []
         for book_id in ids:
             ok = True

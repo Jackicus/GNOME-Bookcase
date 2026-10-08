@@ -29,6 +29,7 @@ from gettext import gettext as _
 
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
+from ..widgets.util import connect_weak, connect_weak_call
 from . import add_books, watch_dialog
 
 log = logging.getLogger(__name__)
@@ -120,20 +121,19 @@ class PreferencesDialog(Adw.PreferencesDialog):
         for child, key, nicks in COMBOS:
             row = getattr(self, child)
             self._set_combo(row, key, nicks)
-            row.connect('notify::selected', self._on_combo_selected, key, nicks)
+            connect_weak(row, 'notify::selected', self._on_combo_selected, key, nicks)
             self._watch(settings, 'changed::' + key,
                         lambda *_args, row=row, key=key, nicks=nicks:
                         self._set_combo(row, key, nicks))
         self._set_font_button()
-        self.custom_font_button.connect('notify::font-desc', self._on_font_chosen)
+        connect_weak(self.custom_font_button, 'notify::font-desc', self._on_font_chosen)
         self._watch(settings, 'changed::reader-custom-font', lambda *_args:
                     self._set_font_button())
         self._watch(settings, 'changed::library-folder', lambda *_args:
                     self._show_library_folder())
-        self.library_folder_button.connect('clicked', lambda *_args:
-                                           self.choose_library_folder())
-        self.add_watched_button.connect('clicked', lambda *_args: self.choose_watched())
-        self.add_calibre_button.connect('clicked', lambda *_args: self.choose_calibre())
+        connect_weak_call(self.library_folder_button, 'clicked', self.choose_library_folder)
+        connect_weak_call(self.add_watched_button, 'clicked', self.choose_watched)
+        connect_weak_call(self.add_calibre_button, 'clicked', self.choose_calibre)
         library = getattr(app, 'library', None)
         if library is not None:
             self._watch(library, 'changed', self._on_library_changed)
@@ -258,7 +258,9 @@ class PreferencesDialog(Adw.PreferencesDialog):
         library = getattr(self.app, 'library', None)
         folders = library.folders() if library is not None else []
         for listbox, kind in ((self.watched_list, 'watched'), (self.calibre_list, 'calibre')):
-            listbox.remove_all()
+            # Row by row: Gtk.ListBox.remove_all() would take the placeholder too.
+            while (row := listbox.get_row_at_index(0)) is not None:
+                listbox.remove(row)
             for folder in folders:
                 if folder.kind == kind:
                     listbox.append(self._folder_row(folder))
@@ -276,12 +278,12 @@ class PreferencesDialog(Adw.PreferencesDialog):
         refresh = Gtk.Button(icon_name='view-refresh-symbolic', valign=Gtk.Align.CENTER,
                              tooltip_text=_('Read Again'))
         refresh.add_css_class('flat')
-        refresh.connect('clicked', self._on_refresh, folder)
+        connect_weak(refresh, 'clicked', self._on_refresh, folder)
         row.add_suffix(refresh)
         remove = Gtk.Button(icon_name='user-trash-symbolic', valign=Gtk.Align.CENTER,
                             tooltip_text=_('Remove'))
         remove.add_css_class('flat')
-        remove.connect('clicked', self._on_remove, folder)
+        connect_weak(remove, 'clicked', self._on_remove, folder)
         row.add_suffix(remove)
         return row
 
@@ -301,7 +303,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
         name = os.path.basename(folder.path) or folder.path
         toast = Adw.Toast(title=_('“{}” removed. Its books stay in the library.').format(name),
                           button_label=_('Undo'), use_markup=False)
-        toast.connect('button-clicked', lambda *_args: self._undo())
+        connect_weak_call(toast, 'button-clicked', self._undo)
         self.add_toast(toast)
 
     def _undo(self):
